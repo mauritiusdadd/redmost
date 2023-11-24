@@ -106,6 +106,20 @@ def specexFitsLoader(file_name: str,
         mask_hdu = getHDU(hdulist, KNOWN_MASK_EXT_NAMES)
         wd_hdu = getHDU(hdulist, KNOWN_RCURVE_EXT_NAMES)
 
+        valid_id_keys = [
+            f"{i}{j}"
+            for i in ['', 'OBJ', 'OBJ_', 'TARGET', 'TARGET_']
+            for j in ['ID', 'NUMBER', 'UID', 'UUID']
+        ]
+
+        obj_id = None
+        for key in valid_id_keys:
+            try:
+                obj_id = hdulist[0].header[key]
+            except KeyError:
+                continue
+            else:
+                break
 
         if flux_hdu is None:
             raise ValueError("Cannot find flux data")
@@ -189,6 +203,7 @@ def specexFitsLoader(file_name: str,
 
         sp.mask = mask
         sp.wd = wd
+        sp.obj_id = obj_id
 
     return sp
 

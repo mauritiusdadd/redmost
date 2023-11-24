@@ -7,6 +7,7 @@ Created on Fri Nov 24 10:33:40 2023.
 """
 import os
 import sys
+import uuid
 import typing
 import logging
 
@@ -39,7 +40,13 @@ class GuiApp():
         self.main_wnd.importSpecPushButton.clicked.connect(
             self.doImportSpectra
         )
+        self.main_wnd.specListWidget.currentItemChanged.connect(
+            self.currentSpecItemChanged
+        )
 
+    def currentSpecItemChanged(self, new_item, *args, **kwargs):
+        spec_uuid = new_item.uuid
+        sp = self.open_spectra(spec_uuid)
 
     def doImportSpectra(self, *args, **kwargs):
         """
@@ -70,6 +77,13 @@ class GuiApp():
 
         for file in file_list:
             sp = loadSpectrum(file)
+            new_item = QtWidgets.QListWidgetItem(f"{sp.obj_id}")
+            new_item.setCheckState(QtCore.Qt.CheckState.Checked)
+            new_item.setToolTip(file)
+            new_item.uuid = uuid.uuid4()
+
+            self.open_spectra[new_item.uuid] = sp
+            self.main_wnd.specListWidget.addItem(new_item)
 
     def run(self):
         """
