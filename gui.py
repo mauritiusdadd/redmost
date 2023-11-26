@@ -11,14 +11,15 @@ import uuid
 import typing
 import logging
 
+from astropy.nddata import VarianceUncertainty, StdDevUncertainty
 
 from utils import loadSpectrum
 import backends
 
 try:
-    from PySide6 import QtCore, QtGui, QtUiTools, QtWidgets
+    from PySide6 import QtCore, QtGui, QtUiTools, QtWidgets, QtCharts
 except (ImportError, ModuleNotFoundError):
-    from PyQt6 import QtCore, QtGui, QtWidgets, uic
+    from PyQt6 import QtCore, QtGui, QtWidgets, QtCharts, uic
     QT_BACKEND = 'PyQt6'
 else:
     QT_BACKEND = 'PySide6'
@@ -44,9 +45,106 @@ class GuiApp():
             self.currentSpecItemChanged
         )
 
+        self.fluxQChartView = QtCharts.QChartView(
+            self.main_wnd.fluxGroupBox
+        )
+        self.fluxQChartView.setObjectName("fluxQChartView")
+        self.fluxQChartView.setRenderHint(QtGui.QPainter.Antialiasing)
+        self.fluxQChartView.setHorizontalScrollBarPolicy(
+            QtCore.Qt.ScrollBarAlwaysOff
+        )
+        self.main_wnd.fluxGroupBoxGridLayout.addWidget(
+            self.fluxQChartView, 0, 0, 1, 1
+        )
+
+        self.varQChartView = QtCharts.QChartView(
+            self.main_wnd.varianceGroupBox
+        )
+        self.varQChartView.setObjectName("varQChartView")
+        self.varQChartView.setRenderHint(QtGui.QPainter.Antialiasing)
+        self.varQChartView.setHorizontalScrollBarPolicy(
+            QtCore.Qt.ScrollBarAlwaysOff
+        )
+        self.main_wnd.varGroupBoxGridLayout.addWidget(
+            self.varQChartView, 0, 0, 1, 1
+        )
+
     def currentSpecItemChanged(self, new_item, *args, **kwargs):
+        """
+        Update widgets when the current object changes.
+
+        Parameters
+        ----------
+        new_item : TYPE
+            DESCRIPTION.
+        *args : TYPE
+            DESCRIPTION.
+        **kwargs : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
         spec_uuid = new_item.uuid
-        sp = self.open_spectra(spec_uuid)
+        sp = self.open_spectra[spec_uuid]
+
+        wav = sp.spectral_axis.value
+        wav_unit = sp.spectral_axis.unit
+
+        flux = sp.flux.value
+        flux_unit = sp.flux.unit
+
+        var = None
+        var_unit = None
+
+        if isinstance(sp.uncertainty, VarianceUncertainty):
+            var = sp.uncertainty.array
+        elif isinstance(sp.uncertainty, StdDevUncertainty):
+            var = sp.uncertainty.array ** 2
+
+        flux_chart = self.fluxQChartView.chart()
+        var_chart = self.varQChartView.chart()
+
+        flux_axis_x = QtCharts.QValueAxis()
+        flux_axis_x.setTickCount(10)
+        flux_axis_x.setLabelFormat("%.2f")
+        flux_axis_x.setTitleText("Flux")
+
+        flux_axis_y = QtCharts.QValueAxis()
+        flux_axis_y.setTickCount(10)
+        flux_axis_y.setLabelFormat("%.2f")
+        flux_axis_y.setTitleText("Flux")
+
+        flux_series = values2series(wav, flux, "Flux", )
+        flux_series.attachAxis(flux_axis_x)
+        flux_series.attachAxis(flux_axis_y)
+        flux_chart.addSeries(flux_series)
+        flux_chart.addAxis(flux_axis_x, QtCore.Qt.AlignBottom)
+        flux_chart.addAxis(flux_axis_y, QtCore.Qt.AlignLeft)
+
+        if var is None:
+            self.main_wnd.varianceGroupBox.setEnabled(False)
+        else:
+            self.main_wnd.varianceGroupBox.setEnabled(True)
+
+            var_axis_x = QtCharts.QValueAxis()
+            var_axis_x.setTickCount(10)
+            var_axis_x.setLabelFormat("%.2f")
+            var_axis_x.setTitleText("Flux")
+
+            var_axis_y = QtCharts.QValueAxis()
+            var_axis_y.setTickCount(10)
+            var_axis_y.setLabelFormat("%.2f")
+            var_axis_y.setTitleText("Flux")
+
+            var_series = values2series(wav, var, "Flux", )
+            var_series.attachAxis(var_axis_x)
+            var_series.attachAxis(var_axis_y)
+            var_chart.addSeries(var_series)
+            var_chart.addAxis(var_axis_x, QtCore.Qt.AlignBottom)
+            var_chart.addAxis(var_axis_y, QtCore.Qt.AlignLeft)
 
     def doImportSpectra(self, *args, **kwargs):
         """
@@ -104,6 +202,15 @@ class GuiAppPyside(GuiApp):
     def __init__(self):
         super().__init__(QT_BACKEND)
 
+
+def values2series(x_values, y_values, name):
+    series = QtCharts.QLineSeries()
+    series.setName(name)
+
+    for x, y in zip(x_values, y_values):
+        series.append(x, y)
+
+    return series
 
 def loadUiWidget(uifilename: str,
                  parent: typing.Optional[QtWidgets.QWidget] = None,

@@ -169,14 +169,9 @@ def specexFitsLoader(file_name: str,
         flux_units = units.Unit(flux_hdu.header['BUNIT'])
         wave_units = units.Unit(flux_hdu.header['CUNIT1'])
 
-        print(flux_units, wave_units)
-
         flux = flux[flux_not_nan_mask].copy() * flux_units
         var = var[flux_not_nan_mask].copy() * (flux_units**2)
         lam = lam[flux_not_nan_mask].copy() * wave_units
-
-        print(flux)
-        print(var)
 
         if wd is not None:
             wd = wd[flux_not_nan_mask].copy()
