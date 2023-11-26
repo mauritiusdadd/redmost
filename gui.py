@@ -25,6 +25,48 @@ else:
     QT_BACKEND = 'PySide6'
 
 
+class AdvancedQChartView(QtCharts.QChartView):
+    """Subclass of QtCharts.QChartView with advanced features."""
+
+    onMouseMoveSeries = QtCore.Signal(object)
+    onMousePressSeries = QtCore.Signal(object)
+    onMouseReleaseSeries = QtCore.Signal(object)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def zoomIn(self):
+        self.chart().zoomIn()
+
+    def zoomOut(self):
+        self.chart().zoomOut()
+
+    def zoom(self, value):
+        self.chart.zoom(value)
+
+    def mouseDoubleClickEvent(self, event):
+        super().mouseDoubleClickEvent(event)
+
+    def mouseMoveEvent(self, event):
+        super().mouseMoveEvent(event)
+        self.onMouseMoveSeries.emit(self.toSeriesPos(event))
+
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        self.onMouseMoveSeries.emit(self.toSeriesPos(event))
+
+    def mouseReleaseEvent(self, event):
+        super().mouseReleaseEvent(event)
+        self.onMouseMoveSeries.emit(self.toSeriesPos(event))
+
+    def toSeriesPos(self, event):
+        widgetPos = event.localPos()
+        scenePos = self.mapToScene(widgetPos.x(), widgetPos.y())
+        chartItemPos = self.chart().mapFromScene(scenePos)
+        valueGivenSeries = self.chart().mapToValue(chartItemPos)
+        return valueGivenSeries
+
+
 class GuiApp():
     """General class for the main GUI."""
 
@@ -38,14 +80,13 @@ class GuiApp():
 
         self.main_wnd = loadUiWidget("main_window.ui", qt_backend=qt_backend)
 
-        self.main_wnd.importSpecPushButton.clicked.connect(
-            self.doImportSpectra
-        )
-        self.main_wnd.specListWidget.currentItemChanged.connect(
-            self.currentSpecItemChanged
-        )
+        # Status Bar
+        self.mousePosLabel = QtWidgets.QLabel("")
+        self.main_wnd.statusBar().addPermanentWidget(self.mousePosLabel)
 
-        self.fluxQChartView = QtCharts.QChartView(
+        self.main_wnd.fluxContainerWidget.setContentsMargins(0, 0, 0, 0)
+
+        self.fluxQChartView = AdvancedQChartView(
             self.main_wnd.fluxGroupBox
         )
         self.fluxQChartView.setObjectName("fluxQChartView")
@@ -53,11 +94,19 @@ class GuiApp():
         self.fluxQChartView.setHorizontalScrollBarPolicy(
             QtCore.Qt.ScrollBarAlwaysOff
         )
-        self.main_wnd.fluxGroupBoxGridLayout.addWidget(
-            self.fluxQChartView, 0, 0, 1, 1
+        self.fluxQChartView.setDragMode(
+            QtWidgets.QGraphicsView.ScrollHandDrag
         )
+        self.fluxQChartView.setContentsMargins(0, 0, 0, 0)
+        self.fluxQChartView.chart().setContentsMargins(0, 0, 0, 0)
+        self.fluxQChartView.chart().layout().setContentsMargins(0, 0, 0, 0)
 
-        self.varQChartView = QtCharts.QChartView(
+        # self.fluxQChartView.setRubberBand(
+        #     QtCharts.QChartView.HorizontalRubberBand
+        # )
+        self.main_wnd.fluxWidgetLayout.addWidget(self.fluxQChartView)
+
+        self.varQChartView = AdvancedQChartView(
             self.main_wnd.varianceGroupBox
         )
         self.varQChartView.setObjectName("varQChartView")
@@ -65,9 +114,65 @@ class GuiApp():
         self.varQChartView.setHorizontalScrollBarPolicy(
             QtCore.Qt.ScrollBarAlwaysOff
         )
-        self.main_wnd.varGroupBoxGridLayout.addWidget(
-            self.varQChartView, 0, 0, 1, 1
+        self.varQChartView.setContentsMargins(0, 0, 0, 0)
+        self.varQChartView.chart().setContentsMargins(0, 0, 0, 0)
+        self.varQChartView.chart().layout().setContentsMargins(0, 0, 0, 0)
+        self.main_wnd.varWidgetLayout.addWidget(self.varQChartView)
+
+        # Connect signals
+
+        self.main_wnd.importSpecPushButton.clicked.connect(
+            self.doImportSpectra
         )
+        self.main_wnd.specListWidget.currentItemChanged.connect(
+            self.currentSpecItemChanged
+        )
+        self.main_wnd.actionZoomIn.triggered.connect(self.doZoomIn)
+        self.main_wnd.actionZoomOut.triggered.connect(self.doZoomOut)
+
+        self.fluxQChartView.onMouseMoveSeries.connect(self.updateMouseLabel)
+        self.varQChartView.onMouseMoveSeries.connect(self.updateMouseLabel)
+
+    def updateMouseLabel(self, mouse_pos):
+        self.mousePosLabel.setText(f"\u03BB = {mouse_pos.x():.2f}")
+
+    def doZoomIn(self, *args, **kwargs):
+        """
+        Zoom In flux and var plots.
+
+        Parameters
+        ----------
+        *args : TYPE
+            DESCRIPTION.
+        **kwargs : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
+        self.fluxQChartView.zoomIn()
+        self.varQChartView.zoomIn()
+
+    def doZoomOut(self, *args, **kwargs):
+        """
+        Zoom Out flux and var plots.
+
+        Parameters
+        ----------
+        *args : TYPE
+            DESCRIPTION.
+        **kwargs : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
+        self.fluxQChartView.zoomOut()
+        self.varQChartView.zoomOut()
 
     def currentSpecItemChanged(self, new_item, *args, **kwargs):
         """
@@ -101,50 +206,57 @@ class GuiApp():
 
         if isinstance(sp.uncertainty, VarianceUncertainty):
             var = sp.uncertainty.array
+            var_unit = sp.uncertainty.unit
         elif isinstance(sp.uncertainty, StdDevUncertainty):
             var = sp.uncertainty.array ** 2
+            var_unit = sp.uncertainty.unit ** 2
 
         flux_chart = self.fluxQChartView.chart()
-        var_chart = self.varQChartView.chart()
+
+        flux_series = values2series(wav, flux, "Flux")
+
+        flux_chart.addSeries(flux_series)
+        #flux_chart.createDefaultAxes()
 
         flux_axis_x = QtCharts.QValueAxis()
-        flux_axis_x.setTickCount(10)
+        flux_axis_x.setTickInterval(500)
         flux_axis_x.setLabelFormat("%.2f")
-        flux_axis_x.setTitleText("Flux")
+        flux_axis_x.setTitleText(str(wav_unit))
 
         flux_axis_y = QtCharts.QValueAxis()
         flux_axis_y.setTickCount(10)
         flux_axis_y.setLabelFormat("%.2f")
-        flux_axis_y.setTitleText("Flux")
+        flux_axis_y.setTitleText(str(flux_unit))
 
-        flux_series = values2series(wav, flux, "Flux", )
-        flux_series.attachAxis(flux_axis_x)
-        flux_series.attachAxis(flux_axis_y)
-        flux_chart.addSeries(flux_series)
         flux_chart.addAxis(flux_axis_x, QtCore.Qt.AlignBottom)
         flux_chart.addAxis(flux_axis_y, QtCore.Qt.AlignLeft)
+
+        flux_series.attachAxis(flux_axis_x)
+        flux_series.attachAxis(flux_axis_y)
 
         if var is None:
             self.main_wnd.varianceGroupBox.setEnabled(False)
         else:
             self.main_wnd.varianceGroupBox.setEnabled(True)
+            var_chart = self.varQChartView.chart()
+            var_series = values2series(wav, var, "Variance")
+            var_chart.addSeries(var_series)
 
             var_axis_x = QtCharts.QValueAxis()
-            var_axis_x.setTickCount(10)
+            var_axis_x.setTickInterval(500)
             var_axis_x.setLabelFormat("%.2f")
-            var_axis_x.setTitleText("Flux")
+            var_axis_x.setTitleText(str(wav_unit))
 
             var_axis_y = QtCharts.QValueAxis()
             var_axis_y.setTickCount(10)
             var_axis_y.setLabelFormat("%.2f")
-            var_axis_y.setTitleText("Flux")
+            var_axis_y.setTitleText(str(var_unit))
 
-            var_series = values2series(wav, var, "Flux", )
-            var_series.attachAxis(var_axis_x)
-            var_series.attachAxis(var_axis_y)
-            var_chart.addSeries(var_series)
             var_chart.addAxis(var_axis_x, QtCore.Qt.AlignBottom)
             var_chart.addAxis(var_axis_y, QtCore.Qt.AlignLeft)
+
+            var_series.attachAxis(var_axis_x)
+            var_series.attachAxis(var_axis_y)
 
     def doImportSpectra(self, *args, **kwargs):
         """
