@@ -31,36 +31,217 @@ class AdvancedQChartView(QtCharts.QChartView):
     onMouseMoveSeries = QtCore.Signal(object)
     onMousePressSeries = QtCore.Signal(object)
     onMouseReleaseSeries = QtCore.Signal(object)
+    onMouseDoubleClickSeries = QtCore.Signal(object)
+    onMouseWheelEvent = QtCore.Signal(object)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def zoomIn(self):
-        self.chart().zoomIn()
+        self.vertical_lock = False
+        self.horizontall_lock = False
 
-    def zoomOut(self):
-        self.chart().zoomOut()
+    def zoomIn(self, value=2, x_center=None, y_center=None):
+        """
+        Zoom in.
 
-    def zoom(self, value):
-        self.chart.zoom(value)
+        Parameters
+        ----------
+        value : float
+            Zoom value.
+        x_center : float
+            x of the zoom center
+        y_center : float
+            y of the zoom center
+
+        Returns
+        -------
+        None.
+
+        """
+        self.zoom(value, x_center, y_center)
+
+    def zoomOut(self, value=0.5, x_center=None, y_center=None):
+        """
+        Zoom out.
+
+        Parameters
+        ----------
+        value : float
+            Zoom value.
+        x_center : float
+            x of the zoom center
+        y_center : float
+            y of the zoom center
+
+        Returns
+        -------
+        None.
+
+        """
+        self.zoom(value, x_center, y_center)
+
+    def zoom(self, value, x_center=None, y_center=None):
+        """
+        Zoom.
+
+        Parameters
+        ----------
+        value : float
+            Zoom value.
+        x_center : float
+            x of the zoom center
+        y_center : float
+            y of the zoom center
+
+        Returns
+        -------
+        None.
+
+        """
+        rect = self.chart().plotArea()
+
+        if x_center is None:
+            x_center = rect.width()/2
+
+        if y_center is None:
+            y_center = rect.height()/2
+
+        if not self.horizontall_lock:
+            width_original = rect.width()
+            rect.setWidth(width_original / value)
+            center_scale_x = x_center / width_original
+            left_offset = x_center - (rect.width() * center_scale_x)
+            rect.moveLeft(rect.x() + left_offset)
+
+        if not self.vertical_lock:
+            height_original = rect.height()
+            rect.setHeight(height_original / value)
+            center_scale_y = y_center / height_original
+            top_offset = y_center - (rect.height() * center_scale_y)
+            rect.moveTop(rect.y() + top_offset)
+
+        self.chart().zoomIn(rect)
 
     def mouseDoubleClickEvent(self, event):
+        """
+        Handle mouse double click events.
+
+        Parameters
+        ----------
+        event : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
         super().mouseDoubleClickEvent(event)
+        self.onMouseDoubleClickSeries.emit((self.toSeriesPos(event), event))
 
     def mouseMoveEvent(self, event):
+        """
+        Handle mouse move events.
+
+        Parameters
+        ----------
+        event : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
         super().mouseMoveEvent(event)
-        self.onMouseMoveSeries.emit(self.toSeriesPos(event))
+        self.onMouseMoveSeries.emit((self.toSeriesPos(event), event))
 
     def mousePressEvent(self, event):
+        """
+        Handle mouse button press events.
+
+        Parameters
+        ----------
+        event : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
         super().mousePressEvent(event)
-        self.onMouseMoveSeries.emit(self.toSeriesPos(event))
+        self.onMousePressSeries.emit((self.toSeriesPos(event), event))
 
     def mouseReleaseEvent(self, event):
+        """
+        Handle mouse button release events.
+
+        Parameters
+        ----------
+        event : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
         super().mouseReleaseEvent(event)
-        self.onMouseMoveSeries.emit(self.toSeriesPos(event))
+        self.onMouseReleaseSeries.emit((self.toSeriesPos(event), event))
+
+    def wheelEvent(self, event):
+        """
+        Handle mouse wheel events.
+
+        Parameters
+        ----------
+        event : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
+        super().wheelEvent(event)
+        delta_pix = event.pixelDelta().y() / 5
+
+        modifiers = QtWidgets.QApplication.keyboardModifiers()
+
+        if modifiers == QtCore.Qt.ShiftModifier:
+            # Vertical scroll
+            if not self.vertical_lock:
+                self.chart().scroll(0, delta_pix)
+        elif modifiers == QtCore.Qt.ControlModifier:
+            # Zoom
+            if delta_pix > 0:
+                self.zoomIn()
+            else:
+                self.zoomOut()
+        else:
+            # Horizontal scroll
+            if not self.horizontall_lock:
+                self.chart().scroll(delta_pix, 0)
+
+        self.onMouseWheelEvent.emit(event)
 
     def toSeriesPos(self, event):
-        widgetPos = event.localPos()
+        """
+        Convert mouse position from event location to data values.
+
+        Parameters
+        ----------
+        event : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        valueGivenSeries : TYPE
+            DESCRIPTION.
+
+        """
+        widgetPos = event.position()
         scenePos = self.mapToScene(widgetPos.x(), widgetPos.y())
         chartItemPos = self.chart().mapFromScene(scenePos)
         valueGivenSeries = self.chart().mapToValue(chartItemPos)
@@ -94,24 +275,25 @@ class GuiApp():
         self.fluxQChartView.setHorizontalScrollBarPolicy(
             QtCore.Qt.ScrollBarAlwaysOff
         )
-        self.fluxQChartView.setDragMode(
-            QtWidgets.QGraphicsView.ScrollHandDrag
+        self.fluxQChartView.setVerticalScrollBarPolicy(
+            QtCore.Qt.ScrollBarAlwaysOff
         )
         self.fluxQChartView.setContentsMargins(0, 0, 0, 0)
         self.fluxQChartView.chart().setContentsMargins(0, 0, 0, 0)
         self.fluxQChartView.chart().layout().setContentsMargins(0, 0, 0, 0)
 
-        # self.fluxQChartView.setRubberBand(
-        #     QtCharts.QChartView.HorizontalRubberBand
-        # )
         self.main_wnd.fluxWidgetLayout.addWidget(self.fluxQChartView)
 
         self.varQChartView = AdvancedQChartView(
             self.main_wnd.varianceGroupBox
         )
+        self.varQChartView.vertical_lock = True
         self.varQChartView.setObjectName("varQChartView")
         self.varQChartView.setRenderHint(QtGui.QPainter.Antialiasing)
         self.varQChartView.setHorizontalScrollBarPolicy(
+            QtCore.Qt.ScrollBarAlwaysOff
+        )
+        self.varQChartView.setVerticalScrollBarPolicy(
             QtCore.Qt.ScrollBarAlwaysOff
         )
         self.varQChartView.setContentsMargins(0, 0, 0, 0)
@@ -129,12 +311,43 @@ class GuiApp():
         )
         self.main_wnd.actionZoomIn.triggered.connect(self.doZoomIn)
         self.main_wnd.actionZoomOut.triggered.connect(self.doZoomOut)
+        self.main_wnd.actionZoomFit.triggered.connect(self.doZoomReset)
 
-        self.fluxQChartView.onMouseMoveSeries.connect(self.updateMouseLabel)
-        self.varQChartView.onMouseMoveSeries.connect(self.updateMouseLabel)
+        self.fluxQChartView.onMouseMoveSeries.connect(
+            self._updateMouseLabelFromEvent
+        )
+        self.varQChartView.onMouseMoveSeries.connect(
+            self._updateMouseLabelFromEvent
+        )
 
-    def updateMouseLabel(self, mouse_pos):
+        self.fluxQChartView.onMouseWheelEvent.connect(
+            self.varQChartView.wheelEvent
+        )
+
+
+        self.fluxQChartView.onMousePressSeries.connect(self.mousePressedFlux)
+
+    def _updateMouseLabelFromEvent(self, args):
+        self._updateMouseLabel(args[0])
+
+    def _updateMouseLabel(self, mouse_pos):
         self.mousePosLabel.setText(f"\u03BB = {mouse_pos.x():.2f}")
+
+    def mouseScollFlux(self, args):
+        data_pos = args[0]
+        event = args[1]
+        print(data_pos)
+        print(event)
+
+    def mousePressedFlux(self, args):
+        data_pos = args[0]
+        event = args[1]
+        print(data_pos)
+        print(event)
+
+    def doZoomReset(self, *arg, **kwargs):
+        self.fluxQChartView.chart().zoomReset()
+        self.varQChartView.chart().zoomReset()
 
     def doZoomIn(self, *args, **kwargs):
         """
@@ -216,7 +429,7 @@ class GuiApp():
         flux_series = values2series(wav, flux, "Flux")
 
         flux_chart.addSeries(flux_series)
-        #flux_chart.createDefaultAxes()
+        # flux_chart.createDefaultAxes()
 
         flux_axis_x = QtCharts.QValueAxis()
         flux_axis_x.setTickInterval(500)
@@ -316,6 +529,24 @@ class GuiAppPyside(GuiApp):
 
 
 def values2series(x_values, y_values, name):
+    """
+    Convert point values to a QLineSeries object.
+
+    Parameters
+    ----------
+    x_values : TYPE
+        DESCRIPTION.
+    y_values : TYPE
+        DESCRIPTION.
+    name : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    series : TYPE
+        DESCRIPTION.
+
+    """
     series = QtCharts.QLineSeries()
     series.setName(name)
 
@@ -323,6 +554,7 @@ def values2series(x_values, y_values, name):
         series.append(x, y)
 
     return series
+
 
 def loadUiWidget(uifilename: str,
                  parent: typing.Optional[QtWidgets.QWidget] = None,
