@@ -18,6 +18,7 @@ from specutils import Spectrum1D  # type: ignore
 
 from pyzui import utils
 from pyzui import backends
+from pyzui import lines
 
 try:
     from PySide6 import QtCore, QtGui, QtUiTools, QtWidgets, QtCharts
@@ -337,6 +338,10 @@ class GuiApp:
             self.setSmoothingFactor
         )
 
+        self.main_wnd.linesAutoPushButton.clicked.connect(
+            self.doIdentifyLines
+        )
+
     def _updateMouseLabelFromEvent(self, args):
         self._updateMouseLabel(args[0])
 
@@ -406,10 +411,40 @@ class GuiApp:
         self.redrawCurrentSpec()
 
     def redrawCurrentSpec(self, *args, **kwargs):
-        # TODO: save and restore current zoom
         self.currentSpecItemChanged(
             self.main_wnd.specListWidget.currentItem()
         )
+
+    def doIdentifyLines(self, *args, **kwargs):
+        if self._current_spec_uuid is None:
+            return
+
+        sp = self.open_spectra[self._current_spec_uuid]
+
+        wav = sp.spectral_axis.value
+        wav_unit = sp.spectral_axis.unit
+        flux = sp.flux.value
+        var = None
+
+        if isinstance(sp.uncertainty, VarianceUncertainty):
+            var = sp.uncertainty.array
+        elif isinstance(sp.uncertainty, StdDevUncertainty):
+            var = sp.uncertainty.array ** 2
+
+        detected_lines = lines.get_spectrum_lines(
+            wavelengths=wav,
+            flux=flux,
+            var=var
+        )
+
+        self.main_wnd.linesTableWidget.setRowCount(0)
+        self.main_wnd.linesTableWidget.setRowCount(len(detected_lines))
+        for j, (k, w, l, h) in enumerate(detected_lines):
+            new_item = QtWidgets.QTableWidgetItem(f"{w:.2f} A")
+            new_item.setFlags(
+                QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled
+            )
+            self.main_wnd.linesTableWidget.setItem(j, 0, new_item)
 
     def currentSpecItemChanged(self, new_item, *args, **kwargs):
         """
@@ -458,6 +493,7 @@ class GuiApp:
         if spec_uuid != self._current_spec_uuid:
             # If we actually change the spectrum, then reset the view
             self._current_spec_uuid = spec_uuid
+            self.main_wnd.linesTableWidget.setRowCount(0)
             for ax in flux_chart.axes():
                 flux_chart.removeAxis(ax)
             for ax in var_chart.axes():

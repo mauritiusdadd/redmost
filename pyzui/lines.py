@@ -212,7 +212,7 @@ def get_spectrum_lines(
                 c_start = None
 
     # Sort by height
-    identifications.sort(key=lambda a: a[3])
+    identifications.sort(key=lambda a: -a[3])
     return identifications
 
 
