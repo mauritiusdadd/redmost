@@ -262,6 +262,7 @@ class GuiApp:
 
         self.open_spectra: Dict[str, Spectrum1D] = {}
         self.current_smoothing: float = -1.0
+        self._current_spec_uuid = None
 
         self.main_wnd = loadUiWidget("main_window.ui", qt_backend=qt_backend)
 
@@ -429,6 +430,7 @@ class GuiApp:
 
         """
         spec_uuid = new_item.uuid
+
         sp = self.open_spectra[spec_uuid]
 
         wav = sp.spectral_axis.value
@@ -449,42 +451,62 @@ class GuiApp:
 
         flux_chart = self.fluxQChartView.chart()
         flux_chart.removeAllSeries()
-        for ax in flux_chart.axes():
-            flux_chart.removeAxis(ax)
+
+        var_chart = self.varQChartView.chart()
+        var_chart.removeAllSeries()
+
+        if spec_uuid != self._current_spec_uuid:
+            # If we actually change the spectrum, then reset the view
+            self._current_spec_uuid = spec_uuid
+            for ax in flux_chart.axes():
+                flux_chart.removeAxis(ax)
+            for ax in var_chart.axes():
+                var_chart.removeAxis(ax)
 
         flux_series = values2series(wav, flux, "Flux")
 
         flux_chart.addSeries(flux_series)
 
-        flux_axis_x = QtCharts.QValueAxis()
+        if not flux_chart.axes():
+            flux_axis_x = QtCharts.QValueAxis()
+            flux_axis_y = QtCharts.QValueAxis()
+            var_axis_x = QtCharts.QValueAxis()
+            var_axis_y = QtCharts.QValueAxis()
+            flux_chart.addAxis(flux_axis_x, QtCore.Qt.AlignBottom)
+            flux_chart.addAxis(flux_axis_y, QtCore.Qt.AlignLeft)
+            var_chart.addAxis(var_axis_x, QtCore.Qt.AlignBottom)
+            var_chart.addAxis(var_axis_y, QtCore.Qt.AlignLeft)
+        else:
+            flux_axis_x = flux_chart.axes()[0]
+            flux_axis_y = flux_chart.axes()[1]
+            var_axis_x = var_chart.axes()[0]
+            var_axis_y = var_chart.axes()[1]
+
         flux_axis_x.setTickInterval(500)
         flux_axis_x.setLabelFormat("%.2f")
         flux_axis_x.setTitleText(str(wav_unit))
 
-        flux_axis_y = QtCharts.QValueAxis()
         flux_axis_y.setLabelFormat("%.2f")
         flux_axis_y.setTitleText(str(flux_unit))
-
-        flux_chart.addAxis(flux_axis_x, QtCore.Qt.AlignBottom)
-        flux_chart.addAxis(flux_axis_y, QtCore.Qt.AlignLeft)
 
         flux_series.attachAxis(flux_axis_x)
         flux_series.attachAxis(flux_axis_y)
 
         if self.current_smoothing >= 0:
+            flux_series.setOpacity(0.3)
             smoothing_sigma =  len(flux) / (1 + 2*self.current_smoothing)
             smoothed_flux = utils.smooth_fft(flux, sigma=smoothing_sigma)
             smoothed_flux_series = values2series(
                 wav, smoothed_flux, "Smoothed flux"
             )
+
+            pen = smoothed_flux_series.pen()
+            pen.setColor("orange")
+            smoothed_flux_series.setPen(pen)
+
             flux_chart.addSeries(smoothed_flux_series)
             smoothed_flux_series.attachAxis(flux_axis_x)
             smoothed_flux_series.attachAxis(flux_axis_y)
-
-        var_chart = self.varQChartView.chart()
-        var_chart.removeAllSeries()
-        for ax in var_chart.axes():
-            var_chart.removeAxis(ax)
 
         if var is None:
             self.main_wnd.varianceGroupBox.setEnabled(False)
@@ -493,18 +515,13 @@ class GuiApp:
             var_series = values2series(wav, var, "Variance")
             var_chart.addSeries(var_series)
 
-            var_axis_x = QtCharts.QValueAxis()
             var_axis_x.setTickInterval(500)
             var_axis_x.setLabelFormat("%.2f")
             var_axis_x.setTitleText(str(wav_unit))
 
-            var_axis_y = QtCharts.QValueAxis()
             var_axis_y.setTickCount(10)
             var_axis_y.setLabelFormat("%.2f")
             var_axis_y.setTitleText(str(var_unit))
-
-            var_chart.addAxis(var_axis_x, QtCore.Qt.AlignBottom)
-            var_chart.addAxis(var_axis_y, QtCore.Qt.AlignLeft)
 
             var_series.attachAxis(var_axis_x)
             var_series.attachAxis(var_axis_y)
