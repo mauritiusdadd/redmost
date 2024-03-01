@@ -6,16 +6,16 @@ Created on Fri Nov 24 20:38:29 2023.
 @author: daddona
 """
 import os
-from typing import Union, Optional
+from typing import Union, Optional, List
 
 import numpy as np
 
-from astropy.nddata import VarianceUncertainty
-from astropy.io import fits
-from astropy import wcs
-from astropy import units
-from specutils import Spectrum1D
-from specutils.io.registers import data_loader
+from astropy.nddata import VarianceUncertainty  # type: ignore
+from astropy.io import fits  # type: ignore
+from astropy import wcs  # type: ignore
+from astropy import units  # type: ignore
+from specutils import Spectrum1D  # type: ignore
+from specutils.io.registers import data_loader  # type: ignore
 
 KNOWN_SPEC_EXT_NAMES = ['spec', 'spectrum', 'flux', 'data', 'sci', 'science']
 KNOWN_VARIANCE_EXT_NAMES = ['stat', 'stats', 'var', 'variance', 'noise', 'err']
@@ -90,7 +90,11 @@ def specexFitsLoader(file_name: str,
         DESCRIPTION.
 
     """
-    def getHDU(hdul, valid_names, index=None):
+    def getHDU(
+        hdul: fits.HDUList,
+        valid_names: List[str],
+        index: Optional[Union[str, int]] = None
+    ):
         if index is None:
             for hdu in hdul:
                 if hdu.name.lower() in valid_names:
@@ -101,12 +105,12 @@ def specexFitsLoader(file_name: str,
             return hdul[index]
 
     with fits.open(file_name, **kwargs) as hdulist:
-        flux_hdu = getHDU(hdulist, KNOWN_SPEC_EXT_NAMES)
+        flux_hdu = getHDU(hdulist, KNOWN_SPEC_EXT_NAMES, index=flux_hdu_index)
         var_hdu = getHDU(hdulist, KNOWN_VARIANCE_EXT_NAMES)
         mask_hdu = getHDU(hdulist, KNOWN_MASK_EXT_NAMES)
         wd_hdu = getHDU(hdulist, KNOWN_RCURVE_EXT_NAMES)
 
-        valid_id_keys = [
+        valid_id_keys: List[str] = [
             f"{i}{j}"
             for i in ['', 'OBJ', 'OBJ_', 'TARGET', 'TARGET_']
             for j in ['ID', 'NUMBER', 'UID', 'UUID']
@@ -164,17 +168,17 @@ def specexFitsLoader(file_name: str,
         flux_not_nan_mask = ~np.isnan(flux)
 
         if mask is not None:
-            flux_not_nan_mask &= ~mask
+            flux_not_nan_mask &= ~(mask.astype(bool))
 
         flux_units = units.Unit(flux_hdu.header['BUNIT'])
         wave_units = units.Unit(flux_hdu.header['CUNIT1'])
 
-        flux = flux[flux_not_nan_mask].copy() * flux_units
-        var = var[flux_not_nan_mask].copy() * (flux_units**2)
-        lam = lam[flux_not_nan_mask].copy() * wave_units
+        flux = flux.copy() * flux_units
+        var = var.copy() * (flux_units**2)
+        lam = lam.copy() * wave_units
 
         if wd is not None:
-            wd = wd[flux_not_nan_mask].copy()
+            wd = wd.copy()
         else:
             # If now wavelenght dispersion information is present, then
             # compute it using the wavelenght
@@ -188,7 +192,7 @@ def specexFitsLoader(file_name: str,
         meta = {'header': hdulist[0].header}
         uncertainty = VarianceUncertainty(var)
 
-        sp = Spectrum1D(
+        sp: Spectrum1D = Spectrum1D(
             flux=flux,
             spectral_axis=lam,
             wcs=flux_wcs,
@@ -196,14 +200,14 @@ def specexFitsLoader(file_name: str,
             meta=meta
         )
 
-        sp.mask = mask
+        sp.mask = flux_not_nan_mask
         sp.wd = wd
         sp.obj_id = obj_id
 
     return sp
 
 
-def loadSpectrum(url: str):
+def loadSpectrum(url: str) -> Spectrum1D:
     """
     Load a spectrum.
 
@@ -224,7 +228,7 @@ def loadSpectrum(url: str):
 
     """
     try:
-        sp = Spectrum1D.read(url)
+        sp: Spectrum1D = Spectrum1D.read(url)
     except Exception:
         raise NotImplementedError("No loader available")
     else:

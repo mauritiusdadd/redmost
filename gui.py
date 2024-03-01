@@ -8,10 +8,13 @@ Created on Fri Nov 24 10:33:40 2023.
 import os
 import sys
 import uuid
-import typing
+from typing import Optional, Union, List, Dict
 import logging
 
+import numpy as np
 from astropy.nddata import VarianceUncertainty, StdDevUncertainty
+
+from specutils import Spectrum1D  # type: ignore
 
 from utils import loadSpectrum
 import backends
@@ -248,7 +251,7 @@ class AdvancedQChartView(QtCharts.QChartView):
         return valueGivenSeries
 
 
-class GuiApp():
+class GuiApp:
     """General class for the main GUI."""
 
     def __init__(self, qt_backend: str):
@@ -257,7 +260,7 @@ class GuiApp():
             # if it does not exist then a QApplication is created
             self.qapp = QtWidgets.QApplication(sys.argv)
 
-        self.open_spectra = {}
+        self.open_spectra: Dict[str, Spectrum1D] = {}
 
         self.main_wnd = loadUiWidget("main_window.ui", qt_backend=qt_backend)
 
@@ -323,8 +326,6 @@ class GuiApp():
         self.fluxQChartView.onMouseWheelEvent.connect(
             self.varQChartView.wheelEvent
         )
-
-
         self.fluxQChartView.onMousePressSeries.connect(self.mousePressedFlux)
 
     def _updateMouseLabelFromEvent(self, args):
@@ -336,14 +337,10 @@ class GuiApp():
     def mouseScollFlux(self, args):
         data_pos = args[0]
         event = args[1]
-        print(data_pos)
-        print(event)
 
     def mousePressedFlux(self, args):
         data_pos = args[0]
         event = args[1]
-        print(data_pos)
-        print(event)
 
     def doZoomReset(self, *arg, **kwargs):
         self.fluxQChartView.chart().zoomReset()
@@ -425,6 +422,9 @@ class GuiApp():
             var_unit = sp.uncertainty.unit ** 2
 
         flux_chart = self.fluxQChartView.chart()
+        flux_chart.removeAllSeries()
+        for ax in flux_chart.axes():
+            flux_chart.removeAxis(ax)
 
         flux_series = values2series(wav, flux, "Flux")
 
@@ -447,11 +447,15 @@ class GuiApp():
         flux_series.attachAxis(flux_axis_x)
         flux_series.attachAxis(flux_axis_y)
 
+        var_chart = self.varQChartView.chart()
+        var_chart.removeAllSeries()
+        for ax in var_chart.axes():
+            var_chart.removeAxis(ax)
+
         if var is None:
             self.main_wnd.varianceGroupBox.setEnabled(False)
         else:
             self.main_wnd.varianceGroupBox.setEnabled(True)
-            var_chart = self.varQChartView.chart()
             var_series = values2series(wav, var, "Variance")
             var_chart.addSeries(var_series)
 
@@ -528,7 +532,11 @@ class GuiAppPyside(GuiApp):
         super().__init__(QT_BACKEND)
 
 
-def values2series(x_values, y_values, name):
+def values2series(
+    x_values: Union[List[float], np.ndarray],
+    y_values: Union[List[float], np.ndarray],
+    name: str
+) -> QtCharts.QLineSeries:
     """
     Convert point values to a QLineSeries object.
 
@@ -547,7 +555,7 @@ def values2series(x_values, y_values, name):
         DESCRIPTION.
 
     """
-    series = QtCharts.QLineSeries()
+    series: QtCharts.QLineSeries = QtCharts.QLineSeries()
     series.setName(name)
 
     for x, y in zip(x_values, y_values):
@@ -556,12 +564,13 @@ def values2series(x_values, y_values, name):
     return series
 
 
-def loadUiWidget(uifilename: str,
-                 parent: typing.Optional[QtWidgets.QWidget] = None,
-                 qt_backend: typing.Optional[str] = 'PySide6'
-                 ) -> QtWidgets.QWidget:
+def loadUiWidget(
+    uifilename: str,
+    parent: Optional[QtWidgets.QWidget] = None,
+    qt_backend: Optional[str] = 'PySide6'
+) -> QtWidgets.QWidget:
     """
-    Load an UI file.
+    Load a UI file.
 
     Parameters
     ----------
@@ -569,6 +578,8 @@ def loadUiWidget(uifilename: str,
         Path of the UI file to load.
     parent : Qwidget, optional
         Parent widget. The default is None.
+    qt_backend : str, optional.
+        The UI backed to use. The default value is 'PySide6'
 
     Returns
     -------
@@ -576,8 +587,9 @@ def loadUiWidget(uifilename: str,
         The widget loaded from the UI file.
 
     """
+
     logging.debug(f"Loading UI using Qt backend '{qt_backend}'")
-    ui_file_path = os.path.join(
+    ui_file_path: str = os.path.join(
         os.path.abspath(os.path.dirname(__file__)), 'ui',
         uifilename
     )
@@ -586,7 +598,7 @@ def loadUiWidget(uifilename: str,
         loader = QtUiTools.QUiLoader()
         uifile = QtCore.QFile(ui_file_path)
         uifile.open(QtCore.QFile.ReadOnly)
-        ui = loader.load(uifile, parent)
+        ui: QtWidgets.QWidget = loader.load(uifile, parent)
         uifile.close()
     elif qt_backend == 'PyQt6':
         ui = uic.loadUi(ui_file_path)
@@ -594,7 +606,7 @@ def loadUiWidget(uifilename: str,
     return ui
 
 
-def main():
+def main() -> None:
     """
     Run the main GUI application using PySide.
 
