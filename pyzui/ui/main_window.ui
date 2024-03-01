@@ -263,7 +263,17 @@
             </widget>
            </item>
            <item>
-            <widget class="QDoubleSpinBox" name="smoothingDoubleSpinBox"/>
+            <widget class="QDoubleSpinBox" name="smoothingDoubleSpinBox">
+             <property name="minimum">
+              <double>0.000000000000000</double>
+             </property>
+             <property name="maximum">
+              <double>10.000000000000000</double>
+             </property>
+             <property name="value">
+              <double>3.000000000000000</double>
+             </property>
+            </widget>
            </item>
            <item>
             <spacer name="horizontalSpacer_2">

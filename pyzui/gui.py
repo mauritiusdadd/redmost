@@ -16,8 +16,8 @@ from astropy.nddata import VarianceUncertainty, StdDevUncertainty
 
 from specutils import Spectrum1D  # type: ignore
 
-from utils import loadSpectrum
-import backends
+from pyzui import utils
+from pyzui import backends
 
 try:
     from PySide6 import QtCore, QtGui, QtUiTools, QtWidgets, QtCharts
@@ -261,6 +261,7 @@ class GuiApp:
             self.qapp = QtWidgets.QApplication(sys.argv)
 
         self.open_spectra: Dict[str, Spectrum1D] = {}
+        self.current_smoothing: float = -1.0
 
         self.main_wnd = loadUiWidget("main_window.ui", qt_backend=qt_backend)
 
@@ -328,6 +329,13 @@ class GuiApp:
         )
         self.fluxQChartView.onMousePressSeries.connect(self.mousePressedFlux)
 
+        self.main_wnd.smoothingCheckBox.stateChanged.connect(
+            self.toggleSmothing
+        )
+        self.main_wnd.smoothingDoubleSpinBox.valueChanged.connect(
+            self.setSmoothingFactor
+        )
+
     def _updateMouseLabelFromEvent(self, args):
         self._updateMouseLabel(args[0])
 
@@ -384,6 +392,24 @@ class GuiApp:
         self.fluxQChartView.zoomOut()
         self.varQChartView.zoomOut()
 
+    def toggleSmothing(self, show_smoothing: int):
+        if show_smoothing:
+            curr_smt_val = self.main_wnd.smoothingDoubleSpinBox.value()
+            self.current_smoothing = float(curr_smt_val)
+        else:
+            self.current_smoothing = -1.0
+        self.redrawCurrentSpec()
+
+    def setSmoothingFactor(self, smoothing_value: float):
+        self.current_smoothing = float(smoothing_value)
+        self.redrawCurrentSpec()
+
+    def redrawCurrentSpec(self, *args, **kwargs):
+        # TODO: save and restore current zoom
+        self.currentSpecItemChanged(
+            self.main_wnd.specListWidget.currentItem()
+        )
+
     def currentSpecItemChanged(self, new_item, *args, **kwargs):
         """
         Update widgets when the current object changes.
@@ -429,7 +455,6 @@ class GuiApp:
         flux_series = values2series(wav, flux, "Flux")
 
         flux_chart.addSeries(flux_series)
-        # flux_chart.createDefaultAxes()
 
         flux_axis_x = QtCharts.QValueAxis()
         flux_axis_x.setTickInterval(500)
@@ -437,7 +462,6 @@ class GuiApp:
         flux_axis_x.setTitleText(str(wav_unit))
 
         flux_axis_y = QtCharts.QValueAxis()
-        flux_axis_y.setTickCount(10)
         flux_axis_y.setLabelFormat("%.2f")
         flux_axis_y.setTitleText(str(flux_unit))
 
@@ -446,6 +470,16 @@ class GuiApp:
 
         flux_series.attachAxis(flux_axis_x)
         flux_series.attachAxis(flux_axis_y)
+
+        if self.current_smoothing >= 0:
+            smoothing_sigma =  len(flux) / (1 + 2*self.current_smoothing)
+            smoothed_flux = utils.smooth_fft(flux, sigma=smoothing_sigma)
+            smoothed_flux_series = values2series(
+                wav, smoothed_flux, "Smoothed flux"
+            )
+            flux_chart.addSeries(smoothed_flux_series)
+            smoothed_flux_series.attachAxis(flux_axis_x)
+            smoothed_flux_series.attachAxis(flux_axis_y)
 
         var_chart = self.varQChartView.chart()
         var_chart.removeAllSeries()
@@ -503,7 +537,7 @@ class GuiApp:
         )
 
         for file in file_list:
-            sp = loadSpectrum(file)
+            sp = utils.loadSpectrum(file)
             new_item = QtWidgets.QListWidgetItem(f"{sp.obj_id}")
             new_item.setCheckState(QtCore.Qt.CheckState.Checked)
             new_item.setToolTip(file)

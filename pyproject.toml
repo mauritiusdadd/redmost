@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-data]
+pyzui = ["ui/*.ui"]
+
+[project]
+name = "pyzui"
+version = "0.1.1"
+description = "Display spectra and estimate their redshifts."
+readme = "README.md"
+requires-python = ">=3.8"
+license = {file = "LICENSE"}
+keywords = ["spectroscopy", "FITS", "astronomy"]
+authors = [
+ {name = "Maurizio D'Addona"},
+ {email = "mauritiusdadd@gmail.com"}
+]
+maintainers = [
+ {name = "Maurizio D'Addona"},
+ {email = "mauritiusdadd@gmail.com"}
+]
+classifiers = [
+        # How mature is this project? Common values are
+        #   3 - Alpha
+        #   4 - Beta
+        #   5 - Production/Stable
+        "Development Status :: 4 - Beta",
+        # Indicate who your project is intended for
+        "Intended Audience :: Science/Research",
+        "Topic :: Multimedia :: Graphics :: Graphics Conversion",
+        # Specify the Python versions you support here. In particular, ensure
+        # that you indicate whether you support Python 2, Python 3 or both.
+        "Programming Language :: Python :: 3",
+]
+
+dependencies = [
+    "numpy",
+    "scipy",
+    "astropy",
+    "specutils",
+]
+
+
+[project.urls]
+repository = "https://github.com/mauritiusdadd/pyzui"
+
+[project.scripts]
+pyzui = "pyzui.gui:main"
