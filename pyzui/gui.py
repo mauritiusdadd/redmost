@@ -51,8 +51,8 @@ class AdvancedQChartView(QtCharts.QChartView):
     onMouseDoubleClickSeries = Signal(object)
     onMouseWheelEvent = Signal(object)
 
-    def __init__(self, *args: List[Any], **kwargs: Dict[str, Any]) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, *args: List[Any]) -> None:
+        super().__init__(*args)
 
         self.vertical_lock: bool = False
         self.horizontall_lock: bool = False
@@ -151,6 +151,60 @@ class AdvancedQChartView(QtCharts.QChartView):
 
         """
         self.zoom(value, x_center, y_center)
+
+    def _getDataBounds(self) -> Union[
+        Tuple[float, float, float, float],
+        Tuple[None, None, None, None],
+    ]:
+        x_min = None
+        x_max = None
+        y_min = None
+        y_max = None
+        for series in self.chart().series():
+            data: np.ndarray = np.array(
+                [(p.x(), p.y()) for p in series.points()]
+            )
+            p1x, p1y = np.min(data, axis=0)[0:2]
+            p2x, p2y = np.max(data, axis=0)[0:2]
+
+            if x_min is None:
+                x_min = p1x
+                y_min = p1y
+                x_max = p2x
+                y_max = p2y
+            else:
+                x_min = min(x_min, p1x)
+                y_min = min(y_min, p1y)
+                x_max = max(x_max, p2x)
+                y_max = max(y_max, p2y)
+        return x_min, y_min, x_max, y_max
+
+    def zoomReset(self) -> None:
+        """
+        Reset the zoom to fit the chart content.
+
+        Returns
+        -------
+        None
+
+        """
+        if self._sibling_locked:
+            return
+
+        self._sibling_locked = True
+        for sibling in self.siblings:
+            sibling.zoomReset()
+        self._sibling_locked = False
+
+        chart = self.chart()
+        x1, y1, x2, y2 = self._getDataBounds()
+        if x1 is not None:
+            x_axis = chart.axes()[0]
+            y_axis = chart.axes()[1]
+            x_axis.setMin(x1)
+            y_axis.setMin(y1)
+            x_axis.setMax(x2)
+            y_axis.setMax(y2)
 
     def zoom(
         self,
@@ -387,11 +441,11 @@ class AdvancedQChartView(QtCharts.QChartView):
             DESCRIPTION.
 
         """
-        widgetPos = event.position()
-        scenePos = self.mapToScene(int(widgetPos.x()), int(widgetPos.y()))
-        chartItemPos = self.chart().mapFromScene(scenePos)
-        valueGivenSeries = self.chart().mapToValue(chartItemPos)
-        return valueGivenSeries
+        widget_pos = event.position()
+        scene_pos = self.mapToScene(int(widget_pos.x()), int(widget_pos.y()))
+        chart_item_pos = self.chart().mapFromScene(scene_pos)
+        value_in_series = self.chart().mapToValue(chart_item_pos)
+        return value_in_series
 
 
 class GuiApp:
@@ -417,7 +471,8 @@ class GuiApp:
         # Status Bar
         self.mousePosLabel: QtWidgets.QLabel = QtWidgets.QLabel("")
 
-        if statusbar := self.main_wnd.statusBar():
+        statusbar = self.main_wnd.statusBar()
+        if statusbar:
             statusbar.addPermanentWidget(self.mousePosLabel)
 
         self.main_wnd.fluxContainerWidget.setContentsMargins(0, 0, 0, 0)
@@ -514,14 +569,11 @@ class GuiApp:
     def mousePressedFlux(self, args) -> None:
         data_pos: QtCore.QPointF = args[0]
         event: QtGui.QMouseEvent = args[1]
-        match self.global_state:
-            case self.GlobalState.SELECT_LINE_MANUAL:
-                self.addLine(data_pos.x())
-                self.global_state = self.GlobalState.READY
-                self.qapp.restoreOverrideCursor()
-                self.unlock()
-            case _:
-                pass
+        if self.global_state == self.GlobalState.SELECT_LINE_MANUAL:
+            self.addLine(data_pos.x())
+            self.global_state = self.GlobalState.READY
+            self.qapp.restoreOverrideCursor()
+            self.unlock()
 
     def lock(self, *args, **kwargs) -> None:
         self.main_wnd.redGroupBox.setEnabled(False)
@@ -734,7 +786,7 @@ class GuiApp:
 
         if self.current_smoothing >= 0:
             flux_series.setOpacity(0.3)
-            smoothing_sigma =  len(flux) / (1 + 2*self.current_smoothing)
+            smoothing_sigma = len(flux) / (1 + 2*self.current_smoothing)
             smoothed_flux = utils.smooth_fft(flux, sigma=smoothing_sigma)
             smoothed_flux_series = values2series(
                 wav, smoothed_flux, "Smoothed flux"
@@ -747,6 +799,10 @@ class GuiApp:
             flux_chart.addSeries(smoothed_flux_series)
             smoothed_flux_series.attachAxis(flux_axis_x)
             smoothed_flux_series.attachAxis(flux_axis_y)
+
+        flux_chart.setContentsMargins(0, 0, 0, 0)
+        flux_chart.setBackgroundRoundness(0)
+        flux_chart.legend().hide()
 
         if var is None:
             self.main_wnd.varianceGroupBox.setEnabled(False)
@@ -765,6 +821,10 @@ class GuiApp:
 
             var_series.attachAxis(var_axis_x)
             var_series.attachAxis(var_axis_y)
+
+        var_chart.setContentsMargins(0, 0, 0, 0)
+        var_chart.setBackgroundRoundness(0)
+        var_chart.legend().hide()
 
     def doImportSpectra(self, *args, **kwargs) -> None:
         """
