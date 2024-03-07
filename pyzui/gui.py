@@ -179,6 +179,53 @@ class AdvancedQChartView(QtCharts.QChartView):
                 y_max = max(y_max, p2y)
         return x_min, y_min, x_max, y_max
 
+
+    def syncSiblingAxes(self) -> None:
+        if self._sibling_locked:
+            return
+
+        axes = self.chart().axes()
+        if len(axes) < 2:
+            return
+        x_axis, y_axis = axes[0:2]
+
+        self._sibling_locked = True
+        # Get current range for x and y axes
+        x_min = x_axis.min()
+        y_min = y_axis.min()
+        x_max = x_axis.max()
+        y_max = y_axis.max()
+
+        for sibling in self.siblings:
+            sibling.setAxesRange(x_min, y_min, x_max, y_max)
+        self._sibling_locked = False
+
+    def setAxesRange(
+        self,
+        x_min: Optional[float],
+        y_min: Optional[float],
+        x_max: Optional[float],
+        y_max: Optional[float]
+    ) -> None:
+        if self._sibling_locked:
+            return
+
+        axes = self.chart().axes()
+        if len(axes) < 2:
+            return
+        x_axis, y_axis = axes[0:2]
+
+        if not self.horizontall_lock:
+            if x_min is not None:
+                x_axis.setMin(x_min)
+            if x_max is not None:
+                x_axis.setMax(x_max)
+        if not self.vertical_lock:
+            if y_min is not None:
+                y_axis.setMin(y_min)
+            if y_max is not None:
+                y_axis.setMax(y_max)
+
     def zoomReset(self) -> None:
         """
         Reset the zoom to fit the chart content.
@@ -196,15 +243,7 @@ class AdvancedQChartView(QtCharts.QChartView):
             sibling.zoomReset()
         self._sibling_locked = False
 
-        chart = self.chart()
-        x1, y1, x2, y2 = self._getDataBounds()
-        if x1 is not None:
-            x_axis = chart.axes()[0]
-            y_axis = chart.axes()[1]
-            x_axis.setMin(x1)
-            y_axis.setMin(y1)
-            x_axis.setMax(x2)
-            y_axis.setMax(y2)
+        self.setAxesRange(*self._getDataBounds())
 
     def zoom(
         self,
@@ -382,12 +421,23 @@ class AdvancedQChartView(QtCharts.QChartView):
         if self._sibling_locked:
             return
 
+        self._sibling_locked = True
+        for sibling in self.siblings:
+            sibling.mouseReleaseEvent(event)
+        self._sibling_locked = False
+
         if event.button() == QtCore.Qt.MouseButton.MiddleButton:
             getQApp().restoreOverrideCursor()
             event.accept()
+        elif event.button() == QtCore.Qt.MouseButton.RightButton:
+            QtWidgets.QGraphicsView.mouseReleaseEvent(self, event)
+        else:
+            # Passtrough for rubber band handling
+            super().mouseReleaseEvent(event)
 
-        super().mouseReleaseEvent(event)
         self.onMouseReleaseSeries.emit((self.toSeriesPos(event), event))
+        if self.rubberBand() != QtCharts.QChartView.RubberBand.NoRubberBand:
+            self.syncSiblingAxes()
 
     def wheelEvent(self, event: QtGui.QWheelEvent, **kwargs) -> None:
         """
@@ -579,12 +629,18 @@ class GuiApp:
         self.main_wnd.redGroupBox.setEnabled(False)
         self.main_wnd.infoGroupBox.setEnabled(False)
         self.main_wnd.plotGroupBox.setEnabled(False)
+        self.fluxQChartView.setRubberBand(
+            QtCharts.QChartView.RubberBand.NoRubberBand
+        )
 
     def unlock(self, *args, **kwargs) -> None:
         self.main_wnd.specGroupBox.setEnabled(True)
         self.main_wnd.redGroupBox.setEnabled(True)
         self.main_wnd.infoGroupBox.setEnabled(True)
         self.main_wnd.plotGroupBox.setEnabled(True)
+        self.fluxQChartView.setRubberBand(
+            QtCharts.QChartView.RubberBand.RectangleRubberBand
+        )
 
     def doAddNewLine(self, *args, **kwargs) -> None:
         if self._current_spec_uuid is None:

@@ -138,7 +138,7 @@
      </widget>
     </item>
     <item>
-     <layout class="QVBoxLayout" name="verticalLayout_2" stretch="6,3,1">
+     <layout class="QVBoxLayout" name="verticalLayout_2" stretch="6,3,0">
       <item>
        <widget class="QGroupBox" name="fluxGroupBox">
         <property name="sizePolicy">
@@ -290,6 +290,13 @@
               </size>
              </property>
             </spacer>
+           </item>
+           <item>
+            <widget class="QLabel" name="label">
+             <property name="text">
+              <string>LMB: zoom selection;  MMB: pan;  RMB: context menu; MW: zoom in/out</string>
+             </property>
+            </widget>
            </item>
           </layout>
          </item>
@@ -606,7 +613,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <addaction name="actionSave_List"/>
    <addaction name="actionSave_List_As"/>
    <addaction name="separator"/>
-   <addaction name="actionZoomRegion"/>
    <addaction name="actionZoomIn"/>
    <addaction name="actionZoomOut"/>
    <addaction name="actionZoomFit"/>
@@ -697,20 +703,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
    </property>
    <property name="toolTip">
     <string>Zoom fit</string>
-   </property>
-   <property name="menuRole">
-    <enum>QAction::NoRole</enum>
-   </property>
-  </action>
-  <action name="actionZoomRegion">
-   <property name="icon">
-    <iconset theme="edit-find"/>
-   </property>
-   <property name="text">
-    <string>Zoom</string>
-   </property>
-   <property name="toolTip">
-    <string>Zoom</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>
