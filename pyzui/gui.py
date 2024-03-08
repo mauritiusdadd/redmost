@@ -43,7 +43,6 @@ def getQApp() -> QtWidgets.QApplication:
         qapp = QtWidgets.QApplication(sys.argv)
     return qapp
 
-
 class AdvancedQChartView(QtCharts.QChartView):
     """Subclass of QtCharts.QChartView with advanced features."""
     onMouseMoveSeries = Signal(object)
@@ -517,14 +516,20 @@ class GuiApp:
         self.qapp: QtWidgets.QApplication = getQApp()
 
         self.open_spectra: Dict[uuid.UUID, Spectrum1D] = {}
-        self.current_redshift: Union[float, None] = None
-        self.current_spec_uuid: uuid.UUID | None = None
+        self.open_spectra_files: Dict[uuid.UUID, str] = {}
+        self.current_redshift: Optional[float] = None
+        self.current_spec_uuid: Optional[uuid.UUID] = None
         self.object_state_dict: Dict[uuid.UUID, Any] = {}
+        self.current_project_file_path: Optional[str] = None
 
         self.global_state: Enum = self.GlobalState.READY
 
         self.main_wnd: QtWidgets.QMainWindow = loadUiWidget(
             "main_window.ui", qt_backend=qt_backend
+        )
+
+        self.msgBox: QtWidgets.QMessageBox = QtWidgets.QMessageBox(
+            parent=self.main_wnd
         )
 
         # Status Bar
@@ -606,9 +611,21 @@ class GuiApp:
         self.main_wnd.specListWidget.currentItemChanged.connect(
             self.currentSpecItemChanged
         )
-        self.main_wnd.actionZoomIn.triggered.connect(self.doZoomIn)
-        self.main_wnd.actionZoomOut.triggered.connect(self.doZoomOut)
-        self.main_wnd.actionZoomFit.triggered.connect(self.doZoomReset)
+        self.main_wnd.actionZoomIn.triggered.connect(
+            self.doZoomIn
+        )
+        self.main_wnd.actionZoomOut.triggered.connect(
+            self.doZoomOut
+        )
+        self.main_wnd.actionZoomFit.triggered.connect(
+            self.doZoomReset
+        )
+        self.main_wnd.actionSaveProjectAs.triggered.connect(
+            self.doSaveProjectAs
+        )
+        self.main_wnd.actionSaveProject.triggered.connect(
+            self.doSaveProject
+        )
 
         self.fluxQChartView.onMouseMoveSeries.connect(
             self._updateMouseLabelFromEvent
@@ -911,9 +928,6 @@ class GuiApp:
             new_item.setCheckState(QtCore.Qt.CheckState.Checked)
             self.main_wnd.linesTableWidget.setItem(j, 0, new_item)
 
-    def doSaveCurrentProject(self):
-        raise NotImplementedError()
-
     def doImportSpectra(self, *args, **kwargs) -> None:
         """
         Use QFileDialog to get spectra files.
@@ -931,10 +945,10 @@ class GuiApp:
 
         """
         file_list, files_type = QtWidgets.QFileDialog.getOpenFileNames(
-            self.main_wnd,
-            self.qapp.tr("Import Spectra"),
-            '.',
-            (
+            parent=self.main_wnd,
+            caption=self.qapp.tr("Import Spectra"),
+            directory='.',
+            filter=(
                 f"{self.qapp.tr('FITS')} (*.fit *.fits);;"
                 f"{self.qapp.tr('ASCII')} (*.txt *.dat *.cat);;"
                 f"{self.qapp.tr('All Files')} (*.*)"
@@ -955,19 +969,25 @@ class GuiApp:
 
             self.pbar.setValue(j + 1)
             self.statusbar.showMessage(
-                f"Loading file {j + 1:d} of {n_files}..."
+                self.qapp.tr("Loading file") + f"{j + 1:d}/{n_files}..."
             )
             self.qapp.processEvents()
 
             item_uuid: uuid.UUID = uuid.uuid4()
-            sp: Spectrum1D = utils.loadSpectrum(file)
+            try:
+                sp: Spectrum1D = utils.loadSpectrum(file)
+            except Exception:
+                # TODO: show proper message
+                continue
 
-            new_item = QtWidgets.QListWidgetItem(f"{sp.obj_id}")
+            spec_file = os.path.basename(file)
+            new_item = QtWidgets.QListWidgetItem(spec_file)
             new_item.setCheckState(QtCore.Qt.CheckState.Checked)
             new_item.setToolTip(file)
             new_item.setData(QtCore.Qt.ItemDataRole.UserRole, item_uuid)
 
             self.open_spectra[item_uuid] = sp
+            self.open_spectra_files[item_uuid] = os.path.abspath(spec_file)
             self.main_wnd.specListWidget.addItem(new_item)
             self.qapp.processEvents()
 
@@ -975,6 +995,61 @@ class GuiApp:
         self.pbar.hide()
         self._unlock()
         self.global_state = self.GlobalState.READY
+
+    def doSaveProject(self, *args, **kwargs) -> None:
+        """
+        Save the current project.
+
+        Parameters
+        ----------
+        args
+        kwargs
+
+        Returns
+        -------
+
+        """
+        self.doSaveProjectAs(dest=self.current_project_file_path)
+
+    def doSaveProjectAs(
+            self,
+            dest: Optional[str] = None,
+            *args, **kwargs
+    ) -> None:
+
+        if (dest is None) or (not os.path.exists(dest)):
+            dest_file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+                parent=self.main_wnd,
+                caption=self.qapp.tr("Save project to file"),
+                directory='.',
+                filter=(
+                    f"{self.qapp.tr('Project file')} (*.json);;"
+                    f"{self.qapp.tr('All files')} (*.*);;"
+                )
+            )
+
+            if not dest_file_path:
+                return
+        else:
+            dest_file_path = dest
+
+        try:
+            self.saveProject(dest_file_path)
+        except Exception as exc:
+            self.msgBox.setText(
+                 self.qapp.tr(
+                     "An error has occurred while saving the project."
+                 )
+            )
+            self.msgBox.setInformativeText('')
+            self.msgBox.setDetailedText(str(exc))
+            self.msgBox.setIcon(
+                QtWidgets.QMessageBox.Icon.Critical
+            )
+            self.msgBox.setStandardButtons(
+                QtWidgets.QMessageBox.StandardButton.Ok
+            )
+            self.msgBox.showNormal()
 
     def doZoomIn(self, *args, **kwargs) -> None:
         """
@@ -1031,7 +1106,6 @@ class GuiApp:
         z_min: float = self.main_wnd.zMinDoubleSpinBox.value()
         z_max: float = self.main_wnd.zMaxDoubleSpinBox.value()
 
-
         # Build a list of selected lines to be used.
         # If no lines are selected, then use all lines.
         lines_lam = []
@@ -1053,8 +1127,19 @@ class GuiApp:
             new_z_item = QtWidgets.QListWidgetItem(f"z={z:.4f} (p={prob:.4f})")
             z_list.addItem(new_z_item)
 
-
     def doZoomReset(self, *arg, **kwargs) -> None:
+        """
+        Reset the zoom for the flux chart and all its siblings.
+        Parameters
+        ----------
+        arg
+        kwargs
+
+        Returns
+        -------
+        None
+
+        """
         self.fluxQChartView.zoomReset()
 
     def mousePressedFlux(self, args) -> None:
@@ -1078,19 +1163,59 @@ class GuiApp:
             self.qapp.restoreOverrideCursor()
             self._unlock()
 
-    def requestCancelCurrentOperation(self) -> None:
-        self.global_state = self.GlobalState.REUQUEST_CANCEL
-
-    def toggleSmothing(self, show_smoothing: int) -> None:
-        self.redrawCurrentSpec()
-
-    def setSmoothingFactor(self, smoothing_value: float) -> None:
-        self.redrawCurrentSpec()
-
     def redrawCurrentSpec(self, *args, **kwargs) -> None:
         self.currentSpecItemChanged(
             self.main_wnd.specListWidget.currentItem()
         )
+
+    def requestCancelCurrentOperation(self) -> None:
+        self.global_state = self.GlobalState.REUQUEST_CANCEL
+
+    def saveProject(self, file_name: str) -> None:
+        """
+        Save the project to a file
+
+        Parameters
+        ----------
+        file_name : str
+            The destination file path.
+
+        Returns
+        -------
+        None
+
+        """
+        # Serlializing objects
+
+        open_file_list = []
+        for k in range(self.main_wnd.specListWidget.count()):
+            item = self.main_wnd.specListWidget.item(k)
+            item_uuid: uuid.UUID = item.data(
+                QtCore.Qt.ItemDataRole.UserRole
+            )
+
+            file_info = {
+                'index': k,
+                'uuid': item_uuid.hex,
+                'text': item.text(),
+                'path': self.open_spectra_files[item_uuid]
+            }
+
+            open_file_list.append(file_info)
+
+        project_dict = {
+            'open_files': open_file_list,
+            # 'objects_properties': self.object_state_dict
+        }
+
+        with open(file_name, 'w') as f:
+            json.dump(project_dict, f, indent=2)
+
+    def setSmoothingFactor(self, smoothing_value: float) -> None:
+        self.redrawCurrentSpec()
+
+    def toggleSmothing(self, show_smoothing: int) -> None:
+        self.redrawCurrentSpec()
 
     def currentSpecItemChanged(self, new_item, *args, **kwargs) -> None:
         """
@@ -1154,7 +1279,7 @@ class GuiApp:
             var = sp.uncertainty.array ** 2
             var_unit = sp.uncertainty.unit ** 2
 
-        flux_series = values2series(wav, flux, "Flux")
+        flux_series = values2series(wav, flux, self.qapp.tr("Flux"))
         flux_chart.addSeries(flux_series)
 
         if not flux_chart.axes():
@@ -1198,7 +1323,7 @@ class GuiApp:
             smoothing_sigma = len(flux) / (1 + 2 * smoothing_factor)
             smoothed_flux = utils.smooth_fft(flux, sigma=smoothing_sigma)
             smoothed_flux_series = values2series(
-                wav, smoothed_flux, "Smoothed flux"
+                wav, smoothed_flux, self.qapp.tr("Smoothed flux")
             )
 
             pen: QtGui.QPen = smoothed_flux_series.pen()
@@ -1218,7 +1343,7 @@ class GuiApp:
             self.main_wnd.varianceGroupBox.setEnabled(False)
         else:
             self.main_wnd.varianceGroupBox.setEnabled(True)
-            var_series = values2series(wav, var, "Variance")
+            var_series = values2series(wav, var, self.qapp.tr("Variance"))
             var_chart.addSeries(var_series)
 
             var_axis_x.setTickInterval(500)

@@ -627,13 +627,13 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <property name="title">
      <string>File</string>
     </property>
-    <addaction name="actionOpen_Project"/>
-    <addaction name="actionSave_Project"/>
-    <addaction name="actionSave_Project_As"/>
+    <addaction name="actionOpenProject"/>
+    <addaction name="actionSaveProject"/>
+    <addaction name="actionSaveProjectAs"/>
     <addaction name="separator"/>
-    <addaction name="actionImport_spectra"/>
+    <addaction name="actionImportSpectra"/>
     <addaction name="separator"/>
-    <addaction name="actionClose_all"/>
+    <addaction name="actionCloseAll"/>
     <addaction name="separator"/>
     <addaction name="actionExit"/>
    </widget>
@@ -654,15 +654,15 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <bool>false</bool>
    </attribute>
    <addaction name="actionNew_Project"/>
-   <addaction name="actionOpen_Project"/>
-   <addaction name="actionSave_Project"/>
+   <addaction name="actionOpenProject"/>
+   <addaction name="actionSaveProject"/>
    <addaction name="separator"/>
    <addaction name="actionZoomIn"/>
    <addaction name="actionZoomOut"/>
    <addaction name="actionZoomFit"/>
    <addaction name="separator"/>
   </widget>
-  <action name="actionOpen_Project">
+  <action name="actionOpenProject">
    <property name="icon">
     <iconset theme="document-open"/>
    </property>
@@ -673,7 +673,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <string>Open Project</string>
    </property>
   </action>
-  <action name="actionSave_Project">
+  <action name="actionSaveProject">
    <property name="icon">
     <iconset theme="document-save"/>
    </property>
@@ -684,7 +684,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <string>Save current session to a file</string>
    </property>
   </action>
-  <action name="actionImport_spectra">
+  <action name="actionImportSpectra">
    <property name="icon">
     <iconset theme="list-add"/>
    </property>
@@ -700,7 +700,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <string>Exit</string>
    </property>
   </action>
-  <action name="actionClose_all">
+  <action name="actionCloseAll">
    <property name="icon">
     <iconset theme="edit-delete"/>
    </property>
@@ -708,7 +708,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <string>Remove All</string>
    </property>
   </action>
-  <action name="actionSave_Project_As">
+  <action name="actionSaveProjectAs">
    <property name="icon">
     <iconset theme="document-save-as"/>
    </property>
