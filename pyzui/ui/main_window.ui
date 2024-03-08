@@ -425,13 +425,13 @@
              <property name="title">
               <string>Matching</string>
              </property>
-             <layout class="QVBoxLayout" name="verticalLayout_10">
+             <layout class="QVBoxLayout" name="verticalLayout_12">
               <item>
                <layout class="QHBoxLayout" name="horizontalLayout_5">
                 <item>
                  <widget class="QLabel" name="label_3">
                   <property name="text">
-                   <string>Tolerance:</string>
+                   <string>simga-tolerance:</string>
                   </property>
                   <property name="alignment">
                    <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -439,7 +439,7 @@
                  </widget>
                 </item>
                 <item>
-                 <widget class="QDoubleSpinBox" name="linedMatchingTolDoubleSpinBox">
+                 <widget class="QDoubleSpinBox" name="linesMatchingTolDoubleSpinBox">
                   <property name="suffix">
                    <string> Angstrom</string>
                   </property>
@@ -449,19 +449,63 @@
                   <property name="singleStep">
                    <double>0.001000000000000</double>
                   </property>
+                  <property name="value">
+                   <double>1.000000000000000</double>
+                  </property>
                  </widget>
                 </item>
                </layout>
               </item>
               <item>
-               <widget class="QPushButton" name="doLinesMatchingPushButton">
+               <layout class="QHBoxLayout" name="horizontalLayout_7">
+                <item>
+                 <widget class="QLabel" name="label_5">
+                  <property name="text">
+                   <string>min. z</string>
+                  </property>
+                  <property name="alignment">
+                   <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QDoubleSpinBox" name="zMinDoubleSpinBox">
+                  <property name="maximum">
+                   <double>999.000000000000000</double>
+                  </property>
+                  <property name="singleStep">
+                   <double>0.001000000000000</double>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QLabel" name="label_2">
+                  <property name="text">
+                   <string>max. z</string>
+                  </property>
+                  <property name="alignment">
+                   <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QDoubleSpinBox" name="zMaxDoubleSpinBox">
+                  <property name="value">
+                   <double>6.000000000000000</double>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+              <item>
+               <widget class="QPushButton" name="matchLinesPushButton">
                 <property name="text">
                  <string>Match</string>
                 </property>
                </widget>
               </item>
               <item>
-               <widget class="QListView" name="linesMarchingResListView"/>
+               <widget class="QListWidget" name="linesMatchListWidget"/>
               </item>
              </layout>
             </widget>
@@ -583,9 +627,9 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <property name="title">
      <string>File</string>
     </property>
-    <addaction name="actionOpen_List"/>
-    <addaction name="actionSave_List"/>
-    <addaction name="actionSave_List_As"/>
+    <addaction name="actionOpen_Project"/>
+    <addaction name="actionSave_Project"/>
+    <addaction name="actionSave_Project_As"/>
     <addaction name="separator"/>
     <addaction name="actionImport_spectra"/>
     <addaction name="separator"/>
@@ -609,29 +653,35 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
-   <addaction name="actionOpen_List"/>
-   <addaction name="actionSave_List"/>
-   <addaction name="actionSave_List_As"/>
+   <addaction name="actionNew_Project"/>
+   <addaction name="actionOpen_Project"/>
+   <addaction name="actionSave_Project"/>
    <addaction name="separator"/>
    <addaction name="actionZoomIn"/>
    <addaction name="actionZoomOut"/>
    <addaction name="actionZoomFit"/>
    <addaction name="separator"/>
   </widget>
-  <action name="actionOpen_List">
+  <action name="actionOpen_Project">
    <property name="icon">
     <iconset theme="document-open"/>
    </property>
    <property name="text">
-    <string>Open List</string>
+    <string>Open Project</string>
+   </property>
+   <property name="toolTip">
+    <string>Open Project</string>
    </property>
   </action>
-  <action name="actionSave_List">
+  <action name="actionSave_Project">
    <property name="icon">
     <iconset theme="document-save"/>
    </property>
    <property name="text">
-    <string>Save List</string>
+    <string>Save Project</string>
+   </property>
+   <property name="toolTip">
+    <string>Save current session to a file</string>
    </property>
   </action>
   <action name="actionImport_spectra">
@@ -658,12 +708,15 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <string>Remove All</string>
    </property>
   </action>
-  <action name="actionSave_List_As">
+  <action name="actionSave_Project_As">
    <property name="icon">
     <iconset theme="document-save-as"/>
    </property>
    <property name="text">
-    <string>Save List As..</string>
+    <string>Save Project As...</string>
+   </property>
+   <property name="toolTip">
+    <string>Save current session to as file ...</string>
    </property>
   </action>
   <action name="actionZoomIn">
@@ -703,6 +756,20 @@ li.checked::marker { content: &quot;\2612&quot;; }
    </property>
    <property name="toolTip">
     <string>Zoom fit</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionNew_Project">
+   <property name="icon">
+    <iconset theme="document-new"/>
+   </property>
+   <property name="text">
+    <string>New Project</string>
+   </property>
+   <property name="toolTip">
+    <string>Start a new empty project</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>

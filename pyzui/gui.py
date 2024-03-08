@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import sys
+import json
 import uuid
 from enum import Enum
 from typing import Optional, Union, Tuple, List, Dict, Any, cast
@@ -178,7 +179,6 @@ class AdvancedQChartView(QtCharts.QChartView):
                 x_max = max(x_max, p2x)
                 y_max = max(y_max, p2y)
         return x_min, y_min, x_max, y_max
-
 
     def syncSiblingAxes(self) -> None:
         if self._sibling_locked:
@@ -503,15 +503,24 @@ class GuiApp:
 
     GlobalState: Enum = Enum(
         'GlobalState',
-        ['READY', 'SELECT_LINE_MANUAL']
+        [
+            'READY',
+            'WAITING',
+            'SELECT_LINE_MANUAL',
+            'SAVE_OBJECT_STATE',
+            'LOAD_OBJECT_STATE',
+            'REUQUEST_CANCEL',
+        ]
     )
 
     def __init__(self, qt_backend: str) -> None:
         self.qapp: QtWidgets.QApplication = getQApp()
 
         self.open_spectra: Dict[uuid.UUID, Spectrum1D] = {}
-        self.current_smoothing: float = -1.0
-        self._current_spec_uuid: uuid.UUID | None = None
+        self.current_redshift: Union[float, None] = None
+        self.current_spec_uuid: uuid.UUID | None = None
+        self.object_state_dict: Dict[uuid.UUID, Any] = {}
+
         self.global_state: Enum = self.GlobalState.READY
 
         self.main_wnd: QtWidgets.QMainWindow = loadUiWidget(
@@ -521,9 +530,24 @@ class GuiApp:
         # Status Bar
         self.mousePosLabel: QtWidgets.QLabel = QtWidgets.QLabel("")
 
-        statusbar = self.main_wnd.statusBar()
-        if statusbar:
-            statusbar.addPermanentWidget(self.mousePosLabel)
+        self.cancel_button: QtWidgets.QPushButton = QtWidgets.QPushButton()
+        self.cancel_button.setText("Cancel")
+        self.cancel_button.hide()
+        self.cancel_button.clicked.connect(
+            self.requestCancelCurrentOperation
+        )
+
+        self.pbar: QtWidgets.QProgressBar = QtWidgets.QProgressBar()
+        self.pbar.hide()
+
+        self.statusbar: QtWidgets.QStatusBar = self.main_wnd.statusBar()
+        if self.statusbar is None:
+            self.statusbar = QtWidgets.QStatusBar()
+            self.main_wnd.setStatusBar(self.statusbar)
+
+        self.statusbar.addPermanentWidget(self.pbar)
+        self.statusbar.addPermanentWidget(self.cancel_button)
+        self.statusbar.addPermanentWidget(self.mousePosLabel)
 
         self.main_wnd.fluxContainerWidget.setContentsMargins(0, 0, 0, 0)
 
@@ -610,22 +634,127 @@ class GuiApp:
             self.doAddNewLine
         )
 
-    def _updateMouseLabelFromEvent(self, *args) -> None:
-        self._updateMouseLabel(args[0][0])
+        self.main_wnd.deleteLinePushButton.clicked.connect(
+            self.doDeleteCurrentLine
+        )
 
-    def _updateMouseLabel(self, mouse_pos: QtCore.QPointF) -> None:
-        self.mousePosLabel.setText(f"\u03BB = {mouse_pos.x():.2f}")
+        self.main_wnd.deleteLinesPushButton.clicked.connect(
+            self.doDeleteAllLines
+        )
 
-    def mousePressedFlux(self, args) -> None:
-        data_pos: QtCore.QPointF = args[0]
-        event: QtGui.QMouseEvent = args[1]
-        if self.global_state == self.GlobalState.SELECT_LINE_MANUAL:
-            self.addLine(data_pos.x())
+        self.main_wnd.matchLinesPushButton.clicked.connect(
+            self.doGetRedshiftFromLines
+        )
+
+    def _backup_current_object_state(self) -> None:
+        """
+        Backup the program state for the current object
+
+        Returns
+        -------
+        None
+
+        """
+        if self.current_spec_uuid is None:
+            return
+
+        self.global_state = self.GlobalState.SAVE_OBJECT_STATE
+        smooting_dict = {
+            'state': self.main_wnd.smoothingCheckBox.checkState(),
+            'value': self.main_wnd.smoothingDoubleSpinBox.value()
+        }
+
+        lines_list = []
+        for row_index in range(self.main_wnd.linesTableWidget.rowCount()):
+            w_item = self.main_wnd.linesTableWidget.item(row_index, 0)
+            line_info = {
+                'row': row_index,
+                'data': float(w_item.data(QtCore.Qt.ItemDataRole.UserRole)),
+                'text': w_item.text(),
+                'checked': w_item.checkState()
+            }
+            lines_list.append(line_info)
+
+        redshifts_form_lines = []
+        for row_index in range(self.main_wnd.linesMatchListWidget.count()):
+            z_item = self.main_wnd.linesMatchListWidget.item(row_index)
+            z_info = {
+                'row': row_index,
+                'text': z_item.text(),
+                'data': z_item.data(QtCore.Qt.ItemDataRole.UserRole)
+            }
+            redshifts_form_lines.append(z_info)
+
+        obj_state = {
+            'smoothing': smooting_dict,
+            'redshift': self.current_redshift,
+            'lines': {
+                'list': lines_list,
+                'redshifts': redshifts_form_lines
+            }
+        }
+
+        self.object_state_dict[self.current_spec_uuid] = obj_state
+        self.global_state = self.GlobalState.READY
+
+    def _restore_object_state(self, obj_uuid: uuid.UUID) -> None:
+        """
+        Restore the programs state for a given object.
+
+        Parameters
+        ----------
+        obj_uuid : uuid.UUID
+            The UUID of the object
+
+        Returns
+        -------
+        None
+
+        """
+        self.global_state = self.GlobalState.LOAD_OBJECT_STATE
+
+        # Clear current content of the widgets
+        self.main_wnd.linesTableWidget.setRowCount(0)
+        self.main_wnd.linesMatchListWidget.clear()
+
+        # If object has not been saved yes, use dafult values
+        if obj_uuid not in self.object_state_dict.keys():
+            self.main_wnd.smoothingCheckBox.setCheckState(
+                QtCore.Qt.CheckState.Unchecked
+            )
+            self.main_wnd.smoothingDoubleSpinBox.setValue(3)
             self.global_state = self.GlobalState.READY
-            self.qapp.restoreOverrideCursor()
-            self.unlock()
+            return
 
-    def lock(self, *args, **kwargs) -> None:
+       # otherwise restore any old previously saved data
+        old_state = self.object_state_dict[obj_uuid]
+        self.main_wnd.smoothingCheckBox.setCheckState(
+            old_state['smoothing']['state']
+        )
+        self.main_wnd.smoothingDoubleSpinBox.setValue(
+            old_state['smoothing']['value']
+        )
+
+        lines = old_state['lines']['list']
+        self.main_wnd.linesTableWidget.setRowCount(len(lines))
+        for line_info in lines:
+            w_item = QtWidgets.QTableWidgetItem(line_info['text'])
+            w_item.setData(QtCore.Qt.ItemDataRole.UserRole, line_info['data'])
+            w_item.setCheckState(line_info['checked'])
+            self.main_wnd.linesTableWidget.setItem(line_info['row'], 0, w_item)
+
+        redshifts_form_lines = old_state['lines']['redshifts']
+        for z_info in redshifts_form_lines:
+            z_item = QtWidgets.QListWidgetItem(z_info['text'])
+            z_item.setData(QtCore.Qt.ItemDataRole.UserRole, z_info['data'])
+            self.main_wnd.linesMatchListWidget.insertItem(
+                z_info['row'], z_item
+            )
+
+        self.global_state = self.GlobalState.READY
+
+    def _lock(self, *args, **kwargs) -> None:
+        self.main_wnd.specGroupBox.setEnabled(False)
         self.main_wnd.redGroupBox.setEnabled(False)
         self.main_wnd.infoGroupBox.setEnabled(False)
         self.main_wnd.plotGroupBox.setEnabled(False)
@@ -633,7 +762,7 @@ class GuiApp:
             QtCharts.QChartView.RubberBand.NoRubberBand
         )
 
-    def unlock(self, *args, **kwargs) -> None:
+    def _unlock(self, *args, **kwargs) -> None:
         self.main_wnd.specGroupBox.setEnabled(True)
         self.main_wnd.redGroupBox.setEnabled(True)
         self.main_wnd.infoGroupBox.setEnabled(True)
@@ -642,16 +771,210 @@ class GuiApp:
             QtCharts.QChartView.RubberBand.RectangleRubberBand
         )
 
+    def _updateMouseLabelFromEvent(self, *args) -> None:
+        self._updateMouseLabel(args[0][0])
+
+    def _updateMouseLabel(self, mouse_pos: QtCore.QPointF) -> None:
+        self.mousePosLabel.setText(f"\u03BB = {mouse_pos.x():.2f}")
+
+    def addLine(self, wavelength: float) -> None:
+        """
+        Add a new line by selecting its position with the mouse.
+
+        Parameters
+        ----------
+        wavelength
+
+        Returns
+        -------
+        None
+
+        """
+        new_item = QtWidgets.QTableWidgetItem(f"{wavelength:.2f} A")
+        new_item.setFlags(
+            QtCore.Qt.ItemFlag.ItemIsSelectable |
+            QtCore.Qt.ItemFlag.ItemIsEnabled |
+            QtCore.Qt.ItemFlag.ItemIsUserCheckable
+        )
+        new_item.setCheckState(QtCore.Qt.CheckState.Checked)
+        new_item_row: int = self.main_wnd.linesTableWidget.rowCount()
+        new_item.setData(QtCore.Qt.ItemDataRole.UserRole, wavelength)
+        self.main_wnd.linesTableWidget.setRowCount(new_item_row + 1)
+        self.main_wnd.linesTableWidget.setItem(new_item_row, 0, new_item)
+
     def doAddNewLine(self, *args, **kwargs) -> None:
-        if self._current_spec_uuid is None:
+        """
+        Tell the main app to identify a new line
+
+        Parameters
+        ----------
+        args
+        kwargs
+
+        Returns
+        -------
+        None
+
+        """
+        # Do nothing if no spectrum is currently selected
+        if self.current_spec_uuid is None:
             return
-        self.lock()
+        self._lock()
         self.main_wnd.specGroupBox.setEnabled(False)
         self.global_state = self.GlobalState.SELECT_LINE_MANUAL
         self.qapp.setOverrideCursor(QtCore.Qt.CursorShape.CrossCursor)
 
-    def doZoomReset(self, *arg, **kwargs) -> None:
-        self.fluxQChartView.zoomReset()
+    def doDeleteCurrentLine(self, *args, **kwargs) -> None:
+        """
+        Delete the current selected line from the table.
+
+        Parameters
+        ----------
+        args
+        kwargs
+
+        Returns
+        -------
+        None
+
+        """
+        # Do nothing if no spectrum is currently selected
+        if self.current_spec_uuid is None:
+            return
+
+        self.main_wnd.linesTableWidget.removeRow(
+            self.main_wnd.linesTableWidget.currentRow()
+        )
+
+    def doDeleteAllLines(self, *args, **kwargs) -> None:
+        """
+        Delete all identified lines.
+
+        Parameters
+        ----------
+        args
+        kwargs
+
+        Returns
+        -------
+        None
+        """
+        self.main_wnd.linesTableWidget.setRowCount(0)
+
+    def doIdentifyLines(self, *args, **kwargs) -> None:
+        """
+        Automagically identify lines in the current spectrum.
+
+        Parameters
+        ----------
+        args
+        kwargs
+
+        Returns
+        -------
+        None
+
+        """
+        if self.current_spec_uuid is None:
+            return
+
+        sp: Spectrum1D = self.open_spectra[self.current_spec_uuid]
+
+        wav: np.ndarray = sp.spectral_axis.value
+        wav_unit = sp.spectral_axis.unit
+        flux: np.ndarray = sp.flux.value
+        var: np.ndarray | None = None
+
+        if isinstance(sp.uncertainty, VarianceUncertainty):
+            var = sp.uncertainty.array
+        elif isinstance(sp.uncertainty, StdDevUncertainty):
+            var = sp.uncertainty.array ** 2
+
+        my_lines: List[
+            Tuple[int, float, float, float]
+        ] = lines.get_spectrum_lines(
+            wavelengths=wav,
+            flux=flux,
+            var=var
+        )
+
+        self.main_wnd.linesTableWidget.setRowCount(0)
+        self.main_wnd.linesTableWidget.setRowCount(len(my_lines))
+        for j, (k, w, l, h) in enumerate(my_lines):
+            new_item = QtWidgets.QTableWidgetItem(f"{w:.2f} A")
+            new_item.setFlags(
+                QtCore.Qt.ItemFlag.ItemIsSelectable |
+                QtCore.Qt.ItemFlag.ItemIsEnabled |
+                QtCore.Qt.ItemFlag.ItemIsUserCheckable
+            )
+            new_item.setData(QtCore.Qt.ItemDataRole.UserRole, w)
+            new_item.setCheckState(QtCore.Qt.CheckState.Checked)
+            self.main_wnd.linesTableWidget.setItem(j, 0, new_item)
+
+    def doSaveCurrentProject(self):
+        raise NotImplementedError()
+
+    def doImportSpectra(self, *args, **kwargs) -> None:
+        """
+        Use QFileDialog to get spectra files.
+
+        Parameters
+        ----------
+        *args : TYPE
+            DESCRIPTION.
+        **kwargs : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
+        file_list, files_type = QtWidgets.QFileDialog.getOpenFileNames(
+            self.main_wnd,
+            self.qapp.tr("Import Spectra"),
+            '.',
+            (
+                f"{self.qapp.tr('FITS')} (*.fit *.fits);;"
+                f"{self.qapp.tr('ASCII')} (*.txt *.dat *.cat);;"
+                f"{self.qapp.tr('All Files')} (*.*)"
+            )
+        )
+
+        self._lock()
+        self.global_state = self.GlobalState.WAITING
+
+        n_files = len(file_list)
+
+        self.pbar.setMaximum(n_files)
+        self.pbar.show()
+        self.cancel_button.show()
+        for j, file in enumerate(file_list):
+            if self.global_state == self.GlobalState.REUQUEST_CANCEL:
+                break
+
+            self.pbar.setValue(j + 1)
+            self.statusbar.showMessage(
+                f"Loading file {j + 1:d} of {n_files}..."
+            )
+            self.qapp.processEvents()
+
+            item_uuid: uuid.UUID = uuid.uuid4()
+            sp: Spectrum1D = utils.loadSpectrum(file)
+
+            new_item = QtWidgets.QListWidgetItem(f"{sp.obj_id}")
+            new_item.setCheckState(QtCore.Qt.CheckState.Checked)
+            new_item.setToolTip(file)
+            new_item.setData(QtCore.Qt.ItemDataRole.UserRole, item_uuid)
+
+            self.open_spectra[item_uuid] = sp
+            self.main_wnd.specListWidget.addItem(new_item)
+            self.qapp.processEvents()
+
+        self.cancel_button.hide()
+        self.pbar.hide()
+        self._unlock()
+        self.global_state = self.GlobalState.READY
 
     def doZoomIn(self, *args, **kwargs) -> None:
         """
@@ -689,66 +1012,85 @@ class GuiApp:
         """
         self.fluxQChartView.zoomOut()
 
+    def doGetRedshiftFromLines(self, *args, **kwargs) -> None:
+        """
+        Compute the redshift by matching identified lines.
+
+        Parameters
+        ----------
+        args
+        kwargs
+
+        Returns
+        -------
+        None
+        """
+        line_table: QtWidgets.QTableWidget = self.main_wnd.linesTableWidget
+        z_list: QtWidgets.QListWidget = self.main_wnd.linesMatchListWidget
+        tol: float = self.main_wnd.linesMatchingTolDoubleSpinBox.value()
+        z_min: float = self.main_wnd.zMinDoubleSpinBox.value()
+        z_max: float = self.main_wnd.zMaxDoubleSpinBox.value()
+
+
+        # Build a list of selected lines to be used.
+        # If no lines are selected, then use all lines.
+        lines_lam = []
+        for row_index in range(line_table.rowCount()):
+            item: QtWidgets.QTableWidgetItem = line_table.item(row_index, 0)
+
+            if item.checkState() != QtCore.Qt.CheckState.Checked:
+                # Ignore lines that are not selected
+                continue
+
+            lines_lam.append(float(item.data(QtCore.Qt.ItemDataRole.UserRole)))
+
+        best_z_values, best_z_probs = lines.get_redshift_from_lines(
+            lines_lam, z_min=z_min, z_max=z_max, tol=tol
+        )
+
+        z_list.clear()
+        for z, prob in zip(best_z_values, best_z_probs):
+            new_z_item = QtWidgets.QListWidgetItem(f"z={z:.4f} (p={prob:.4f})")
+            z_list.addItem(new_z_item)
+
+
+    def doZoomReset(self, *arg, **kwargs) -> None:
+        self.fluxQChartView.zoomReset()
+
+    def mousePressedFlux(self, args) -> None:
+        """
+        Handle mouse button pressed events.
+
+        Parameters
+        ----------
+        args
+
+        Returns
+        -------
+        None
+
+        """
+        data_pos: QtCore.QPointF = args[0]
+        event: QtGui.QMouseEvent = args[1]
+        if self.global_state == self.GlobalState.SELECT_LINE_MANUAL:
+            self.addLine(data_pos.x())
+            self.global_state = self.GlobalState.READY
+            self.qapp.restoreOverrideCursor()
+            self._unlock()
+
+    def requestCancelCurrentOperation(self) -> None:
+        self.global_state = self.GlobalState.REUQUEST_CANCEL
+
     def toggleSmothing(self, show_smoothing: int) -> None:
-        if show_smoothing:
-            curr_smt_val = self.main_wnd.smoothingDoubleSpinBox.value()
-            self.current_smoothing = float(curr_smt_val)
-        else:
-            self.current_smoothing = -1.0
         self.redrawCurrentSpec()
 
     def setSmoothingFactor(self, smoothing_value: float) -> None:
-        self.current_smoothing = float(smoothing_value)
         self.redrawCurrentSpec()
 
     def redrawCurrentSpec(self, *args, **kwargs) -> None:
         self.currentSpecItemChanged(
             self.main_wnd.specListWidget.currentItem()
         )
-
-    def doIdentifyLines(self, *args, **kwargs) -> None:
-        if self._current_spec_uuid is None:
-            return
-
-        sp: Spectrum1D = self.open_spectra[self._current_spec_uuid]
-
-        wav: np.ndarray = sp.spectral_axis.value
-        wav_unit = sp.spectral_axis.unit
-        flux: np.ndarray = sp.flux.value
-        var: np.ndarray | None = None
-
-        if isinstance(sp.uncertainty, VarianceUncertainty):
-            var = sp.uncertainty.array
-        elif isinstance(sp.uncertainty, StdDevUncertainty):
-            var = sp.uncertainty.array ** 2
-
-        my_lines: List[
-            Tuple[int, float, float, float]
-        ] = lines.get_spectrum_lines(
-            wavelengths=wav,
-            flux=flux,
-            var=var
-        )
-
-        self.main_wnd.linesTableWidget.setRowCount(0)
-        self.main_wnd.linesTableWidget.setRowCount(len(my_lines))
-        for j, (k, w, l, h) in enumerate(my_lines):
-            new_item = QtWidgets.QTableWidgetItem(f"{w:.2f} A")
-            new_item.setFlags(
-                QtCore.Qt.ItemFlag.ItemIsSelectable |
-                QtCore.Qt.ItemFlag.ItemIsEnabled
-            )
-            self.main_wnd.linesTableWidget.setItem(j, 0, new_item)
-
-    def addLine(self, wavelength: float) -> None:
-        new_item = QtWidgets.QTableWidgetItem(f"{wavelength:.2f} A")
-        new_item.setFlags(
-            QtCore.Qt.ItemFlag.ItemIsSelectable |
-            QtCore.Qt.ItemFlag.ItemIsEnabled
-        )
-        new_item_row: int = self.main_wnd.linesTableWidget.rowCount()
-        self.main_wnd.linesTableWidget.setRowCount(new_item_row+1)
-        self.main_wnd.linesTableWidget.setItem(new_item_row, 0, new_item)
 
     def currentSpecItemChanged(self, new_item, *args, **kwargs) -> None:
         """
@@ -768,9 +1110,32 @@ class GuiApp:
         None.
 
         """
-        self.unlock()
+        if self.global_state != self.GlobalState.READY:
+            return
 
-        spec_uuid: uuid.UUID = new_item.uuid
+        self._unlock()
+
+        spec_uuid: uuid.UUID = new_item.data(
+            QtCore.Qt.ItemDataRole.UserRole
+        )
+
+        flux_chart = self.fluxQChartView.chart()
+        flux_chart.removeAllSeries()
+
+        var_chart = self.varQChartView.chart()
+        var_chart.removeAllSeries()
+
+        self._backup_current_object_state()
+        if spec_uuid != self.current_spec_uuid:
+            # If we actually change the spectrum, then reset the view
+            self._restore_object_state(spec_uuid)
+            self.current_spec_uuid = spec_uuid
+
+            for ax in flux_chart.axes():
+                flux_chart.removeAxis(ax)
+            for ax in var_chart.axes():
+                var_chart.removeAxis(ax)
+
         sp: Spectrum1D = self.open_spectra[spec_uuid]
 
         wav: np.ndarray = sp.spectral_axis.value
@@ -788,21 +1153,6 @@ class GuiApp:
         elif isinstance(sp.uncertainty, StdDevUncertainty):
             var = sp.uncertainty.array ** 2
             var_unit = sp.uncertainty.unit ** 2
-
-        flux_chart = self.fluxQChartView.chart()
-        flux_chart.removeAllSeries()
-
-        var_chart = self.varQChartView.chart()
-        var_chart.removeAllSeries()
-
-        if spec_uuid != self._current_spec_uuid:
-            # If we actually change the spectrum, then reset the view
-            self._current_spec_uuid = spec_uuid
-            self.main_wnd.linesTableWidget.setRowCount(0)
-            for ax in flux_chart.axes():
-                flux_chart.removeAxis(ax)
-            for ax in var_chart.axes():
-                var_chart.removeAxis(ax)
 
         flux_series = values2series(wav, flux, "Flux")
         flux_chart.addSeries(flux_series)
@@ -840,16 +1190,20 @@ class GuiApp:
         flux_series.attachAxis(flux_axis_x)
         flux_series.attachAxis(flux_axis_y)
 
-        if self.current_smoothing >= 0:
-            flux_series.setOpacity(0.3)
-            smoothing_sigma = len(flux) / (1 + 2*self.current_smoothing)
+        smoothing_check_state = self.main_wnd.smoothingCheckBox.checkState()
+        if smoothing_check_state == QtCore.Qt.CheckState.Checked:
+            smoothing_factor = self.main_wnd.smoothingDoubleSpinBox.value()
+
+            flux_series.setOpacity(0.2)
+            smoothing_sigma = len(flux) / (1 + 2 * smoothing_factor)
             smoothed_flux = utils.smooth_fft(flux, sigma=smoothing_sigma)
             smoothed_flux_series = values2series(
                 wav, smoothed_flux, "Smoothed flux"
             )
 
-            pen = smoothed_flux_series.pen()
+            pen: QtGui.QPen = smoothed_flux_series.pen()
             pen.setColor(QtGui.QColor("orange"))
+            pen.setWidth(2)
             smoothed_flux_series.setPen(pen)
 
             flux_chart.addSeries(smoothed_flux_series)
@@ -881,43 +1235,6 @@ class GuiApp:
         var_chart.setContentsMargins(0, 0, 0, 0)
         var_chart.setBackgroundRoundness(0)
         var_chart.legend().hide()
-
-    def doImportSpectra(self, *args, **kwargs) -> None:
-        """
-        Use QFileDialog to get spectra files.
-
-        Parameters
-        ----------
-        *args : TYPE
-            DESCRIPTION.
-        **kwargs : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        None.
-
-        """
-        file_list, files_type = QtWidgets.QFileDialog.getOpenFileNames(
-            self.main_wnd,
-            self.qapp.tr("Import Spectra"),
-            '.',
-            (
-                f"{self.qapp.tr('FITS')} (*.fit *.fits);;"
-                f"{self.qapp.tr('ASCII')} (*.txt *.dat *.cat);;"
-                f"{self.qapp.tr('All Files')} (*.*)"
-            )
-        )
-
-        for file in file_list:
-            sp: Spectrum1D = utils.loadSpectrum(file)
-            new_item = QtWidgets.QListWidgetItem(f"{sp.obj_id}")
-            new_item.setCheckState(QtCore.Qt.CheckState.Checked)
-            new_item.setToolTip(file)
-            new_item.uuid = uuid.uuid4()
-
-            self.open_spectra[new_item.uuid] = sp
-            self.main_wnd.specListWidget.addItem(new_item)
 
     def run(self) -> None:
         """

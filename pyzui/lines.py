@@ -75,11 +75,14 @@ RESTFRAME_LINES = [
 
 
 def _normal(x, mu, sigma):
+    x = np.array(x, dtype='float64')
     return np.exp(-((x - mu)**2)/(2*sigma)) / (sigma * np.sqrt(2 * np.pi))
 
 
 class Emission1D(Fittable1DModel):
     """Simple model for a flat spectrum with emission lines."""
+    n_inputs = 1
+    n_outputs = 1
 
     redshift = Parameter()
 
@@ -88,13 +91,13 @@ class Emission1D(Fittable1DModel):
         self.sigma = sigma
         super().__init__(redshift=redshift, **kwargs)
 
-    def evaluate(self, lam: np.ndarray, redshift: float) -> np.ndarray:
+    def evaluate(self, x: np.ndarray, redshift: float = 0) -> np.ndarray:
         """
         Evaluate the model.
 
         Parameters
         ----------
-        lam : np.ndarray
+        x : np.ndarray
             Array of wavelength.
         redshift : float, optional
             The redshift of the spectrum.
@@ -106,10 +109,10 @@ class Emission1D(Fittable1DModel):
             The model values.
 
         """
-        result = np.zeros_like(lam)
-        for candidate in self.line_candidates:
-            mu = candidate[1] / (1 + redshift)
-            result += _normal(lam, mu, self.sigma) * candidate[3]
+        result = np.zeros_like(x, dtype='float64')
+        for candidate_lam in self.line_candidates:
+            mu = candidate_lam / (1 + redshift)
+            result += _normal(x, mu, self.sigma)
         return result
 
 
@@ -288,8 +291,8 @@ def get_redshift_from_lines(
     z_max: float = 6.0,
     z_min: float = 0.0,
     z_points: Optional[int] = None,
-    tol: Optional[float] = None
-):
+    tol: Optional[float] = 1.0
+) -> Union[None, Tuple[np.ndarray, np.ndarray]]:
     """
     Get the redshift of a set of line identifications.
 
@@ -305,9 +308,8 @@ def get_redshift_from_lines(
         Number of redshift values between z_min and z_max to test.
         If None, then z_points = int(1000*(z_max - z_min)).
         The default is None.
-    tol : Optional[float], optional
-        The tolerance. If None, it is computed automatically.
-        The default is None.
+    tol : float, optional
+        The tolerance. The default is 0.1.
 
     Returns
     -------
@@ -321,24 +323,25 @@ def get_redshift_from_lines(
         return None
 
     if z_points is None:
-        z_points = int(1000 * (z_max - z_min))
+        z_points = int(1000 * (z_max - z_min) / tol)
 
-    if tol is None:
-        tol = np.mean([x[2] for x in identifications])
+    mymodel = Emission1D(identifications, sigma=tol, redshift=0)
 
-    mymodel = Emission1D(identifications, tol, redshift=0)
-
-    z_values = list(np.linspace(
+    z_values = np.linspace(
         start=z_min, stop=z_max, num=z_points
-    ))
+    )
+
+    if len(z_values) <= 1:
+        return None
 
     prob_values = np.zeros_like(z_values)
     for j, z in enumerate(z_values):
-        rest_lines_lam = [
+        rest_lines_lam = np.array([
             x[0] for x in get_lines(z=z)
-        ]
+        ])
 
-        prob_values[j] = np.sum(mymodel(rest_lines_lam))
+        # We compute the matching at object restframe so redshift=0
+        prob_values[j] = np.sum(mymodel.evaluate(rest_lines_lam))
 
     peak_indices = find_peaks_cwt(prob_values, 1)
     z_values_p = z_values[peak_indices]
@@ -353,4 +356,7 @@ def get_redshift_from_lines(
 
     plausible_mask = z_prob_p >= mean_prob + std_prob
 
-    return z_values_p[plausible_mask], z_prob_p[plausible_mask]
+    best_z_values = z_values_p[plausible_mask]
+    best_z_probs = z_prob_p[plausible_mask]
+
+    return best_z_values, best_z_probs
