@@ -627,6 +627,12 @@ class GuiApp:
         self.main_wnd.actionSaveProject.triggered.connect(
             self.doSaveProject
         )
+        self.main_wnd.actionOpenProject.triggered.connect(
+            self.doOpenProject
+        )
+        self.main_wnd.actionNewProject.triggered.connect(
+            self.doNewProject
+        )
 
         self.fluxQChartView.onMouseMoveSeries.connect(
             self._updateMouseLabelFromEvent
@@ -663,6 +669,8 @@ class GuiApp:
         self.main_wnd.matchLinesPushButton.clicked.connect(
             self.doRedshiftFromLines
         )
+
+        self.newProject()
 
     def _backup_current_object_state(self) -> None:
         """
@@ -826,7 +834,7 @@ class GuiApp:
                 "Do you want to save the current project before closing?"
             )
         )
-        self.msgBox.setWindowTitle("Closing...")
+        self.msgBox.setWindowTitle(self.qapp.tr("Closing..."))
         self.msgBox.setInformativeText("")
         self.msgBox.setDetailedText("")
         self.msgBox.setIcon(QtWidgets.QMessageBox.Icon.Question)
@@ -956,6 +964,9 @@ class GuiApp:
             new_item.setCheckState(QtCore.Qt.CheckState.Checked)
             self.main_wnd.linesTableWidget.setItem(j, 0, new_item)
 
+    def doNewProject(self, *args, **kwargs):
+        self.newProject()
+
     def doImportSpectra(self, *args, **kwargs) -> None:
         """
         Use QFileDialog to get spectra files.
@@ -983,6 +994,8 @@ class GuiApp:
             )
         )
 
+        excetpion_tracker: Dict[uuid.UUID, Tuple[str, str]] = {}
+
         self._lock()
         self.global_state = self.GlobalState.WAITING
 
@@ -1009,18 +1022,17 @@ class GuiApp:
 
             try:
                 sp: Spectrum1D = utils.loadSpectrum(file)
-            except Exception:
-                # TODO: show proper message
+            except Exception as exc:
+                excetpion_tracker[item_uuid] = (path, str(exc))
                 continue
 
-            spec_file = os.path.basename(file)
-            new_item = QtWidgets.QListWidgetItem(spec_file)
+            new_item = QtWidgets.QListWidgetItem(os.path.basename(file))
             new_item.setCheckState(QtCore.Qt.CheckState.Checked)
             new_item.setToolTip(file)
             new_item.setData(QtCore.Qt.ItemDataRole.UserRole, item_uuid)
 
             self.open_spectra[item_uuid] = sp
-            self.open_spectra_files[item_uuid] = os.path.abspath(spec_file)
+            self.open_spectra_files[item_uuid] = os.path.abspath(file)
             self.main_wnd.specListWidget.addItem(new_item)
             self.qapp.processEvents()
 
@@ -1028,6 +1040,67 @@ class GuiApp:
         self.pbar.hide()
         self._unlock()
         self.global_state = self.GlobalState.READY
+
+        if excetpion_tracker:
+            self.msgBox.setWindowTitle(self.qapp.tr("Error"))
+            self.msgBox.setText(
+                self.qapp.tr(
+                    "An error has occurred while loading the project: one or "
+                    "more files could not be loaded."
+                )
+            )
+            self.msgBox.setDetailedText(
+                "\n\n".join(
+                    [
+                        f"uuid: {exc_uuid}\n"
+                        f"file: {exc_data[0]}\n"
+                        f"reason: {exc_data[1]}"
+                        for exc_uuid, exc_data in excetpion_tracker.items()
+                    ]
+                )
+            )
+            self.msgBox.setIcon(QtWidgets.QMessageBox.Icon.Critical)
+            self.msgBox.setStandardButtons(
+                QtWidgets.QMessageBox.StandardButton.Ok
+            )
+            self.msgBox.exec()
+
+    def doOpenProject(self, *args, **kwargs) -> bool:
+        proj_file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            parent=self.main_wnd,
+            caption=self.qapp.tr("Load a project from file"),
+            directory='.',
+            filter=(
+                f"{self.qapp.tr('Project file')} (*.json);;"
+                f"{self.qapp.tr('All files')} (*.*);;"
+            )
+        )
+
+        if not proj_file_path:
+            return False
+
+        self.newProject()
+
+        try:
+            self.openProject(file_name=proj_file_path)
+        except Exception as exc:
+            self.msgBox.setWindowTitle(self.qapp.tr("Error"))
+            self.msgBox.setText(
+                 self.qapp.tr(
+                     "An error has occurred while opening the project."
+                 )
+            )
+            self.msgBox.setInformativeText('')
+            self.msgBox.setDetailedText(str(exc))
+            self.msgBox.setIcon(
+                QtWidgets.QMessageBox.Icon.Critical
+            )
+            self.msgBox.setStandardButtons(
+                QtWidgets.QMessageBox.StandardButton.Ok
+            )
+            self.msgBox.exec()
+            return False
+        return True
 
     def doRedshiftFromLines(self, *args, **kwargs) -> None:
         """
@@ -1122,7 +1195,7 @@ class GuiApp:
         try:
             self.saveProject(dest_file_path)
         except Exception as exc:
-            self.msgBox.setWindowTitle("Error")
+            self.msgBox.setWindowTitle(self.qapp.tr("Error"))
             self.msgBox.setText(
                  self.qapp.tr(
                      "An error has occurred while saving the project."
@@ -1136,9 +1209,12 @@ class GuiApp:
             self.msgBox.setStandardButtons(
                 QtWidgets.QMessageBox.StandardButton.Ok
             )
-            self.msgBox.showNormal()
+            self.msgBox.exec()
             return False
-        return  True
+
+        self.statusbar.showMessage(self.qapp.tr("Project saved"))
+
+        return True
 
     def doZoomIn(self, *args, **kwargs) -> None:
         """
@@ -1212,12 +1288,180 @@ class GuiApp:
             self.qapp.restoreOverrideCursor()
             self._unlock()
 
+    def newProject(self) -> None:
+        self.open_spectra_files = {}
+        self.open_spectra = {}
+        self.object_state_dict = {}
+        self.current_spec_uuid = None
+
+        self.main_wnd.specListWidget.clear()
+        self.main_wnd.linesMatchListWidget.clear()
+        self.main_wnd.linesTableWidget.setRowCount(0)
+        self.main_wnd.smoothingDoubleSpinBox.setValue(3.0)
+        self.main_wnd.smoothingCheckBox.setCheckState(
+            QtCore.Qt.CheckState.Unchecked
+        )
+        self.main_wnd.objPropertiesTableWidget.setRowCount(0)
+
+        flux_chart = self.fluxQChartView.chart()
+        flux_chart.removeAllSeries()
+        for ax in flux_chart.axes():
+            flux_chart.removeAxis(ax)
+
+        var_chart = self.varQChartView.chart()
+        var_chart.removeAllSeries()
+        for ax in var_chart.axes():
+            var_chart.removeAxis(ax)
+
+        self._lock()
+        self.global_state = self.GlobalState.READY
+        self.statusbar.showMessage(self.qapp.tr("New project created"))
+
+    def openProject(self, file_name: str) -> None:
+        """
+        Load the project from a file
+
+        Parameters
+        ----------
+        file_name : str
+            The project file path.
+
+        Returns
+        -------
+        None
+
+        """
+        with open(file_name, 'r') as f:
+            serialized_dict: Dict[str, Any] = json.load(f)
+
+        self._lock()
+        self.global_state = self.GlobalState.WAITING
+
+        n_files = len(serialized_dict['open_files'])
+
+        excetpion_tracker: Dict[uuid.UUID, Tuple[str, str]] = {}
+
+        self.pbar.setMaximum(n_files)
+        self.pbar.show()
+        for j, file_info in enumerate(serialized_dict['open_files']):
+            self.pbar.setValue(j + 1)
+            self.statusbar.showMessage(
+                self.qapp.tr("Loading project...")
+            )
+            self.qapp.processEvents()
+
+            item_uuid = uuid.UUID(file_info['uuid'])
+            item_row = int(file_info['index'])
+
+            try:
+                sp: Spectrum1D = utils.loadSpectrum(file_info['path'])
+            except Exception as exc:
+                excetpion_tracker[item_uuid] = (file_info['path'], str(exc))
+                continue
+
+            new_item = QtWidgets.QListWidgetItem(file_info['text'])
+            new_item.setCheckState(QtCore.Qt.CheckState(file_info['checked']))
+            new_item.setToolTip(file_info['path'])
+            new_item.setData(QtCore.Qt.ItemDataRole.UserRole, item_uuid)
+
+            self.main_wnd.specListWidget.addItem(new_item)
+            self.open_spectra[item_uuid] = sp
+            self.open_spectra_files[item_uuid] = file_info['path']
+            self.main_wnd.specListWidget.insertItem(item_row, new_item)
+            self.qapp.processEvents()
+
+        for h_uuid, obj_info in serialized_dict['objects_properties'].items():
+
+            obj_uuid = uuid.UUID(h_uuid)
+            smoothing_info = obj_info['smoothing']
+
+            lines_list = []
+            for line_info in obj_info['lines']['list']:
+                lines_list.append({
+                    'row': int(line_info['row']),
+                    'data': float(line_info['data']),
+                    'text': str(line_info['text']),
+                    'checked': QtCore.Qt.CheckState(line_info['checked'])
+                })
+
+            z_list = []
+            for z_info in obj_info['lines']['redshifts']:
+                z_list.append({
+                    'row': int(z_info['row']),
+                    'text': str(z_info['text']),
+                    'data': z_info['data']
+                })
+
+            self.object_state_dict[obj_uuid] = {
+                'smoothing': {
+                    'state': QtCore.Qt.CheckState(smoothing_info['state']),
+                    'value': float(smoothing_info['value']),
+                },
+                'lines': {
+                    'list': lines_list,
+                    'redshifts': z_list,
+                }
+            }
+
+        self.pbar.hide()
+        self._unlock()
+        self.global_state = self.GlobalState.READY
+
+        self.redrawCurrentSpec()
+
+        self.statusbar.showMessage(self.qapp.tr("Project loaded"))
+
+        if excetpion_tracker:
+            self.msgBox.setWindowTitle(self.qapp.tr("Error"))
+            self.msgBox.setText(
+                self.qapp.tr(
+                    "An error has occurred while loading the project: one or "
+                    "more files could not be loaded."
+                )
+            )
+            self.msgBox.setDetailedText(
+                "\n\n".join(
+                    [
+                        f"uuid: {exc_uuid}\n"
+                        f"file: {exc_data[0]}\n"
+                        f"reason: {exc_data[1]}"
+                        for exc_uuid, exc_data in excetpion_tracker.items()
+                    ]
+                )
+            )
+            self.msgBox.setIcon(QtWidgets.QMessageBox.Icon.Critical)
+            self.msgBox.setStandardButtons(
+                QtWidgets.QMessageBox.StandardButton.Ok
+            )
+            self.msgBox.exec()
+
     def redrawCurrentSpec(self, *args, **kwargs) -> None:
+        """
+        Redraw the charts.
+
+        Parameters
+        ----------
+        args
+        kwargs
+
+        Returns
+        -------
+        None
+
+        """
         self.currentSpecItemChanged(
             self.main_wnd.specListWidget.currentItem()
         )
 
     def requestCancelCurrentOperation(self) -> None:
+        """
+        Set the global state of the program to REUQUEST_CANCEL.
+
+        Returns
+        -------
+        None
+
+        """
         self.global_state = self.GlobalState.REUQUEST_CANCEL
 
     def saveProject(self, file_name: str) -> None:
@@ -1279,7 +1523,7 @@ class GuiApp:
             serialized_info_dict: Dict[str, Dict] = {
                 'smoothing': {
                     'state': int(obj_info['smoothing']['state'].value),
-                    'value': int(obj_info['smoothing']['value']),
+                    'value': float(obj_info['smoothing']['value']),
                 },
                 'lines': {
                     'list': serialized_lines_list,
@@ -1321,7 +1565,7 @@ class GuiApp:
         None.
 
         """
-        if self.global_state != self.GlobalState.READY:
+        if (new_item is None) or (self.global_state != self.GlobalState.READY):
             return
 
         self._unlock()

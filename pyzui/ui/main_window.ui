@@ -653,7 +653,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
-   <addaction name="actionNew_Project"/>
+   <addaction name="actionNewProject"/>
    <addaction name="actionOpenProject"/>
    <addaction name="actionSaveProject"/>
    <addaction name="separator"/>
@@ -761,7 +761,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <enum>QAction::NoRole</enum>
    </property>
   </action>
-  <action name="actionNew_Project">
+  <action name="actionNewProject">
    <property name="icon">
     <iconset theme="document-new"/>
    </property>
