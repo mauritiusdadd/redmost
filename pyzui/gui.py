@@ -527,6 +527,7 @@ class GuiApp:
         self.main_wnd: QtWidgets.QMainWindow = loadUiWidget(
             "main_window.ui", qt_backend=qt_backend
         )
+        self.main_wnd.closeEvent = self.closeEvent
 
         self.msgBox: QtWidgets.QMessageBox = QtWidgets.QMessageBox(
             parent=self.main_wnd
@@ -660,7 +661,7 @@ class GuiApp:
         )
 
         self.main_wnd.matchLinesPushButton.clicked.connect(
-            self.doGetRedshiftFromLines
+            self.doRedshiftFromLines
         )
 
     def _backup_current_object_state(self) -> None:
@@ -819,6 +820,33 @@ class GuiApp:
         self.main_wnd.linesTableWidget.setRowCount(new_item_row + 1)
         self.main_wnd.linesTableWidget.setItem(new_item_row, 0, new_item)
 
+    def closeEvent(self, event: QtGui.QCloseEvent) -> None:
+        self.msgBox.setText(
+            self.qapp.tr(
+                "Do you want to save the current project before closing?"
+            )
+        )
+        self.msgBox.setWindowTitle("Closing...")
+        self.msgBox.setInformativeText("")
+        self.msgBox.setDetailedText("")
+        self.msgBox.setIcon(QtWidgets.QMessageBox.Icon.Question)
+        self.msgBox.setStandardButtons(
+            QtWidgets.QMessageBox.StandardButton.Yes |
+            QtWidgets.QMessageBox.StandardButton.No |
+            QtWidgets.QMessageBox.StandardButton.Cancel
+        )
+        res = self.msgBox.exec()
+
+        if res == QtWidgets.QMessageBox.StandardButton.Yes:
+            # If Yes button is pressed, then accept the event only if the
+            # project is correctly saved
+            event.setAccepted(self.doSaveProject())
+        elif res == QtWidgets.QMessageBox.StandardButton.No:
+            event.accept()
+        else:
+            # Ignore the close event if Cancel button is pressed
+            event.ignore()
+
     def doAddNewLine(self, *args, **kwargs) -> None:
         """
         Tell the main app to identify a new line
@@ -974,6 +1002,11 @@ class GuiApp:
             self.qapp.processEvents()
 
             item_uuid: uuid.UUID = uuid.uuid4()
+
+            # Check for a possible collision, even if it should neve happem
+            while item_uuid in self.open_spectra_files.keys():
+                item_uuid = uuid.uuid4()
+
             try:
                 sp: Spectrum1D = utils.loadSpectrum(file)
             except Exception:
@@ -996,98 +1029,7 @@ class GuiApp:
         self._unlock()
         self.global_state = self.GlobalState.READY
 
-    def doSaveProject(self, *args, **kwargs) -> None:
-        """
-        Save the current project.
-
-        Parameters
-        ----------
-        args
-        kwargs
-
-        Returns
-        -------
-
-        """
-        self.doSaveProjectAs(dest=self.current_project_file_path)
-
-    def doSaveProjectAs(
-            self,
-            dest: Optional[str] = None,
-            *args, **kwargs
-    ) -> None:
-
-        if (dest is None) or (not os.path.exists(dest)):
-            dest_file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
-                parent=self.main_wnd,
-                caption=self.qapp.tr("Save project to file"),
-                directory='.',
-                filter=(
-                    f"{self.qapp.tr('Project file')} (*.json);;"
-                    f"{self.qapp.tr('All files')} (*.*);;"
-                )
-            )
-
-            if not dest_file_path:
-                return
-        else:
-            dest_file_path = dest
-
-        try:
-            self.saveProject(dest_file_path)
-        except Exception as exc:
-            self.msgBox.setText(
-                 self.qapp.tr(
-                     "An error has occurred while saving the project."
-                 )
-            )
-            self.msgBox.setInformativeText('')
-            self.msgBox.setDetailedText(str(exc))
-            self.msgBox.setIcon(
-                QtWidgets.QMessageBox.Icon.Critical
-            )
-            self.msgBox.setStandardButtons(
-                QtWidgets.QMessageBox.StandardButton.Ok
-            )
-            self.msgBox.showNormal()
-
-    def doZoomIn(self, *args, **kwargs) -> None:
-        """
-        Zoom In flux and var plots.
-
-        Parameters
-        ----------
-        *args : TYPE
-            DESCRIPTION.
-        **kwargs : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        None.
-
-        """
-        self.fluxQChartView.zoomIn()
-
-    def doZoomOut(self, *args, **kwargs) -> None:
-        """
-        Zoom Out flux and var plots.
-
-        Parameters
-        ----------
-        *args : TYPE
-            DESCRIPTION.
-        **kwargs : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        None.
-
-        """
-        self.fluxQChartView.zoomOut()
-
-    def doGetRedshiftFromLines(self, *args, **kwargs) -> None:
+    def doRedshiftFromLines(self, *args, **kwargs) -> None:
         """
         Compute the redshift by matching identified lines.
 
@@ -1125,7 +1067,114 @@ class GuiApp:
         z_list.clear()
         for z, prob in zip(best_z_values, best_z_probs):
             new_z_item = QtWidgets.QListWidgetItem(f"z={z:.4f} (p={prob:.4f})")
+            new_z_item.setData(QtCore.Qt.ItemDataRole.UserRole, (z, prob))
             z_list.addItem(new_z_item)
+
+    def doSaveProject(self, *args, **kwargs) -> bool:
+        """
+        Save the current project.
+
+        Parameters
+        ----------
+        args
+        kwargs
+
+        Returns
+        -------
+
+        """
+        return self.doSaveProjectAs(dest=self.current_project_file_path)
+
+    def doSaveProjectAs(
+            self,
+            dest: Optional[str] = None,
+            *args, **kwargs
+    ) -> bool:
+        """
+        Save the current project to a file
+        Parameters
+        ----------
+        dest
+        args
+        kwargs
+
+        Returns
+        -------
+            True if the project is saved correctly, False otherwise.
+
+        """
+        if (dest is None) or (not os.path.exists(dest)):
+            dest_file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+                parent=self.main_wnd,
+                caption=self.qapp.tr("Save project to file"),
+                directory='.',
+                filter=(
+                    f"{self.qapp.tr('Project file')} (*.json);;"
+                    f"{self.qapp.tr('All files')} (*.*);;"
+                )
+            )
+
+            if not dest_file_path:
+                return False
+        else:
+            dest_file_path = dest
+
+        try:
+            self.saveProject(dest_file_path)
+        except Exception as exc:
+            self.msgBox.setWindowTitle("Error")
+            self.msgBox.setText(
+                 self.qapp.tr(
+                     "An error has occurred while saving the project."
+                 )
+            )
+            self.msgBox.setInformativeText('')
+            self.msgBox.setDetailedText(str(exc))
+            self.msgBox.setIcon(
+                QtWidgets.QMessageBox.Icon.Critical
+            )
+            self.msgBox.setStandardButtons(
+                QtWidgets.QMessageBox.StandardButton.Ok
+            )
+            self.msgBox.showNormal()
+            return False
+        return  True
+
+    def doZoomIn(self, *args, **kwargs) -> None:
+        """
+        Zoom In flux and var plots.
+
+        Parameters
+        ----------
+        *args : TYPE
+            DESCRIPTION.
+        **kwargs : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
+        self.fluxQChartView.zoomIn()
+
+    def doZoomOut(self, *args, **kwargs) -> None:
+        """
+        Zoom Out flux and var plots.
+
+        Parameters
+        ----------
+        *args : TYPE
+            DESCRIPTION.
+        **kwargs : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
+        self.fluxQChartView.zoomOut()
 
     def doZoomReset(self, *arg, **kwargs) -> None:
         """
@@ -1185,9 +1234,11 @@ class GuiApp:
         None
 
         """
-        # Serlializing objects
+        # Store any pending information for the current object
+        self._backup_current_object_state()
 
-        open_file_list = []
+        # Serialize program state for json dumping
+        serialized_open_file_list = []
         for k in range(self.main_wnd.specListWidget.count()):
             item = self.main_wnd.specListWidget.item(k)
             item_uuid: uuid.UUID = item.data(
@@ -1198,14 +1249,49 @@ class GuiApp:
                 'index': k,
                 'uuid': item_uuid.hex,
                 'text': item.text(),
-                'path': self.open_spectra_files[item_uuid]
+                'path': self.open_spectra_files[item_uuid],
+                'checked': int(item.checkState().value)
             }
 
-            open_file_list.append(file_info)
+            serialized_open_file_list.append(file_info)
+
+        # Serialize objects info for json dumping
+        serialized_object_info_dict: Dict[str, Any] = {}
+        for obj_uuid, obj_info in self.object_state_dict.items():
+            serialized_lines_list: List[Dict[str, Any]] = []
+            serialized_z_list: List[Dict[str, Any]] = []
+
+            for line_info in obj_info['lines']['list']:
+                serialized_lines_list.append({
+                    'row': int(line_info['row']),
+                    'data': float(line_info['data']),
+                    'text': str(line_info['text']),
+                    'checked': int(line_info['checked'].value)
+                })
+
+            for z_info in obj_info['lines']['redshifts']:
+                serialized_z_list.append({
+                    'row': int(z_info['row']),
+                    'text': str(z_info['text']),
+                    'data': z_info['data']
+                })
+
+            serialized_info_dict: Dict[str, Dict] = {
+                'smoothing': {
+                    'state': int(obj_info['smoothing']['state'].value),
+                    'value': int(obj_info['smoothing']['value']),
+                },
+                'lines': {
+                    'list': serialized_lines_list,
+                    'redshifts': serialized_z_list,
+                }
+            }
+
+            serialized_object_info_dict[obj_uuid.hex] = serialized_info_dict
 
         project_dict = {
-            'open_files': open_file_list,
-            # 'objects_properties': self.object_state_dict
+            'open_files': serialized_open_file_list,
+            'objects_properties': serialized_object_info_dict
         }
 
         with open(file_name, 'w') as f:
