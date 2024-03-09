@@ -82,8 +82,12 @@ def specexFitsLoader(file_name: str,
 
     Parameters
     ----------
-    file_name : TYPE
-        DESCRIPTION.
+    file_name : str
+        The path of the FITS file to read.
+    flux_hdu_index : str or int
+        The extension name or index from which to read the spectrum
+    resolution : int or float
+        The spectral resolution parameter
     **kwargs : TYPE
         DESCRIPTION.
 
@@ -208,34 +212,6 @@ def specexFitsLoader(file_name: str,
         sp.obj_id = obj_id
 
     return sp
-
-
-def loadSpectrum(url: str) -> Spectrum1D:
-    """
-    Load a spectrum.
-
-    Parameters
-    ----------
-    url : str
-        THe url of the file containing a spectrum.
-
-    Raises
-    ------
-    NotImplementedError
-        DESCRIPTION.
-
-    Returns
-    -------
-    sp : specutils.Spectrum1D
-        The spectrum.
-
-    """
-    try:
-        sp: Spectrum1D = Spectrum1D.read(url)
-    except Exception:
-        raise NotImplementedError("No loader available")
-    else:
-        return sp
 
 
 def smooth_fft(

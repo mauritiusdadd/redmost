@@ -19,14 +19,14 @@ import numpy as np
 from astropy.nddata import VarianceUncertainty, StdDevUncertainty
 from astropy import units
 
-from specutils import Spectrum1D  # type: ignore
+from specutils import Spectrum1D
 
 from pyzui import utils
 from pyzui import backends
 from pyzui import lines
 
 try:
-    from PyQt6 import QtCore, QtGui, QtWidgets, QtCharts, uic
+    from PyQt6 import QtCore, QtGui, QtWidgets, QtCharts, uics
     from PyQt6.QtCore import pyqtSignal as Signal
 except (ImportError, ModuleNotFoundError):
     from PySide6 import QtCore, QtGui, QtUiTools, QtWidgets, QtCharts
@@ -42,6 +42,7 @@ def getQApp() -> QtWidgets.QApplication:
         # if it does not exist then a QApplication is created
         qapp = QtWidgets.QApplication(sys.argv)
     return qapp
+
 
 class AdvancedQChartView(QtCharts.QChartView):
     """Subclass of QtCharts.QChartView with advanced features."""
@@ -497,20 +498,17 @@ class AdvancedQChartView(QtCharts.QChartView):
         return value_in_series
 
 
+class GlobalState(Enum):
+    READY = 0
+    WAITING = 1
+    SELECT_LINE_MANUAL = 2
+    SAVE_OBJECT_STATE = 3
+    LOAD_OBJECT_STATE = 4
+    REUQUEST_CANCEL = 5
+
+
 class GuiApp:
     """General class for the main GUI."""
-
-    GlobalState: Enum = Enum(
-        'GlobalState',
-        [
-            'READY',
-            'WAITING',
-            'SELECT_LINE_MANUAL',
-            'SAVE_OBJECT_STATE',
-            'LOAD_OBJECT_STATE',
-            'REUQUEST_CANCEL',
-        ]
-    )
 
     def __init__(self, qt_backend: str) -> None:
         self.qapp: QtWidgets.QApplication = getQApp()
@@ -518,11 +516,11 @@ class GuiApp:
         self.open_spectra: Dict[uuid.UUID, Spectrum1D] = {}
         self.open_spectra_files: Dict[uuid.UUID, str] = {}
         self.current_redshift: Optional[float] = None
-        self.current_spec_uuid: Optional[uuid.UUID] = None
+        self.current_uuid: Optional[uuid.UUID] = None
         self.object_state_dict: Dict[uuid.UUID, Any] = {}
         self.current_project_file_path: Optional[str] = None
 
-        self.global_state: Enum = self.GlobalState.READY
+        self.global_state: Enum = GlobalState.READY
 
         self.main_wnd: QtWidgets.QMainWindow = loadUiWidget(
             "main_window.ui", qt_backend=qt_backend
@@ -555,10 +553,11 @@ class GuiApp:
         self.statusbar.addPermanentWidget(self.cancel_button)
         self.statusbar.addPermanentWidget(self.mousePosLabel)
 
-        self.main_wnd.fluxContainerWidget.setContentsMargins(0, 0, 0, 0)
+        self.main_wnd.flux_container_widget.setContentsMargins(0, 0, 0, 0)
+        self.main_wnd.var_container_widget.setContentsMargins(0, 0, 0, 0)
 
         self.fluxQChartView: AdvancedQChartView = AdvancedQChartView(
-            self.main_wnd.fluxGroupBox
+            self.main_wnd.flux_group_box
         )
         self.fluxQChartView.setObjectName("fluxQChartView")
         self.fluxQChartView.setRenderHint(
@@ -580,7 +579,7 @@ class GuiApp:
         self.main_wnd.fluxWidgetLayout.addWidget(self.fluxQChartView)
 
         self.varQChartView: AdvancedQChartView = AdvancedQChartView(
-            self.main_wnd.varianceGroupBox
+            self.main_wnd.variance_group_box
         )
         self.varQChartView.vertical_lock = True
         self.varQChartView.setObjectName("varQChartView")
@@ -606,28 +605,33 @@ class GuiApp:
 
         # Connect signals
 
-        self.main_wnd.importSpecPushButton.clicked.connect(
+        self.main_wnd.import_spec_button.clicked.connect(
             self.doImportSpectra
         )
-        self.main_wnd.specListWidget.currentItemChanged.connect(
+
+        self.main_wnd.spec_list_widget.currentItemChanged.connect(
             self.currentSpecItemChanged
         )
-        self.main_wnd.actionZoomIn.triggered.connect(
+
+        self.main_wnd.action_import_spectra.triggered.connect(
+            self.doImportSpectra
+        )
+        self.main_wnd.action_zoom_in.triggered.connect(
             self.doZoomIn
         )
-        self.main_wnd.actionZoomOut.triggered.connect(
+        self.main_wnd.action_zoom_out.triggered.connect(
             self.doZoomOut
         )
-        self.main_wnd.actionZoomFit.triggered.connect(
+        self.main_wnd.action_zoom_fit.triggered.connect(
             self.doZoomReset
         )
-        self.main_wnd.actionSaveProjectAs.triggered.connect(
+        self.main_wnd.action_save_project_as.triggered.connect(
             self.doSaveProjectAs
         )
-        self.main_wnd.actionSaveProject.triggered.connect(
+        self.main_wnd.action_save_project.triggered.connect(
             self.doSaveProject
         )
-        self.main_wnd.actionOpenProject.triggered.connect(
+        self.main_wnd.action_open_project.triggered.connect(
             self.doOpenProject
         )
         self.main_wnd.actionNewProject.triggered.connect(
@@ -643,30 +647,30 @@ class GuiApp:
 
         self.fluxQChartView.onMousePressSeries.connect(self.mousePressedFlux)
 
-        self.main_wnd.smoothingCheckBox.stateChanged.connect(
+        self.main_wnd.smoothing_check_box.stateChanged.connect(
             self.toggleSmothing
         )
-        self.main_wnd.smoothingDoubleSpinBox.valueChanged.connect(
+        self.main_wnd.smoothing_dspinbox.valueChanged.connect(
             self.setSmoothingFactor
         )
 
-        self.main_wnd.linesAutoPushButton.clicked.connect(
+        self.main_wnd.lines_auto_button.clicked.connect(
             self.doIdentifyLines
         )
 
-        self.main_wnd.addLinePushButton.clicked.connect(
+        self.main_wnd.add_line_button.clicked.connect(
             self.doAddNewLine
         )
 
-        self.main_wnd.deleteLinePushButton.clicked.connect(
+        self.main_wnd.delete_line_button.clicked.connect(
             self.doDeleteCurrentLine
         )
 
-        self.main_wnd.deleteLinesPushButton.clicked.connect(
+        self.main_wnd.delete_lines_button.clicked.connect(
             self.doDeleteAllLines
         )
 
-        self.main_wnd.matchLinesPushButton.clicked.connect(
+        self.main_wnd.match_lines_button.clicked.connect(
             self.doRedshiftFromLines
         )
 
@@ -681,18 +685,14 @@ class GuiApp:
         None
 
         """
-        if self.current_spec_uuid is None:
+        if self.current_uuid is None:
             return
 
-        self.global_state = self.GlobalState.SAVE_OBJECT_STATE
-        smooting_dict = {
-            'state': self.main_wnd.smoothingCheckBox.checkState(),
-            'value': self.main_wnd.smoothingDoubleSpinBox.value()
-        }
+        self.global_state = GlobalState.SAVE_OBJECT_STATE
 
         lines_list = []
-        for row_index in range(self.main_wnd.linesTableWidget.rowCount()):
-            w_item = self.main_wnd.linesTableWidget.item(row_index, 0)
+        for row_index in range(self.main_wnd.lines_table_widget.rowCount()):
+            w_item = self.main_wnd.lines_table_widget.item(row_index, 0)
             line_info = {
                 'row': row_index,
                 'data': float(w_item.data(QtCore.Qt.ItemDataRole.UserRole)),
@@ -702,8 +702,8 @@ class GuiApp:
             lines_list.append(line_info)
 
         redshifts_form_lines = []
-        for row_index in range(self.main_wnd.linesMatchListWidget.count()):
-            z_item = self.main_wnd.linesMatchListWidget.item(row_index)
+        for row_index in range(self.main_wnd.lines_match_list_widget.count()):
+            z_item = self.main_wnd.lines_match_list_widget.item(row_index)
             z_info = {
                 'row': row_index,
                 'text': z_item.text(),
@@ -712,7 +712,6 @@ class GuiApp:
             redshifts_form_lines.append(z_info)
 
         obj_state = {
-            'smoothing': smooting_dict,
             'redshift': self.current_redshift,
             'lines': {
                 'list': lines_list,
@@ -720,8 +719,8 @@ class GuiApp:
             }
         }
 
-        self.object_state_dict[self.current_spec_uuid] = obj_state
-        self.global_state = self.GlobalState.READY
+        self.object_state_dict[self.current_uuid] = obj_state
+        self.global_state = GlobalState.READY
 
     def _restore_object_state(self, obj_uuid: uuid.UUID) -> None:
         """
@@ -737,62 +736,54 @@ class GuiApp:
         None
 
         """
-        self.global_state = self.GlobalState.LOAD_OBJECT_STATE
+        self.global_state = GlobalState.LOAD_OBJECT_STATE
 
         # Clear current content of the widgets
-        self.main_wnd.linesTableWidget.setRowCount(0)
-        self.main_wnd.linesMatchListWidget.clear()
+        self.main_wnd.lines_table_widget.setRowCount(0)
+        self.main_wnd.lines_match_list_widget.clear()
 
-        # If object has not been saved yes, use dafult values
-        if obj_uuid not in self.object_state_dict.keys():
-            self.main_wnd.smoothingCheckBox.setCheckState(
-                QtCore.Qt.CheckState.Unchecked
-            )
-            self.main_wnd.smoothingDoubleSpinBox.setValue(3)
-            self.global_state = self.GlobalState.READY
+        # If object state has not been previously saved, then return
+        if obj_uuid not in self.object_state_dict:
+            self.global_state = GlobalState.READY
             return
 
-       # otherwise restore any old previously saved data
+        # otherwise restore any old previously saved data
         old_state = self.object_state_dict[obj_uuid]
-        self.main_wnd.smoothingCheckBox.setCheckState(
-            old_state['smoothing']['state']
-        )
-        self.main_wnd.smoothingDoubleSpinBox.setValue(
-            old_state['smoothing']['value']
-        )
 
         lines = old_state['lines']['list']
-        self.main_wnd.linesTableWidget.setRowCount(len(lines))
+        self.main_wnd.lines_table_widget.setRowCount(len(lines))
         for line_info in lines:
             w_item = QtWidgets.QTableWidgetItem(line_info['text'])
             w_item.setData(QtCore.Qt.ItemDataRole.UserRole, line_info['data'])
             w_item.setCheckState(line_info['checked'])
-            self.main_wnd.linesTableWidget.setItem(line_info['row'], 0, w_item)
+            self.main_wnd.lines_table_widget.setItem(
+                line_info['row'], 0, w_item
+            )
 
         redshifts_form_lines = old_state['lines']['redshifts']
         for z_info in redshifts_form_lines:
             z_item = QtWidgets.QListWidgetItem(z_info['text'])
             z_item.setData(QtCore.Qt.ItemDataRole.UserRole, z_info['data'])
-            self.main_wnd.linesMatchListWidget.insertItem(
+            self.main_wnd.lines_match_list_widget.insertItem(
                 z_info['row'], z_item
             )
 
-        self.global_state = self.GlobalState.READY
+        self.global_state = GlobalState.READY
 
     def _lock(self, *args, **kwargs) -> None:
-        self.main_wnd.specGroupBox.setEnabled(False)
-        self.main_wnd.redGroupBox.setEnabled(False)
-        self.main_wnd.infoGroupBox.setEnabled(False)
-        self.main_wnd.plotGroupBox.setEnabled(False)
+        self.main_wnd.spec_group_box.setEnabled(False)
+        self.main_wnd.red_group_box.setEnabled(False)
+        self.main_wnd.info_group_box.setEnabled(False)
+        self.main_wnd.plot_group_box.setEnabled(False)
         self.fluxQChartView.setRubberBand(
             QtCharts.QChartView.RubberBand.NoRubberBand
         )
 
     def _unlock(self, *args, **kwargs) -> None:
-        self.main_wnd.specGroupBox.setEnabled(True)
-        self.main_wnd.redGroupBox.setEnabled(True)
-        self.main_wnd.infoGroupBox.setEnabled(True)
-        self.main_wnd.plotGroupBox.setEnabled(True)
+        self.main_wnd.spec_group_box.setEnabled(True)
+        self.main_wnd.red_group_box.setEnabled(True)
+        self.main_wnd.info_group_box.setEnabled(True)
+        self.main_wnd.plot_group_box.setEnabled(True)
         self.fluxQChartView.setRubberBand(
             QtCharts.QChartView.RubberBand.RectangleRubberBand
         )
@@ -823,10 +814,10 @@ class GuiApp:
             QtCore.Qt.ItemFlag.ItemIsUserCheckable
         )
         new_item.setCheckState(QtCore.Qt.CheckState.Checked)
-        new_item_row: int = self.main_wnd.linesTableWidget.rowCount()
+        new_item_row: int = self.main_wnd.lines_table_widget.rowCount()
         new_item.setData(QtCore.Qt.ItemDataRole.UserRole, wavelength)
-        self.main_wnd.linesTableWidget.setRowCount(new_item_row + 1)
-        self.main_wnd.linesTableWidget.setItem(new_item_row, 0, new_item)
+        self.main_wnd.lines_table_widget.setRowCount(new_item_row + 1)
+        self.main_wnd.lines_table_widget.setItem(new_item_row, 0, new_item)
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         self.msgBox.setText(
@@ -870,11 +861,11 @@ class GuiApp:
 
         """
         # Do nothing if no spectrum is currently selected
-        if self.current_spec_uuid is None:
+        if self.current_uuid is None:
             return
         self._lock()
-        self.main_wnd.specGroupBox.setEnabled(False)
-        self.global_state = self.GlobalState.SELECT_LINE_MANUAL
+        self.main_wnd.spec_group_box.setEnabled(False)
+        self.global_state = GlobalState.SELECT_LINE_MANUAL
         self.qapp.setOverrideCursor(QtCore.Qt.CursorShape.CrossCursor)
 
     def doDeleteCurrentLine(self, *args, **kwargs) -> None:
@@ -892,11 +883,11 @@ class GuiApp:
 
         """
         # Do nothing if no spectrum is currently selected
-        if self.current_spec_uuid is None:
+        if self.current_uuid is None:
             return
 
-        self.main_wnd.linesTableWidget.removeRow(
-            self.main_wnd.linesTableWidget.currentRow()
+        self.main_wnd.lines_table_widget.removeRow(
+            self.main_wnd.lines_table_widget.currentRow()
         )
 
     def doDeleteAllLines(self, *args, **kwargs) -> None:
@@ -912,7 +903,7 @@ class GuiApp:
         -------
         None
         """
-        self.main_wnd.linesTableWidget.setRowCount(0)
+        self.main_wnd.lines_table_widget.setRowCount(0)
 
     def doIdentifyLines(self, *args, **kwargs) -> None:
         """
@@ -928,13 +919,12 @@ class GuiApp:
         None
 
         """
-        if self.current_spec_uuid is None:
+        if self.current_uuid is None:
             return
 
-        sp: Spectrum1D = self.open_spectra[self.current_spec_uuid]
+        sp: Spectrum1D = self.open_spectra[self.current_uuid]
 
         wav: np.ndarray = sp.spectral_axis.value
-        wav_unit = sp.spectral_axis.unit
         flux: np.ndarray = sp.flux.value
         var: np.ndarray | None = None
 
@@ -951,8 +941,8 @@ class GuiApp:
             var=var
         )
 
-        self.main_wnd.linesTableWidget.setRowCount(0)
-        self.main_wnd.linesTableWidget.setRowCount(len(my_lines))
+        self.main_wnd.lines_table_widget.setRowCount(0)
+        self.main_wnd.lines_table_widget.setRowCount(len(my_lines))
         for j, (k, w, l, h) in enumerate(my_lines):
             new_item = QtWidgets.QTableWidgetItem(f"{w:.2f} A")
             new_item.setFlags(
@@ -962,7 +952,7 @@ class GuiApp:
             )
             new_item.setData(QtCore.Qt.ItemDataRole.UserRole, w)
             new_item.setCheckState(QtCore.Qt.CheckState.Checked)
-            self.main_wnd.linesTableWidget.setItem(j, 0, new_item)
+            self.main_wnd.lines_table_widget.setItem(j, 0, new_item)
 
     def doNewProject(self, *args, **kwargs):
         self.newProject()
@@ -984,10 +974,10 @@ class GuiApp:
 
         """
         file_list, files_type = QtWidgets.QFileDialog.getOpenFileNames(
-            parent=self.main_wnd,
-            caption=self.qapp.tr("Import Spectra"),
-            directory='.',
-            filter=(
+            self.main_wnd,
+            self.qapp.tr("Import Spectra"),
+            '.',
+            (
                 f"{self.qapp.tr('FITS')} (*.fit *.fits);;"
                 f"{self.qapp.tr('ASCII')} (*.txt *.dat *.cat);;"
                 f"{self.qapp.tr('All Files')} (*.*)"
@@ -997,7 +987,7 @@ class GuiApp:
         excetpion_tracker: Dict[uuid.UUID, Tuple[str, str]] = {}
 
         self._lock()
-        self.global_state = self.GlobalState.WAITING
+        self.global_state = GlobalState.WAITING
 
         n_files = len(file_list)
 
@@ -1005,7 +995,7 @@ class GuiApp:
         self.pbar.show()
         self.cancel_button.show()
         for j, file in enumerate(file_list):
-            if self.global_state == self.GlobalState.REUQUEST_CANCEL:
+            if self.global_state == GlobalState.REUQUEST_CANCEL:
                 break
 
             self.pbar.setValue(j + 1)
@@ -1021,7 +1011,7 @@ class GuiApp:
                 item_uuid = uuid.uuid4()
 
             try:
-                sp: Spectrum1D = utils.loadSpectrum(file)
+                sp: Spectrum1D = Spectrum1D.read(file)
             except Exception as exc:
                 excetpion_tracker[item_uuid] = (path, str(exc))
                 continue
@@ -1033,13 +1023,13 @@ class GuiApp:
 
             self.open_spectra[item_uuid] = sp
             self.open_spectra_files[item_uuid] = os.path.abspath(file)
-            self.main_wnd.specListWidget.addItem(new_item)
+            self.main_wnd.spec_list_widget.addItem(new_item)
             self.qapp.processEvents()
 
         self.cancel_button.hide()
         self.pbar.hide()
         self._unlock()
-        self.global_state = self.GlobalState.READY
+        self.global_state = GlobalState.READY
 
         if excetpion_tracker:
             self.msgBox.setWindowTitle(self.qapp.tr("Error"))
@@ -1067,10 +1057,10 @@ class GuiApp:
 
     def doOpenProject(self, *args, **kwargs) -> bool:
         proj_file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            parent=self.main_wnd,
-            caption=self.qapp.tr("Load a project from file"),
-            directory='.',
-            filter=(
+            self.main_wnd,
+            self.qapp.tr("Load a project from file"),
+            '.',
+            (
                 f"{self.qapp.tr('Project file')} (*.json);;"
                 f"{self.qapp.tr('All files')} (*.*);;"
             )
@@ -1100,6 +1090,8 @@ class GuiApp:
             )
             self.msgBox.exec()
             return False
+
+        self.current_project_file_path = proj_file_path
         return True
 
     def doRedshiftFromLines(self, *args, **kwargs) -> None:
@@ -1115,11 +1107,11 @@ class GuiApp:
         -------
         None
         """
-        line_table: QtWidgets.QTableWidget = self.main_wnd.linesTableWidget
-        z_list: QtWidgets.QListWidget = self.main_wnd.linesMatchListWidget
-        tol: float = self.main_wnd.linesMatchingTolDoubleSpinBox.value()
-        z_min: float = self.main_wnd.zMinDoubleSpinBox.value()
-        z_max: float = self.main_wnd.zMaxDoubleSpinBox.value()
+        line_table: QtWidgets.QTableWidget = self.main_wnd.lines_table_widget
+        z_list: QtWidgets.QListWidget = self.main_wnd.lines_match_list_widget
+        tol: float = self.main_wnd.lines_tol_dspinbox.value()
+        z_min: float = self.main_wnd.z_min_dspinbox.value()
+        z_max: float = self.main_wnd.z_max_dspinbox.value()
 
         # Build a list of selected lines to be used.
         # If no lines are selected, then use all lines.
@@ -1178,10 +1170,10 @@ class GuiApp:
         """
         if (dest is None) or (not os.path.exists(dest)):
             dest_file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
-                parent=self.main_wnd,
-                caption=self.qapp.tr("Save project to file"),
-                directory='.',
-                filter=(
+                self.main_wnd,
+                self.qapp.tr("Save project to file"),
+                '.',
+                (
                     f"{self.qapp.tr('Project file')} (*.json);;"
                     f"{self.qapp.tr('All files')} (*.*);;"
                 )
@@ -1213,7 +1205,7 @@ class GuiApp:
             return False
 
         self.statusbar.showMessage(self.qapp.tr("Project saved"))
-
+        self.current_project_file_path = dest_file_path
         return True
 
     def doZoomIn(self, *args, **kwargs) -> None:
@@ -1282,9 +1274,9 @@ class GuiApp:
         """
         data_pos: QtCore.QPointF = args[0]
         event: QtGui.QMouseEvent = args[1]
-        if self.global_state == self.GlobalState.SELECT_LINE_MANUAL:
+        if self.global_state == GlobalState.SELECT_LINE_MANUAL:
             self.addLine(data_pos.x())
-            self.global_state = self.GlobalState.READY
+            self.global_state = GlobalState.READY
             self.qapp.restoreOverrideCursor()
             self._unlock()
 
@@ -1292,16 +1284,16 @@ class GuiApp:
         self.open_spectra_files = {}
         self.open_spectra = {}
         self.object_state_dict = {}
-        self.current_spec_uuid = None
+        self.current_uuid = None
 
-        self.main_wnd.specListWidget.clear()
-        self.main_wnd.linesMatchListWidget.clear()
-        self.main_wnd.linesTableWidget.setRowCount(0)
-        self.main_wnd.smoothingDoubleSpinBox.setValue(3.0)
-        self.main_wnd.smoothingCheckBox.setCheckState(
+        self.main_wnd.spec_list_widget.clear()
+        self.main_wnd.lines_match_list_widget.clear()
+        self.main_wnd.lines_table_widget.setRowCount(0)
+        self.main_wnd.smoothing_dspinbox.setValue(3.0)
+        self.main_wnd.smoothing_check_box.setCheckState(
             QtCore.Qt.CheckState.Unchecked
         )
-        self.main_wnd.objPropertiesTableWidget.setRowCount(0)
+        self.main_wnd.obj_prop_table_widget.setRowCount(0)
 
         flux_chart = self.fluxQChartView.chart()
         flux_chart.removeAllSeries()
@@ -1314,7 +1306,7 @@ class GuiApp:
             var_chart.removeAxis(ax)
 
         self._lock()
-        self.global_state = self.GlobalState.READY
+        self.global_state = GlobalState.READY
         self.statusbar.showMessage(self.qapp.tr("New project created"))
 
     def openProject(self, file_name: str) -> None:
@@ -1335,14 +1327,21 @@ class GuiApp:
             serialized_dict: Dict[str, Any] = json.load(f)
 
         self._lock()
-        self.global_state = self.GlobalState.WAITING
+        self.global_state = GlobalState.WAITING
+        self.pbar.setMaximum(0)
+        self.pbar.show()
 
         n_files = len(serialized_dict['open_files'])
-
         excetpion_tracker: Dict[uuid.UUID, Tuple[str, str]] = {}
 
         self.pbar.setMaximum(n_files)
-        self.pbar.show()
+
+        try:
+            current_uuid = uuid.UUID(serialized_dict['current_uuid'])
+        except Exception:
+            current_uuid = None
+
+        current_spec_list_item: Optional[QtWidgets.QListWidgetItem] = None
         for j, file_info in enumerate(serialized_dict['open_files']):
             self.pbar.setValue(j + 1)
             self.statusbar.showMessage(
@@ -1354,7 +1353,7 @@ class GuiApp:
             item_row = int(file_info['index'])
 
             try:
-                sp: Spectrum1D = utils.loadSpectrum(file_info['path'])
+                sp: Spectrum1D = Spectrum1D.read(file_info['path'])
             except Exception as exc:
                 excetpion_tracker[item_uuid] = (file_info['path'], str(exc))
                 continue
@@ -1364,16 +1363,18 @@ class GuiApp:
             new_item.setToolTip(file_info['path'])
             new_item.setData(QtCore.Qt.ItemDataRole.UserRole, item_uuid)
 
-            self.main_wnd.specListWidget.addItem(new_item)
+            if item_uuid == current_uuid:
+                current_spec_list_item = new_item
+
+            self.main_wnd.spec_list_widget.addItem(new_item)
             self.open_spectra[item_uuid] = sp
             self.open_spectra_files[item_uuid] = file_info['path']
-            self.main_wnd.specListWidget.insertItem(item_row, new_item)
+            self.main_wnd.spec_list_widget.insertItem(item_row, new_item)
             self.qapp.processEvents()
 
         for h_uuid, obj_info in serialized_dict['objects_properties'].items():
 
             obj_uuid = uuid.UUID(h_uuid)
-            smoothing_info = obj_info['smoothing']
 
             lines_list = []
             for line_info in obj_info['lines']['list']:
@@ -1393,19 +1394,20 @@ class GuiApp:
                 })
 
             self.object_state_dict[obj_uuid] = {
-                'smoothing': {
-                    'state': QtCore.Qt.CheckState(smoothing_info['state']),
-                    'value': float(smoothing_info['value']),
-                },
                 'lines': {
                     'list': lines_list,
                     'redshifts': z_list,
                 }
             }
 
+        if current_spec_list_item is not None:
+            self.main_wnd.spec_list_widget.setCurrentItem(
+                current_spec_list_item
+            )
+
         self.pbar.hide()
         self._unlock()
-        self.global_state = self.GlobalState.READY
+        self.global_state = GlobalState.READY
 
         self.redrawCurrentSpec()
 
@@ -1450,7 +1452,7 @@ class GuiApp:
 
         """
         self.currentSpecItemChanged(
-            self.main_wnd.specListWidget.currentItem()
+            self.main_wnd.spec_list_widget.currentItem()
         )
 
     def requestCancelCurrentOperation(self) -> None:
@@ -1462,7 +1464,7 @@ class GuiApp:
         None
 
         """
-        self.global_state = self.GlobalState.REUQUEST_CANCEL
+        self.global_state = GlobalState.REUQUEST_CANCEL
 
     def saveProject(self, file_name: str) -> None:
         """
@@ -1483,8 +1485,8 @@ class GuiApp:
 
         # Serialize program state for json dumping
         serialized_open_file_list = []
-        for k in range(self.main_wnd.specListWidget.count()):
-            item = self.main_wnd.specListWidget.item(k)
+        for k in range(self.main_wnd.spec_list_widget.count()):
+            item = self.main_wnd.spec_list_widget.item(k)
             item_uuid: uuid.UUID = item.data(
                 QtCore.Qt.ItemDataRole.UserRole
             )
@@ -1521,10 +1523,6 @@ class GuiApp:
                 })
 
             serialized_info_dict: Dict[str, Dict] = {
-                'smoothing': {
-                    'state': int(obj_info['smoothing']['state'].value),
-                    'value': float(obj_info['smoothing']['value']),
-                },
                 'lines': {
                     'list': serialized_lines_list,
                     'redshifts': serialized_z_list,
@@ -1533,7 +1531,13 @@ class GuiApp:
 
             serialized_object_info_dict[obj_uuid.hex] = serialized_info_dict
 
+        if self.current_uuid is None:
+            serialized_current_uuid = None
+        else:
+            serialized_current_uuid = self.current_uuid.hex
+
         project_dict = {
+            'current_uuid': serialized_current_uuid,
             'open_files': serialized_open_file_list,
             'objects_properties': serialized_object_info_dict
         }
@@ -1565,7 +1569,7 @@ class GuiApp:
         None.
 
         """
-        if (new_item is None) or (self.global_state != self.GlobalState.READY):
+        if (new_item is None) or (self.global_state != GlobalState.READY):
             return
 
         self._unlock()
@@ -1581,10 +1585,10 @@ class GuiApp:
         var_chart.removeAllSeries()
 
         self._backup_current_object_state()
-        if spec_uuid != self.current_spec_uuid:
+        if spec_uuid != self.current_uuid:
             # If we actually change the spectrum, then reset the view
             self._restore_object_state(spec_uuid)
-            self.current_spec_uuid = spec_uuid
+            self.current_uuid = spec_uuid
 
             for ax in flux_chart.axes():
                 flux_chart.removeAxis(ax)
@@ -1645,9 +1649,9 @@ class GuiApp:
         flux_series.attachAxis(flux_axis_x)
         flux_series.attachAxis(flux_axis_y)
 
-        smoothing_check_state = self.main_wnd.smoothingCheckBox.checkState()
+        smoothing_check_state = self.main_wnd.smoothing_check_box.checkState()
         if smoothing_check_state == QtCore.Qt.CheckState.Checked:
-            smoothing_factor = self.main_wnd.smoothingDoubleSpinBox.value()
+            smoothing_factor = self.main_wnd.smoothing_dspinbox.value()
 
             flux_series.setOpacity(0.2)
             smoothing_sigma = len(flux) / (1 + 2 * smoothing_factor)
@@ -1670,9 +1674,9 @@ class GuiApp:
         flux_chart.legend().hide()
 
         if var is None:
-            self.main_wnd.varianceGroupBox.setEnabled(False)
+            self.main_wnd.variance_group_box.setEnabled(False)
         else:
-            self.main_wnd.varianceGroupBox.setEnabled(True)
+            self.main_wnd.variance_group_box.setEnabled(True)
             var_series = values2series(wav, var, self.qapp.tr("Variance"))
             var_chart.addSeries(var_series)
 
