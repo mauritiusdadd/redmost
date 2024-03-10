@@ -46,24 +46,6 @@
       </property>
       <layout class="QVBoxLayout" name="verticalLayout">
        <item>
-        <layout class="QGridLayout" name="grid_layout">
-         <item row="1" column="0">
-          <widget class="QPushButton" name="import_spec_button">
-           <property name="text">
-            <string>Import</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="1">
-          <widget class="QPushButton" name="remove_spec_button">
-           <property name="text">
-            <string>Remove</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </item>
-       <item>
         <widget class="QListWidget" name="spec_list_widget">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
@@ -72,6 +54,52 @@
           </sizepolicy>
          </property>
         </widget>
+       </item>
+       <item>
+        <layout class="QGridLayout" name="grid_layout">
+         <item row="1" column="0">
+          <widget class="QPushButton" name="remove_spec_button">
+           <property name="text">
+            <string>Remove current</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QPushButton" name="remove_selected_button">
+           <property name="text">
+            <string>Remove selected</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="2">
+          <widget class="QPushButton" name="remove_all_button">
+           <property name="text">
+            <string>Remove all</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="2">
+          <widget class="QPushButton" name="toggle_all_button">
+           <property name="text">
+            <string>Toggle all</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QPushButton" name="toggle_similar_button">
+           <property name="text">
+            <string>Toggle similar</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="0">
+          <widget class="QPushButton" name="toggle_done_button">
+           <property name="text">
+            <string>Toggle done</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
        </item>
        <item>
         <widget class="QGroupBox" name="info_group_box">
@@ -800,6 +828,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <addaction name="actionNewProject"/>
    <addaction name="action_open_project"/>
    <addaction name="action_save_project"/>
+   <addaction name="action_import_spectra"/>
    <addaction name="separator"/>
    <addaction name="action_zoom_in"/>
    <addaction name="action_zoom_out"/>

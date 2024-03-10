@@ -609,12 +609,22 @@ class GuiApp:
 
         self.open_spectra: Dict[uuid.UUID, Spectrum1D] = {}
         self.open_spectra_files: Dict[uuid.UUID, str] = {}
-        self.current_redshift: Optional[float] = None
+        self.open_spectra_items: Dict[
+            uuid.UUID, QtWidgets.QListWidgetItem
+        ] = {}
         self.current_uuid: Optional[uuid.UUID] = None
         self.object_state_dict: Dict[uuid.UUID, Any] = {}
         self.current_project_file_path: Optional[str] = None
 
         self.global_state: Enum = GlobalState.READY
+
+        self.qf_color: Dict[int, str] = {
+            0: "#FFFFFF",
+            1: "#55940a00",
+            2: "#55945400",
+            3: "#55176601",
+            4: "#55012d66"
+        }
 
         self.main_wnd: QtWidgets.QMainWindow = loadUiWidget(
             "main_window.ui", qt_backend=qt_backend
@@ -628,6 +638,7 @@ class GuiApp:
         # Status Bar
         self.mousePosLabel: QtWidgets.QLabel = QtWidgets.QLabel("")
 
+        # Global cancel button
         self.cancel_button: QtWidgets.QPushButton = QtWidgets.QPushButton()
         self.cancel_button.setText("Cancel")
         self.cancel_button.hide()
@@ -635,6 +646,7 @@ class GuiApp:
             self.requestCancelCurrentOperation
         )
 
+        # Globsal progress bar
         self.pbar: QtWidgets.QProgressBar = QtWidgets.QProgressBar()
         self.pbar.hide()
 
@@ -699,12 +711,12 @@ class GuiApp:
 
         # Connect signals
 
-        self.main_wnd.import_spec_button.clicked.connect(
-            self.doImportSpectra
-        )
-
         self.main_wnd.spec_list_widget.currentItemChanged.connect(
             self.currentSpecItemChanged
+        )
+
+        self.main_wnd.spec_list_widget.itemDoubleClicked.connect(
+            self.selectSimilarSpecItems
         )
 
         self.main_wnd.action_import_spectra.triggered.connect(
@@ -777,7 +789,11 @@ class GuiApp:
         )
 
         self.main_wnd.z_dspinbox.valueChanged.connect(
-            self.setCurrentRedshift
+            self.setCurrentObjectRedshift
+        )
+
+        self.main_wnd.qflag_combo_box.currentIndexChanged.connect(
+            self.currentQualityFlagChanged
         )
 
         self.newProject()
@@ -818,7 +834,8 @@ class GuiApp:
             redshifts_form_lines.append(z_info)
 
         obj_state = {
-            'redshift': self.current_redshift,
+            'redshift': self.main_wnd.z_dspinbox.value(),
+            'quality_flag': self.main_wnd.qflag_combo_box.currentIndex(),
             'lines': {
                 'list': lines_list,
                 'redshifts': redshifts_form_lines
@@ -827,6 +844,19 @@ class GuiApp:
 
         self.object_state_dict[self.current_uuid] = obj_state
         self.global_state = GlobalState.READY
+
+    def _update_spec_item_qf(self, item_uuid: uuid.UUID, qf: float) -> None:
+        item: QtWidgets.QListWidgetItem = self.open_spectra_items[item_uuid]
+        item.setBackground(QtGui.QColor(self.qf_color[qf]))
+
+    def _lock(self, *args, **kwargs) -> None:
+        self.main_wnd.spec_group_box.setEnabled(False)
+        self.main_wnd.red_group_box.setEnabled(False)
+        self.main_wnd.info_group_box.setEnabled(False)
+        self.main_wnd.plot_group_box.setEnabled(False)
+        self.flux_chart_view.setRubberBand(
+            QtCharts.QChartView.RubberBand.NoRubberBand
+        )
 
     def _restore_object_state(self, obj_uuid: uuid.UUID) -> None:
         """
@@ -875,25 +905,25 @@ class GuiApp:
             )
 
         try:
-            self.current_redshift = old_state['redshift']
+           current_redshift = old_state['redshift']
         except KeyError:
-            self.current_redshift = None
+            current_redshift = None
 
-        if self.current_redshift:
-            self.main_wnd.z_dspinbox.setValue(self.current_redshift)
+        if current_redshift:
+            self.main_wnd.z_dspinbox.setValue(current_redshift)
         else:
             self.main_wnd.z_dspinbox.setValue(0)
 
         self.global_state = GlobalState.READY
 
-    def _lock(self, *args, **kwargs) -> None:
-        self.main_wnd.spec_group_box.setEnabled(False)
-        self.main_wnd.red_group_box.setEnabled(False)
-        self.main_wnd.info_group_box.setEnabled(False)
-        self.main_wnd.plot_group_box.setEnabled(False)
-        self.flux_chart_view.setRubberBand(
-            QtCharts.QChartView.RubberBand.NoRubberBand
-        )
+        try:
+            quality_flag = old_state['quality_flag']
+        except KeyError:
+            quality_flag = 0
+
+        self.main_wnd.qflag_combo_box.setCurrentIndex(quality_flag)
+
+        self._update_spec_item_qf(obj_uuid, quality_flag)
 
     def _unlock(self, *args, **kwargs) -> None:
         self.main_wnd.spec_group_box.setEnabled(True)
@@ -961,6 +991,155 @@ class GuiApp:
         else:
             # Ignore the close event if Cancel button is pressed
             event.ignore()
+
+    def currentQualityFlagChanged(self, df_index):
+        if self.current_uuid is None:
+            return
+        self._update_spec_item_qf(self.current_uuid, df_index)
+
+    def currentSpecItemChanged(self, new_item, *args, **kwargs) -> None:
+        """
+        Update widgets when the current object changes.
+
+        Parameters
+        ----------
+        new_item : TYPE
+            DESCRIPTION.
+        *args : TYPE
+            DESCRIPTION.
+        **kwargs : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
+        if (new_item is None) or (self.global_state != GlobalState.READY):
+            return
+
+        self._unlock()
+
+        spec_uuid: uuid.UUID = new_item.data(
+            QtCore.Qt.ItemDataRole.UserRole
+        )
+
+        flux_chart = self.flux_chart_view.chart()
+        flux_chart.removeAllSeries()
+
+        var_chart = self.var_chart_view.chart()
+        var_chart.removeAllSeries()
+
+        self._backup_current_object_state()
+        if spec_uuid != self.current_uuid:
+            # If we actually change the spectrum, then reset the view
+            self.current_uuid = spec_uuid
+            self._restore_object_state(spec_uuid)
+
+            for ax in flux_chart.axes():
+                flux_chart.removeAxis(ax)
+            for ax in var_chart.axes():
+                var_chart.removeAxis(ax)
+
+        sp: Spectrum1D = self.open_spectra[spec_uuid]
+
+        wav: np.ndarray = sp.spectral_axis.value
+        wav_unit: units.Unit = sp.spectral_axis.unit
+
+        flux: np.ndarray = sp.flux.value
+        flux_unit: units.Unit = sp.flux.unit
+
+        var: np.ndarray | None = None
+        var_unit: units.Unit | None = None
+
+        if isinstance(sp.uncertainty, VarianceUncertainty):
+            var = sp.uncertainty.array
+            var_unit = sp.uncertainty.unit
+        elif isinstance(sp.uncertainty, StdDevUncertainty):
+            var = sp.uncertainty.array ** 2
+            var_unit = sp.uncertainty.unit ** 2
+
+        flux_series = values2series(wav, flux, self.qapp.tr("Flux"))
+        flux_chart.addSeries(flux_series)
+
+        if not flux_chart.axes():
+            flux_axis_x = QtCharts.QValueAxis()
+            flux_axis_y = QtCharts.QValueAxis()
+            var_axis_x = QtCharts.QValueAxis()
+            var_axis_y = QtCharts.QValueAxis()
+            flux_chart.addAxis(
+                flux_axis_x, QtCore.Qt.AlignmentFlag.AlignBottom
+            )
+            flux_chart.addAxis(
+                flux_axis_y, QtCore.Qt.AlignmentFlag.AlignLeft
+            )
+            var_chart.addAxis(
+                var_axis_x, QtCore.Qt.AlignmentFlag.AlignBottom
+            )
+            var_chart.addAxis(
+                var_axis_y, QtCore.Qt.AlignmentFlag.AlignLeft
+            )
+        else:
+            flux_axis_x = flux_chart.axes()[0]
+            flux_axis_y = flux_chart.axes()[1]
+            var_axis_x = var_chart.axes()[0]
+            var_axis_y = var_chart.axes()[1]
+
+        flux_axis_x.setTickInterval(500)
+        flux_axis_x.setLabelFormat("%.2f")
+        flux_axis_x.setTitleText(str(wav_unit))
+
+        flux_axis_y.setLabelFormat("%.2f")
+        flux_axis_y.setTitleText(str(flux_unit))
+
+        flux_series.attachAxis(flux_axis_x)
+        flux_series.attachAxis(flux_axis_y)
+
+        smoothing_check_state = self.main_wnd.smoothing_check_box.checkState()
+        if smoothing_check_state == QtCore.Qt.CheckState.Checked:
+            smoothing_factor = self.main_wnd.smoothing_dspinbox.value()
+
+            flux_series.setOpacity(0.2)
+            smoothing_sigma = len(flux) / (1 + 2 * smoothing_factor)
+            smoothed_flux = utils.smooth_fft(flux, sigma=smoothing_sigma)
+            smoothed_flux_series = values2series(
+                wav, smoothed_flux, self.qapp.tr("Smoothed flux")
+            )
+
+            pen: QtGui.QPen = smoothed_flux_series.pen()
+            pen.setColor(QtGui.QColor("orange"))
+            pen.setWidth(2)
+            smoothed_flux_series.setPen(pen)
+
+            flux_chart.addSeries(smoothed_flux_series)
+            smoothed_flux_series.attachAxis(flux_axis_x)
+            smoothed_flux_series.attachAxis(flux_axis_y)
+
+        flux_chart.setContentsMargins(0, 0, 0, 0)
+        flux_chart.setBackgroundRoundness(0)
+        flux_chart.legend().hide()
+
+        if var is None:
+            self.main_wnd.variance_group_box.setEnabled(False)
+        else:
+            self.main_wnd.variance_group_box.setEnabled(True)
+            var_series = values2series(wav, var, self.qapp.tr("Variance"))
+            var_chart.addSeries(var_series)
+
+            var_axis_x.setTickInterval(500)
+            var_axis_x.setLabelFormat("%.2f")
+            var_axis_x.setTitleText(str(wav_unit))
+
+            var_axis_y.setTickCount(10)
+            var_axis_y.setLabelFormat("%.2f")
+            var_axis_y.setTitleText(str(var_unit))
+
+            var_series.attachAxis(var_axis_x)
+            var_series.attachAxis(var_axis_y)
+
+        var_chart.setContentsMargins(0, 0, 0, 0)
+        var_chart.setBackgroundRoundness(0)
+        var_chart.legend().hide()
 
     def doAddNewLine(self, *args, **kwargs) -> None:
         """
@@ -1129,7 +1308,7 @@ class GuiApp:
             try:
                 sp: Spectrum1D = Spectrum1D.read(file)
             except Exception as exc:
-                excetpion_tracker[item_uuid] = (path, str(exc))
+                excetpion_tracker[item_uuid] = (file, str(exc))
                 continue
 
             new_item = QtWidgets.QListWidgetItem(os.path.basename(file))
@@ -1139,6 +1318,7 @@ class GuiApp:
 
             self.open_spectra[item_uuid] = sp
             self.open_spectra_files[item_uuid] = os.path.abspath(file)
+            self.open_spectra_items[item_uuid] = new_item
             self.main_wnd.spec_list_widget.addItem(new_item)
             self.qapp.processEvents()
 
@@ -1485,6 +1665,7 @@ class GuiApp:
             self.main_wnd.spec_list_widget.addItem(new_item)
             self.open_spectra[item_uuid] = sp
             self.open_spectra_files[item_uuid] = file_info['path']
+            self.open_spectra_items[item_uuid] = new_item
             self.main_wnd.spec_list_widget.insertItem(item_row, new_item)
             self.qapp.processEvents()
 
@@ -1514,8 +1695,15 @@ class GuiApp:
             except KeyError:
                 redshift = None
 
+            try:
+                quality_flag = obj_info['quality_flag']
+            except KeyError:
+                quality_flag = 0
+
+            self._update_spec_item_qf(obj_uuid, quality_flag)
             self.object_state_dict[obj_uuid] = {
                 'redshift': redshift,
+                'quality_flag': quality_flag,
                 'lines': {
                     'list': lines_list,
                     'redshifts': z_list,
@@ -1646,6 +1834,7 @@ class GuiApp:
 
             serialized_info_dict: Dict[str, Dict] = {
                 'redshift': obj_info['redshift'],
+                'quality_flag': obj_info['quality_flag'],
                 'lines': {
                     'list': serialized_lines_list,
                     'redshifts': serialized_z_list,
@@ -1668,6 +1857,29 @@ class GuiApp:
         with open(file_name, 'w') as f:
             json.dump(project_dict, f, indent=2)
 
+    def selectSimilarSpecItems(self, item: QtWidgets.QListWidgetItem) -> None:
+        ref_uuid = item.data(QtCore.Qt.ItemDataRole.UserRole)
+        if ref_uuid in self.object_state_dict:
+            ref_qf = self.object_state_dict[ref_uuid]['quality_flag']
+        else:
+            ref_qf = 0
+
+        if item.checkState() == QtCore.Qt.CheckState.Checked:
+            ref_check_state = QtCore.Qt.CheckState.Unchecked
+        else:
+            ref_check_state = QtCore.Qt.CheckState.Checked
+
+        for row in range(self.main_wnd.spec_list_widget.count()):
+            other_item = self.main_wnd.spec_list_widget.item(row)
+            other_uuid = other_item.data(QtCore.Qt.ItemDataRole.UserRole)
+            if other_uuid in self.object_state_dict:
+                other_qf = self.object_state_dict[other_uuid]['quality_flag']
+            else:
+                other_qf = 0
+
+            if other_qf == ref_qf:
+                other_item.setCheckState(ref_check_state)
+
     def setCurrentObjectRedshiftFromLines(self, row: int) -> None:
         if row < 0:
             return
@@ -1678,11 +1890,9 @@ class GuiApp:
             )[0]
         )
 
-    def setCurrentRedshift(self, redshift: Optional[float]) -> None:
+    def setCurrentObjectRedshift(self, redshift: Optional[float]) -> None:
         if redshift is None:
             redshift = 0
-
-        self.current_redshift = redshift
         self.flux_chart_view.setRedshift(redshift=redshift)
 
     def setSmoothingFactor(self, smoothing_value: float) -> None:
@@ -1690,150 +1900,6 @@ class GuiApp:
 
     def toggleSmothing(self, show_smoothing: int) -> None:
         self.redrawCurrentSpec()
-
-    def currentSpecItemChanged(self, new_item, *args, **kwargs) -> None:
-        """
-        Update widgets when the current object changes.
-
-        Parameters
-        ----------
-        new_item : TYPE
-            DESCRIPTION.
-        *args : TYPE
-            DESCRIPTION.
-        **kwargs : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        None.
-
-        """
-        if (new_item is None) or (self.global_state != GlobalState.READY):
-            return
-
-        self._unlock()
-
-        spec_uuid: uuid.UUID = new_item.data(
-            QtCore.Qt.ItemDataRole.UserRole
-        )
-
-        flux_chart = self.flux_chart_view.chart()
-        flux_chart.removeAllSeries()
-
-        var_chart = self.var_chart_view.chart()
-        var_chart.removeAllSeries()
-
-        self._backup_current_object_state()
-        if spec_uuid != self.current_uuid:
-            # If we actually change the spectrum, then reset the view
-            self._restore_object_state(spec_uuid)
-            self.current_uuid = spec_uuid
-
-            for ax in flux_chart.axes():
-                flux_chart.removeAxis(ax)
-            for ax in var_chart.axes():
-                var_chart.removeAxis(ax)
-
-        sp: Spectrum1D = self.open_spectra[spec_uuid]
-
-        wav: np.ndarray = sp.spectral_axis.value
-        wav_unit: units.Unit = sp.spectral_axis.unit
-
-        flux: np.ndarray = sp.flux.value
-        flux_unit: units.Unit = sp.flux.unit
-
-        var: np.ndarray | None = None
-        var_unit: units.Unit | None = None
-
-        if isinstance(sp.uncertainty, VarianceUncertainty):
-            var = sp.uncertainty.array
-            var_unit = sp.uncertainty.unit
-        elif isinstance(sp.uncertainty, StdDevUncertainty):
-            var = sp.uncertainty.array ** 2
-            var_unit = sp.uncertainty.unit ** 2
-
-        flux_series = values2series(wav, flux, self.qapp.tr("Flux"))
-        flux_chart.addSeries(flux_series)
-
-        if not flux_chart.axes():
-            flux_axis_x = QtCharts.QValueAxis()
-            flux_axis_y = QtCharts.QValueAxis()
-            var_axis_x = QtCharts.QValueAxis()
-            var_axis_y = QtCharts.QValueAxis()
-            flux_chart.addAxis(
-                flux_axis_x, QtCore.Qt.AlignmentFlag.AlignBottom
-            )
-            flux_chart.addAxis(
-                flux_axis_y, QtCore.Qt.AlignmentFlag.AlignLeft
-            )
-            var_chart.addAxis(
-                var_axis_x, QtCore.Qt.AlignmentFlag.AlignBottom
-            )
-            var_chart.addAxis(
-                var_axis_y, QtCore.Qt.AlignmentFlag.AlignLeft
-            )
-        else:
-            flux_axis_x = flux_chart.axes()[0]
-            flux_axis_y = flux_chart.axes()[1]
-            var_axis_x = var_chart.axes()[0]
-            var_axis_y = var_chart.axes()[1]
-
-        flux_axis_x.setTickInterval(500)
-        flux_axis_x.setLabelFormat("%.2f")
-        flux_axis_x.setTitleText(str(wav_unit))
-
-        flux_axis_y.setLabelFormat("%.2f")
-        flux_axis_y.setTitleText(str(flux_unit))
-
-        flux_series.attachAxis(flux_axis_x)
-        flux_series.attachAxis(flux_axis_y)
-
-        smoothing_check_state = self.main_wnd.smoothing_check_box.checkState()
-        if smoothing_check_state == QtCore.Qt.CheckState.Checked:
-            smoothing_factor = self.main_wnd.smoothing_dspinbox.value()
-
-            flux_series.setOpacity(0.2)
-            smoothing_sigma = len(flux) / (1 + 2 * smoothing_factor)
-            smoothed_flux = utils.smooth_fft(flux, sigma=smoothing_sigma)
-            smoothed_flux_series = values2series(
-                wav, smoothed_flux, self.qapp.tr("Smoothed flux")
-            )
-
-            pen: QtGui.QPen = smoothed_flux_series.pen()
-            pen.setColor(QtGui.QColor("orange"))
-            pen.setWidth(2)
-            smoothed_flux_series.setPen(pen)
-
-            flux_chart.addSeries(smoothed_flux_series)
-            smoothed_flux_series.attachAxis(flux_axis_x)
-            smoothed_flux_series.attachAxis(flux_axis_y)
-
-        flux_chart.setContentsMargins(0, 0, 0, 0)
-        flux_chart.setBackgroundRoundness(0)
-        flux_chart.legend().hide()
-
-        if var is None:
-            self.main_wnd.variance_group_box.setEnabled(False)
-        else:
-            self.main_wnd.variance_group_box.setEnabled(True)
-            var_series = values2series(wav, var, self.qapp.tr("Variance"))
-            var_chart.addSeries(var_series)
-
-            var_axis_x.setTickInterval(500)
-            var_axis_x.setLabelFormat("%.2f")
-            var_axis_x.setTitleText(str(wav_unit))
-
-            var_axis_y.setTickCount(10)
-            var_axis_y.setLabelFormat("%.2f")
-            var_axis_y.setTitleText(str(var_unit))
-
-            var_series.attachAxis(var_axis_x)
-            var_series.attachAxis(var_axis_y)
-
-        var_chart.setContentsMargins(0, 0, 0, 0)
-        var_chart.setBackgroundRoundness(0)
-        var_chart.legend().hide()
 
     def run(self) -> None:
         """
