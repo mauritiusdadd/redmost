@@ -64,20 +64,6 @@
            </property>
           </widget>
          </item>
-         <item row="1" column="1">
-          <widget class="QPushButton" name="remove_selected_button">
-           <property name="text">
-            <string>Remove selected</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="2">
-          <widget class="QPushButton" name="remove_all_button">
-           <property name="text">
-            <string>Remove all</string>
-           </property>
-          </widget>
-         </item>
          <item row="0" column="2">
           <widget class="QPushButton" name="toggle_all_button">
            <property name="text">
@@ -96,6 +82,13 @@
           <widget class="QPushButton" name="toggle_done_button">
            <property name="text">
             <string>Toggle done</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="2">
+          <widget class="QPushButton" name="remove_selected_button">
+           <property name="text">
+            <string>Remove selected</string>
            </property>
           </widget>
          </item>

@@ -731,6 +731,14 @@ class GuiApp:
             self.doToggleAll
         )
 
+        self.main_wnd.remove_selected_button.clicked.connect(
+            self.doRemoveSelectedSpecItems
+        )
+
+        self.main_wnd.remove_spec_button.clicked.connect(
+            self.doRemoveCurrentSpecItems
+        )
+
         self.main_wnd.action_import_spectra.triggered.connect(
             self.doImportSpectra
         )
@@ -1176,6 +1184,21 @@ class GuiApp:
         self.global_state = GlobalState.SELECT_LINE_MANUAL
         self.qapp.setOverrideCursor(QtCore.Qt.CursorShape.CrossCursor)
 
+    def doDeleteAllLines(self, *args, **kwargs) -> None:
+        """
+        Delete all identified lines.
+
+        Parameters
+        ----------
+        args
+        kwargs
+
+        Returns
+        -------
+        None
+        """
+        self.main_wnd.lines_table_widget.setRowCount(0)
+
     def doDeleteCurrentLine(self, *args, **kwargs) -> None:
         """
         Delete the current selected line from the table.
@@ -1197,21 +1220,6 @@ class GuiApp:
         self.main_wnd.lines_table_widget.removeRow(
             self.main_wnd.lines_table_widget.currentRow()
         )
-
-    def doDeleteAllLines(self, *args, **kwargs) -> None:
-        """
-        Delete all identified lines.
-
-        Parameters
-        ----------
-        args
-        kwargs
-
-        Returns
-        -------
-        None
-        """
-        self.main_wnd.lines_table_widget.setRowCount(0)
 
     def doIdentifyLines(self, *args, **kwargs) -> None:
         """
@@ -1261,9 +1269,6 @@ class GuiApp:
             new_item.setData(QtCore.Qt.ItemDataRole.UserRole, w)
             new_item.setCheckState(QtCore.Qt.CheckState.Checked)
             self.main_wnd.lines_table_widget.setItem(j, 0, new_item)
-
-    def doNewProject(self, *args, **kwargs):
-        self.newProject()
 
     def doImportSpectra(self, *args, **kwargs) -> None:
         """
@@ -1364,6 +1369,9 @@ class GuiApp:
             )
             self.msgBox.exec()
 
+    def doNewProject(self, *args, **kwargs):
+        self.newProject()
+
     def doOpenProject(self, *args, **kwargs) -> bool:
         proj_file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
             self.main_wnd,
@@ -1443,6 +1451,54 @@ class GuiApp:
             new_z_item = QtWidgets.QListWidgetItem(f"z={z:.4f} (p={prob:.4f})")
             new_z_item.setData(QtCore.Qt.ItemDataRole.UserRole, (z, prob))
             z_list.addItem(new_z_item)
+
+    def doRemoveCurrentSpecItems(self) -> None:
+        if self.main_wnd.spec_list_widget.count() == 0:
+            return
+
+        current_row = self.main_wnd.spec_list_widget.currentRow()
+        item = self.main_wnd.spec_list_widget.item(current_row)
+        item_uuid = item.data(QtCore.Qt.ItemDataRole.UserRole)
+        self.main_wnd.spec_list_widget.takeItem(current_row)
+        self.open_spectra_items.pop(item_uuid)
+        self.open_spectra_files.pop(item_uuid)
+
+        try:
+            self.object_state_dict.pop(item_uuid)
+        except KeyError:
+            pass
+
+        del item
+
+        if self.main_wnd.spec_list_widget.count() == 0:
+            self.newProject()
+
+    def doRemoveSelectedSpecItems(self) -> None:
+        if self.main_wnd.spec_list_widget.count() == 0:
+            return
+
+        for row in range(self.main_wnd.spec_list_widget.count(), 0, -1):
+            item = self.main_wnd.spec_list_widget.item(row - 1)
+
+            if item is None:
+                continue
+            elif item.checkState() != QtCore.Qt.CheckState.Checked:
+                continue
+
+            item_uuid = item.data(QtCore.Qt.ItemDataRole.UserRole)
+            self.main_wnd.spec_list_widget.takeItem(row - 1)
+            self.open_spectra_items.pop(item_uuid)
+            self.open_spectra_files.pop(item_uuid)
+
+            try:
+                self.object_state_dict.pop(item_uuid)
+            except KeyError:
+                pass
+
+            del item
+
+        if self.main_wnd.spec_list_widget.count() == 0:
+            self.newProject()
 
     def doSaveProject(self, *args, **kwargs) -> bool:
         """
