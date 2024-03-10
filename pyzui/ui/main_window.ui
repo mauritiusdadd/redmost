@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1448</width>
-    <height>922</height>
+    <height>953</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -494,7 +494,7 @@
           <enum>QTabWidget::Rounded</enum>
          </property>
          <property name="currentIndex">
-          <number>0</number>
+          <number>1</number>
          </property>
          <widget class="QWidget" name="tab_lines">
           <attribute name="title">
@@ -772,6 +772,13 @@ li.checked::marker { content: &quot;\2612&quot;; }
            </item>
           </layout>
          </widget>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="import_zcat_button">
+         <property name="text">
+          <string>Import existing catalogue</string>
+         </property>
         </widget>
        </item>
        <item>

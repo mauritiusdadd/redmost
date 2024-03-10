@@ -18,6 +18,7 @@ import logging
 import numpy as np
 from astropy.nddata import VarianceUncertainty, StdDevUncertainty
 from astropy import units
+from astropy.table import Table
 
 from specutils import Spectrum1D
 
@@ -739,6 +740,14 @@ class GuiApp:
             self.doRemoveCurrentSpecItems
         )
 
+        self.main_wnd.export_zcat_button.clicked.connect(
+            self.doExportZcat
+        )
+
+        self.main_wnd.import_zcat_button.clicked.connect(
+            self.doImportZcat
+        )
+
         self.main_wnd.action_import_spectra.triggered.connect(
             self.doImportSpectra
         )
@@ -1221,6 +1230,40 @@ class GuiApp:
             self.main_wnd.lines_table_widget.currentRow()
         )
 
+    def doExportZcat(self, *args, **kwargs) -> None:
+        dest_file_path, file_type = QtWidgets.QFileDialog.getSaveFileName(
+            self.main_wnd,
+            self.qapp.tr("Export redshift catalogue to file"),
+            '.',
+            (
+                f"{self.qapp.tr('FITS table')} (*.fits *.fit);;"
+                f"{self.qapp.tr('CSV table')} (*.csv);;"
+                f"{self.qapp.tr('VO table')} (*.votable);;"
+            )
+        )
+
+        try:
+            self.exportZcat(dest_file_path, file_type)
+        except Exception as exc:
+            self.msgBox.setWindowTitle(self.qapp.tr("Error"))
+            self.msgBox.setText(
+                 self.qapp.tr(
+                     "An error has occurred while saving the cataglogue."
+                 )
+            )
+            self.msgBox.setInformativeText('')
+            self.msgBox.setDetailedText(str(exc))
+            self.msgBox.setIcon(
+                QtWidgets.QMessageBox.Icon.Critical
+            )
+            self.msgBox.setStandardButtons(
+                QtWidgets.QMessageBox.StandardButton.Ok
+            )
+            self.msgBox.exec()
+
+        self.statusbar.showMessage(self.qapp.tr("Redshift catalogue saved"))
+        self.current_project_file_path = dest_file_path
+
     def doIdentifyLines(self, *args, **kwargs) -> None:
         """
         Automagically identify lines in the current spectrum.
@@ -1269,6 +1312,41 @@ class GuiApp:
             new_item.setData(QtCore.Qt.ItemDataRole.UserRole, w)
             new_item.setCheckState(QtCore.Qt.CheckState.Checked)
             self.main_wnd.lines_table_widget.setItem(j, 0, new_item)
+
+    def doImportZcat(self, *args, **kwargs) -> None:
+        proj_file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self.main_wnd,
+            self.qapp.tr("Import a zcat"),
+            '.',
+            (
+                f"{self.qapp.tr('FITS table')} (*.fits *.fit);;"
+                f"{self.qapp.tr('CSV table')} (*.csv);;"
+                f"{self.qapp.tr('VO table')} (*.votable);;"
+                f"{self.qapp.tr('All files')} (*.*);;"
+            )
+        )
+
+        if not proj_file_path:
+            return
+
+        try:
+            self.importZcat(proj_file_path)
+        except Exception as exc:
+            self.msgBox.setWindowTitle(self.qapp.tr("Error"))
+            self.msgBox.setText(
+                self.qapp.tr(
+                    "An error has occurred while importing the catalogue."
+                )
+            )
+            self.msgBox.setInformativeText('')
+            self.msgBox.setDetailedText(str(exc))
+            self.msgBox.setIcon(
+                QtWidgets.QMessageBox.Icon.Critical
+            )
+            self.msgBox.setStandardButtons(
+                QtWidgets.QMessageBox.StandardButton.Ok
+            )
+            self.msgBox.exec()
 
     def doImportSpectra(self, *args, **kwargs) -> None:
         """
@@ -1334,9 +1412,19 @@ class GuiApp:
             new_item.setToolTip(file)
             new_item.setData(QtCore.Qt.ItemDataRole.UserRole, item_uuid)
 
+            info_dict: Dict[str, Any] = {
+                'redshift': None,
+                'quality_flag': 0,
+                'lines': {
+                    'list': [],
+                    'redshifts': []
+                }
+            }
+
             self.open_spectra[item_uuid] = sp
             self.open_spectra_files[item_uuid] = os.path.abspath(file)
             self.open_spectra_items[item_uuid] = new_item
+            self.object_state_dict[item_uuid] = info_dict
             self.main_wnd.spec_list_widget.addItem(new_item)
             self.qapp.processEvents()
 
@@ -1662,6 +1750,108 @@ class GuiApp:
 
         """
         self.flux_chart_view.zoomReset()
+
+    def exportZcat(self, dest_file, file_type) -> None:
+        zcat_tbl = Table(
+            names=['INDEX', 'SPEC_FILE', 'Z', 'QF', 'UUID'],
+            dtype=[int, str, float, int, str]
+        )
+
+        for j, (o_uuid, o_path) in enumerate(self.open_spectra_files.items()):
+            spec_file = os.path.basename(o_path)
+
+            try:
+                info_dict = self.object_state_dict[o_uuid]
+            except KeyError:
+                redshift = -99.0
+                quality_flag = 0
+            else:
+                if info_dict['redshift'] is None:
+                    redshift = -99.0
+                else:
+                    redshift = info_dict['redshift']
+                quality_flag = info_dict['quality_flag']
+
+            new_row = (j, spec_file, redshift, quality_flag, o_uuid.hex)
+            zcat_tbl.add_row(new_row)
+
+        # Get valid file extensions
+        valied_exts = (file_type.split('(')[1]).split(')')[0]
+        valied_exts = valied_exts.replace('*', '').split()
+
+        # get destination file extension
+        dest_ext = os.path.splitext(dest_file)[1]
+
+        # correct for mismatching extension
+        if dest_ext not in valied_exts:
+            dest_file = dest_file + valied_exts[0]
+
+        zcat_tbl.write(dest_file, overwrite=True)
+
+    def importZcat(self, catalogue_file) -> None:
+        zcat_tbl = Table.read(catalogue_file)
+
+        needed_cols = ['SPEC_FILE', 'Z']
+
+        for col in needed_cols:
+            if col not in zcat_tbl.colnames:
+                raise ValueError(
+                    self.qapp.tr(
+                        "Catalogue format not supported"
+                    )
+                )
+
+        self._lock()
+        self.global_state = GlobalState.LOAD_OBJECT_STATE
+        self.pbar.show()
+        self.cancel_button.show()
+        self.pbar.setMaximum(len(zcat_tbl))
+
+        matched_uuids = []
+
+        for j, row in enumerate(zcat_tbl):
+            self.pbar.setValue(j + 1)
+
+            if self.global_state == GlobalState.REUQUEST_CANCEL:
+                break
+
+            spec_file = str(row['SPEC_FILE']).strip()
+
+            for obj_uuid, obj_file in self.open_spectra_files.items():
+                if obj_uuid in matched_uuids:
+                    continue
+                elif os.path.basename(obj_file) == spec_file:
+                    matched_uuids.append(obj_uuid)
+                    try:
+                        info_dict = self.object_state_dict[obj_uuid]
+                    except KeyError:
+                        info_dict = {
+                            'redshift': None,
+                            'quality_flag': 0,
+                            'lines': {
+                                'list': [],
+                                'redshifts': []
+                            }
+                        }
+                        self.object_state_dict[obj_uuid] = info_dict
+
+                    if row['Z'] == -99:
+                        info_dict["redshift"] = None
+                    else:
+                        info_dict["redshift"] = row['Z']
+
+                    try:
+                        info_dict["quality_flag"] = row['QF']
+                    except KeyError:
+                        pass
+                    else:
+                        self._update_spec_item_qf(obj_uuid, row['QF'])
+                    break
+
+        self.global_state = GlobalState.READY
+        self.pbar.hide()
+        self.cancel_button.hide()
+        self._unlock()
 
     def mousePressedFlux(self, args) -> None:
         """
