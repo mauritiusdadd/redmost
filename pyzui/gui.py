@@ -44,7 +44,7 @@ def getQApp() -> QtWidgets.QApplication:
     return qapp
 
 
-class AdvancedQChartView(QtCharts.QChartView):
+class SpectrumQChartView(QtCharts.QChartView):
     """Subclass of QtCharts.QChartView with advanced features."""
     onMouseMoveSeries = Signal(object)
     onMousePressSeries = Signal(object)
@@ -55,103 +55,40 @@ class AdvancedQChartView(QtCharts.QChartView):
     def __init__(self, *args: List[Any]) -> None:
         super().__init__(*args)
 
-        self.vertical_lock: bool = False
-        self.horizontall_lock: bool = False
-
         self._last_mouse_pos: QtCore.QPointF | None = None
+        self._static_lines_list: List[Tuple[float, str, str]] = []
+        self._lines_buffer_list: List[Tuple[float, str, str]] = []
+        self._lines_type: Union[str, None] = None
+        self.line_colors: Dict[str, str] = {
+            "absorption": "#b02000",
+            "both": "#d47800",
+            "emission": "#61b000",
+            "unknown": "#222222"
+        }
+        self.line_plot_options: Dict[str, Any] = {
+            "alpha": 0.5,
+            "dash_pattern": (8, 8),
+            "width": 1.5
+        }
 
-        self.setRubberBand(QtCharts.QChartView.RubberBand.RectangleRubberBand)
+        self.show_lines: bool = False
+        self.redshift: float = 0
+        self.horizontall_lock: bool = False
+        self.vertical_lock: bool = False
+
         self.setDragMode(QtCharts.QChartView.DragMode.NoDrag)
         self.setMouseTracking(True)
+        self.setRubberBand(QtCharts.QChartView.RubberBand.RectangleRubberBand)
+
+        self.setViewportUpdateMode(
+            QtWidgets.QGraphicsView.ViewportUpdateMode.FullViewportUpdate
+        )
+
+        self.updateLines()
 
         # Pass events also to siblings
-        self.siblings: List[AdvancedQChartView] = []
         self._sibling_locked: bool = False
-
-    def addSibling(self, sibling: AdvancedQChartView) -> None:
-        """
-        Add sibling to this widget.
-
-        Parameters
-        ----------
-        sibling : AdvancedQChartView
-            A new sibling AdvancedQChartView
-
-        Returns
-        -------
-        None
-
-        """
-        if sibling not in self.siblings:
-            self.siblings.append(sibling)
-            sibling.addSibling(self)
-
-    def removeSibling(self, sibling: AdvancedQChartView) -> None:
-        """
-        Remove a sibling to this widget.
-
-        Parameters
-        ----------
-        sibling : AdvancedQChartView
-            The sibling to remove.
-
-        Returns
-        -------
-        None
-
-        """
-        if sibling in self.siblings:
-            self.siblings.pop(self.siblings.index(sibling))
-            sibling.removeSibling(self)
-
-    def zoomIn(
-        self, value: float = 2.0,
-        x_center: Optional[float] = None,
-        y_center: Optional[float] = None
-    ) -> None:
-        """
-        Zoom in.
-
-        Parameters
-        ----------
-        value : float
-            Zoom value. The default value is 2.0.
-        x_center : float
-            x of the zoom center
-        y_center : float
-            y of the zoom center
-
-        Returns
-        -------
-        None.
-
-        """
-        self.zoom(value, x_center, y_center)
-
-    def zoomOut(
-        self,
-        value: float = 0.5,
-        x_center: Optional[float] = None,
-        y_center: Optional[float] = None
-    ) -> None:
-        """
-        Zoom out.
-
-        Parameters
-        ----------
-        value : float
-            Zoom value. The default value is 0.5.
-        x_center : float, optional
-            x of the zoom center
-        y_center : float, optional
-            y of the zoom center
-
-        Returns
-        -------
-        None.
-
-        """
-        self.zoom(value, x_center, y_center)
+        self.siblings: List[SpectrumQChartView] = []
 
     def _getDataBounds(self) -> Union[
         Tuple[float, float, float, float],
@@ -180,125 +117,69 @@ class AdvancedQChartView(QtCharts.QChartView):
                 y_max = max(y_max, p2y)
         return x_min, y_min, x_max, y_max
 
-    def syncSiblingAxes(self) -> None:
-        if self._sibling_locked:
-            return
-
-        axes = self.chart().axes()
-        if len(axes) < 2:
-            return
-        x_axis, y_axis = axes[0:2]
-
-        self._sibling_locked = True
-        # Get current range for x and y axes
-        x_min = x_axis.min()
-        y_min = y_axis.min()
-        x_max = x_axis.max()
-        y_max = y_axis.max()
-
-        for sibling in self.siblings:
-            sibling.setAxesRange(x_min, y_min, x_max, y_max)
-        self._sibling_locked = False
-
-    def setAxesRange(
-        self,
-        x_min: Optional[float],
-        y_min: Optional[float],
-        x_max: Optional[float],
-        y_max: Optional[float]
-    ) -> None:
-        if self._sibling_locked:
-            return
-
-        axes = self.chart().axes()
-        if len(axes) < 2:
-            return
-        x_axis, y_axis = axes[0:2]
-
-        if not self.horizontall_lock:
-            if x_min is not None:
-                x_axis.setMin(x_min)
-            if x_max is not None:
-                x_axis.setMax(x_max)
-        if not self.vertical_lock:
-            if y_min is not None:
-                y_axis.setMin(y_min)
-            if y_max is not None:
-                y_axis.setMax(y_max)
-
-    def zoomReset(self) -> None:
+    def addSibling(self, sibling: SpectrumQChartView) -> None:
         """
-        Reset the zoom to fit the chart content.
+        Add sibling to this widget.
+
+        Parameters
+        ----------
+        sibling : SpectrumQChartView
+            A new sibling SpectrumQChartView
 
         Returns
         -------
         None
 
         """
-        if self._sibling_locked:
-            return
+        if sibling not in self.siblings:
+            self.siblings.append(sibling)
+            sibling.addSibling(self)
 
-        self._sibling_locked = True
-        for sibling in self.siblings:
-            sibling.zoomReset()
-        self._sibling_locked = False
-
-        self.setAxesRange(*self._getDataBounds())
-
-    def zoom(
+    def drawForeground(
         self,
-        value: float,
-        x_center: Optional[float] = None,
-        y_center: Optional[float] = None
+        painter: QtGui.QPainter,
+        rect: QtCore.QRectF
     ) -> None:
-        """
-        Zoom.
+        super().drawForeground(painter, rect)
 
-        Parameters
-        ----------
-        value : float
-            Zoom value.
-        x_center : float, optional
-            x of the zoom center
-        y_center : float, optional
-            y of the zoom center
-
-        Returns
-        -------
-        None.
-
-        """
-        if self._sibling_locked:
+        if not self.show_lines:
             return
 
-        rect = self.chart().plotArea()
+        painter.save()
+        plot_area: QtCore.QRectF = self.chart().plotArea()
 
-        self._sibling_locked = True
-        for sibling in self.siblings:
-            sibling.zoom(value, x_center, y_center)
-        self._sibling_locked = False
+        for line_lambda, line_name, line_type in self._lines_buffer_list:
+            pen: QtGui.QPen = QtGui.QPen()
 
-        if x_center is None:
-            x_center = rect.width()/2
+            pen_color: QtGui.QColor = QtGui.QColor(self.line_colors["unknown"])
+            if ('AE' in line_type) or ('EA' in line_type):
+                pen_color = QtGui.QColor(self.line_colors["both"])
+            elif 'A' in line_type:
+                pen_color = QtGui.QColor(self.line_colors["absorption"])
+            elif 'E' in line_type:
+                pen_color = QtGui.QColor(self.line_colors["emission"])
 
-        if y_center is None:
-            y_center = rect.height()/2
+            pen_color.setAlphaF(self.line_plot_options["alpha"])
+            pen.setColor(pen_color)
+            pen.setWidth(self.line_plot_options["width"])
+            pen.setDashPattern(self.line_plot_options["dash_pattern"])
+            painter.setPen(pen)
 
-        if not self.horizontall_lock:
-            width_original = rect.width()
-            rect.setWidth(width_original / value)
-            center_scale_x = x_center / width_original
-            left_offset = x_center - (rect.width() * center_scale_x)
-            rect.moveLeft(rect.x() + left_offset)
+            line_x = self.chart().mapToPosition(
+                QtCore.QPointF(line_lambda, 0)
+            ).x()
 
-        if not self.vertical_lock:
-            height_original = rect.height()
-            rect.setHeight(height_original / value)
-            center_scale_y = y_center / height_original
-            top_offset = y_center - (rect.height() * center_scale_y)
-            rect.moveTop(rect.y() + top_offset)
+            if (line_x >= plot_area.left()) and (line_x <= plot_area.right()):
+                p_line_top = QtCore.QPointF(line_x, plot_area.top())
+                p_line_bottom = QtCore.QPointF(line_x, plot_area.bottom())
+                p_text_top = QtCore.QPointF(line_x, plot_area.top() - 5)
+                painter.drawLine(p_line_bottom, p_line_top)
+                painter.drawText(p_text_top, line_name)
 
-        self.chart().zoomIn(rect)
+        painter.restore()
+
+    def hideLines(self) -> None:
+        self.setLinesVisible(False)
 
     def mouseDoubleClickEvent(self, event: QtGui.QMouseEvent) -> None:
         """
@@ -356,26 +237,6 @@ class AdvancedQChartView(QtCharts.QChartView):
 
         super().mouseMoveEvent(event)
         self.onMouseMoveSeries.emit((self.toSeriesPos(event), event))
-
-    def scroll(self, dx: float, dy: float) -> None:
-        if self._sibling_locked:
-            return
-
-        self._sibling_locked = True
-        for sibling in self.siblings:
-            sibling.scroll(dx, dy)
-        self._sibling_locked = False
-
-        chart = self.chart()
-
-        if self.vertical_lock and self.horizontall_lock:
-            return
-        elif not (self.vertical_lock or self.horizontall_lock):
-            chart.scroll(dx, dy)
-        elif self.vertical_lock:
-            chart.scroll(dx, 0)
-        else:
-            chart.scroll(0, dy)
 
     def mousePressEvent(self, event: QtGui.QMouseEvent, **kwargs) -> None:
         """
@@ -439,6 +300,137 @@ class AdvancedQChartView(QtCharts.QChartView):
         if self.rubberBand() != QtCharts.QChartView.RubberBand.NoRubberBand:
             self.syncSiblingAxes()
 
+    def removeSibling(self, sibling: SpectrumQChartView) -> None:
+        """
+        Remove a sibling to this widget.
+
+        Parameters
+        ----------
+        sibling : SpectrumQChartView
+            The sibling to remove.
+
+        Returns
+        -------
+        None
+
+        """
+        if sibling in self.siblings:
+            self.siblings.pop(self.siblings.index(sibling))
+            sibling.removeSibling(self)
+
+    def scroll(self, dx: float, dy: float) -> None:
+        if self._sibling_locked:
+            return
+
+        self._sibling_locked = True
+        for sibling in self.siblings:
+            sibling.scroll(dx, dy)
+        self._sibling_locked = False
+
+        chart = self.chart()
+
+        if self.vertical_lock and self.horizontall_lock:
+            return
+        elif not (self.vertical_lock or self.horizontall_lock):
+            chart.scroll(dx, dy)
+        elif self.vertical_lock:
+            chart.scroll(dx, 0)
+        else:
+            chart.scroll(0, dy)
+
+    def setAxesRange(
+        self,
+        x_min: Optional[float],
+        y_min: Optional[float],
+        x_max: Optional[float],
+        y_max: Optional[float]
+    ) -> None:
+        if self._sibling_locked:
+            return
+
+        axes = self.chart().axes()
+        if len(axes) < 2:
+            return
+        x_axis, y_axis = axes[0:2]
+
+        if not self.horizontall_lock:
+            if x_min is not None:
+                x_axis.setMin(x_min)
+            if x_max is not None:
+                x_axis.setMax(x_max)
+        if not self.vertical_lock:
+            if y_min is not None:
+                y_axis.setMin(y_min)
+            if y_max is not None:
+                y_axis.setMax(y_max)
+
+    def setLinesType(self, type: str) -> None:
+        self._lines_type = type
+        self.updateLines()
+
+    def setLinesVisible(self, show: bool) -> None:
+        self.show_lines = show
+        self.chart().update()
+        self.update()
+
+    def setRedshift(self, redshift: float) -> None:
+        self.redshift = redshift
+        self.updateLines()
+
+    def showLines(self) -> None:
+        self.setLinesVisible(True)
+
+    def syncSiblingAxes(self) -> None:
+        if self._sibling_locked:
+            return
+
+        axes = self.chart().axes()
+        if len(axes) < 2:
+            return
+        x_axis, y_axis = axes[0:2]
+
+        self._sibling_locked = True
+        # Get current range for x and y axes
+        x_min = x_axis.min()
+        y_min = y_axis.min()
+        x_max = x_axis.max()
+        y_max = y_axis.max()
+
+        for sibling in self.siblings:
+            sibling.setAxesRange(x_min, y_min, x_max, y_max)
+        self._sibling_locked = False
+
+    def toSeriesPos(self, event: QtGui.QMouseEvent):
+        """
+        Convert mouse position from event location to data values.
+
+        Parameters
+        ----------
+        event : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        valueGivenSeries : TYPE
+            DESCRIPTION.
+
+        """
+        widget_pos = event.position()
+        scene_pos = self.mapToScene(int(widget_pos.x()), int(widget_pos.y()))
+        chart_item_pos = self.chart().mapFromScene(scene_pos)
+        value_in_series = self.chart().mapToValue(chart_item_pos)
+        return value_in_series
+
+    def updateLines(self) -> None:
+        known_lines: List[Tuple[float, str, str]] = lines.get_lines(
+            line_type=self._lines_type,
+            z=self.redshift
+        )
+
+        self._lines_buffer_list = known_lines + self._static_lines_list
+        self.chart().update()
+        self.update()
+
     def wheelEvent(self, event: QtGui.QWheelEvent, **kwargs) -> None:
         """
         Handle mouse wheel events.
@@ -476,26 +468,128 @@ class AdvancedQChartView(QtCharts.QChartView):
 
         self.onMouseWheelEvent.emit(event)
 
-    def toSeriesPos(self, event: QtGui.QMouseEvent):
+    def zoom(
+        self,
+        value: float,
+        x_center: Optional[float] = None,
+        y_center: Optional[float] = None
+    ) -> None:
         """
-        Convert mouse position from event location to data values.
+        Zoom.
 
         Parameters
         ----------
-        event : TYPE
-            DESCRIPTION.
+        value : float
+            Zoom value.
+        x_center : float, optional
+            x of the zoom center
+        y_center : float, optional
+            y of the zoom center
 
         Returns
         -------
-        valueGivenSeries : TYPE
-            DESCRIPTION.
+        None.
 
         """
-        widget_pos = event.position()
-        scene_pos = self.mapToScene(int(widget_pos.x()), int(widget_pos.y()))
-        chart_item_pos = self.chart().mapFromScene(scene_pos)
-        value_in_series = self.chart().mapToValue(chart_item_pos)
-        return value_in_series
+        if self._sibling_locked:
+            return
+
+        rect = self.chart().plotArea()
+
+        self._sibling_locked = True
+        for sibling in self.siblings:
+            sibling.zoom(value, x_center, y_center)
+        self._sibling_locked = False
+
+        if x_center is None:
+            x_center = rect.width()/2
+
+        if y_center is None:
+            y_center = rect.height()/2
+
+        if not self.horizontall_lock:
+            width_original = rect.width()
+            rect.setWidth(width_original / value)
+            center_scale_x = x_center / width_original
+            left_offset = x_center - (rect.width() * center_scale_x)
+            rect.moveLeft(rect.x() + left_offset)
+
+        if not self.vertical_lock:
+            height_original = rect.height()
+            rect.setHeight(height_original / value)
+            center_scale_y = y_center / height_original
+            top_offset = y_center - (rect.height() * center_scale_y)
+            rect.moveTop(rect.y() + top_offset)
+
+        self.chart().zoomIn(rect)
+
+    def zoomIn(
+        self, value: float = 2.0,
+        x_center: Optional[float] = None,
+        y_center: Optional[float] = None
+    ) -> None:
+        """
+        Zoom in.
+
+        Parameters
+        ----------
+        value : float
+            Zoom value. The default value is 2.0.
+        x_center : float
+            x of the zoom center
+        y_center : float
+            y of the zoom center
+
+        Returns
+        -------
+        None.
+
+        """
+        self.zoom(value, x_center, y_center)
+
+    def zoomOut(
+        self,
+        value: float = 0.5,
+        x_center: Optional[float] = None,
+        y_center: Optional[float] = None
+    ) -> None:
+        """
+        Zoom out.
+
+        Parameters
+        ----------
+        value : float
+            Zoom value. The default value is 0.5.
+        x_center : float, optional
+            x of the zoom center
+        y_center : float, optional
+            y of the zoom center
+
+        Returns
+        -------
+        None.
+
+        """
+        self.zoom(value, x_center, y_center)
+
+    def zoomReset(self) -> None:
+        """
+        Reset the zoom to fit the chart content.
+
+        Returns
+        -------
+        None
+
+        """
+        if self._sibling_locked:
+            return
+
+        self._sibling_locked = True
+        for sibling in self.siblings:
+            sibling.zoomReset()
+        self._sibling_locked = False
+
+        self.setAxesRange(*self._getDataBounds())
 
 
 class GlobalState(Enum):
@@ -556,52 +650,52 @@ class GuiApp:
         self.main_wnd.flux_container_widget.setContentsMargins(0, 0, 0, 0)
         self.main_wnd.var_container_widget.setContentsMargins(0, 0, 0, 0)
 
-        self.fluxQChartView: AdvancedQChartView = AdvancedQChartView(
+        self.flux_chart_view: SpectrumQChartView = SpectrumQChartView(
             self.main_wnd.flux_group_box
         )
-        self.fluxQChartView.setObjectName("fluxQChartView")
-        self.fluxQChartView.setRenderHint(
+        self.flux_chart_view.setObjectName("flux_chart_view")
+        self.flux_chart_view.setRenderHint(
             QtGui.QPainter.RenderHint.Antialiasing
         )
-        self.fluxQChartView.setHorizontalScrollBarPolicy(
+        self.flux_chart_view.setHorizontalScrollBarPolicy(
             QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
-        self.fluxQChartView.setVerticalScrollBarPolicy(
+        self.flux_chart_view.setVerticalScrollBarPolicy(
             QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
-        self.fluxQChartView.setContentsMargins(0, 0, 0, 0)
-        self.fluxQChartView.chart().setContentsMargins(0, 0, 0, 0)
-        self.fluxQChartView.chart().layout().setContentsMargins(0, 0, 0, 0)
-        self.fluxQChartView.setRubberBand(
+        self.flux_chart_view.setContentsMargins(0, 0, 0, 0)
+        self.flux_chart_view.chart().setContentsMargins(0, 0, 0, 0)
+        self.flux_chart_view.chart().layout().setContentsMargins(0, 0, 0, 0)
+        self.flux_chart_view.setRubberBand(
             QtCharts.QChartView.RubberBand.RectangleRubberBand
         )
 
-        self.main_wnd.fluxWidgetLayout.addWidget(self.fluxQChartView)
+        self.main_wnd.fluxWidgetLayout.addWidget(self.flux_chart_view)
 
-        self.varQChartView: AdvancedQChartView = AdvancedQChartView(
+        self.var_chart_view: SpectrumQChartView = SpectrumQChartView(
             self.main_wnd.variance_group_box
         )
-        self.varQChartView.vertical_lock = True
-        self.varQChartView.setObjectName("varQChartView")
-        self.varQChartView.setRenderHint(
+        self.var_chart_view.vertical_lock = True
+        self.var_chart_view.setObjectName("var_chart_view")
+        self.var_chart_view.setRenderHint(
             QtGui.QPainter.RenderHint.Antialiasing
         )
-        self.varQChartView.setHorizontalScrollBarPolicy(
+        self.var_chart_view.setHorizontalScrollBarPolicy(
             QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
-        self.varQChartView.setVerticalScrollBarPolicy(
+        self.var_chart_view.setVerticalScrollBarPolicy(
             QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
-        self.varQChartView.setContentsMargins(0, 0, 0, 0)
-        self.varQChartView.chart().setContentsMargins(0, 0, 0, 0)
-        self.varQChartView.chart().layout().setContentsMargins(0, 0, 0, 0)
-        self.varQChartView.setRubberBand(
+        self.var_chart_view.setContentsMargins(0, 0, 0, 0)
+        self.var_chart_view.chart().setContentsMargins(0, 0, 0, 0)
+        self.var_chart_view.chart().layout().setContentsMargins(0, 0, 0, 0)
+        self.var_chart_view.setRubberBand(
             QtCharts.QChartView.RubberBand.NoRubberBand
         )
 
-        self.main_wnd.varWidgetLayout.addWidget(self.varQChartView)
+        self.main_wnd.varWidgetLayout.addWidget(self.var_chart_view)
 
-        self.fluxQChartView.addSibling(self.varQChartView)
+        self.flux_chart_view.addSibling(self.var_chart_view)
 
         # Connect signals
 
@@ -638,14 +732,14 @@ class GuiApp:
             self.doNewProject
         )
 
-        self.fluxQChartView.onMouseMoveSeries.connect(
+        self.flux_chart_view.onMouseMoveSeries.connect(
             self._updateMouseLabelFromEvent
         )
-        self.varQChartView.onMouseMoveSeries.connect(
-            self._updateMouseLabelFromEvent
-        )
+        self.flux_chart_view.onMousePressSeries.connect(self.mousePressedFlux)
 
-        self.fluxQChartView.onMousePressSeries.connect(self.mousePressedFlux)
+        self.var_chart_view.onMouseMoveSeries.connect(
+            self._updateMouseLabelFromEvent
+        )
 
         self.main_wnd.smoothing_check_box.stateChanged.connect(
             self.toggleSmothing
@@ -656,6 +750,10 @@ class GuiApp:
 
         self.main_wnd.lines_auto_button.clicked.connect(
             self.doIdentifyLines
+        )
+
+        self.main_wnd.lines_match_list_widget.currentRowChanged.connect(
+            self.setCurrentObjectRedshiftFromLines
         )
 
         self.main_wnd.add_line_button.clicked.connect(
@@ -672,6 +770,14 @@ class GuiApp:
 
         self.main_wnd.match_lines_button.clicked.connect(
             self.doRedshiftFromLines
+        )
+
+        self.main_wnd.show_lines_check_box.toggled.connect(
+            self.flux_chart_view.setLinesVisible
+        )
+
+        self.main_wnd.z_dspinbox.valueChanged.connect(
+            self.setCurrentRedshift
         )
 
         self.newProject()
@@ -768,6 +874,16 @@ class GuiApp:
                 z_info['row'], z_item
             )
 
+        try:
+            self.current_redshift = old_state['redshift']
+        except KeyError:
+            self.current_redshift = None
+
+        if self.current_redshift:
+            self.main_wnd.z_dspinbox.setValue(self.current_redshift)
+        else:
+            self.main_wnd.z_dspinbox.setValue(0)
+
         self.global_state = GlobalState.READY
 
     def _lock(self, *args, **kwargs) -> None:
@@ -775,7 +891,7 @@ class GuiApp:
         self.main_wnd.red_group_box.setEnabled(False)
         self.main_wnd.info_group_box.setEnabled(False)
         self.main_wnd.plot_group_box.setEnabled(False)
-        self.fluxQChartView.setRubberBand(
+        self.flux_chart_view.setRubberBand(
             QtCharts.QChartView.RubberBand.NoRubberBand
         )
 
@@ -784,7 +900,7 @@ class GuiApp:
         self.main_wnd.red_group_box.setEnabled(True)
         self.main_wnd.info_group_box.setEnabled(True)
         self.main_wnd.plot_group_box.setEnabled(True)
-        self.fluxQChartView.setRubberBand(
+        self.flux_chart_view.setRubberBand(
             QtCharts.QChartView.RubberBand.RectangleRubberBand
         )
 
@@ -1224,7 +1340,7 @@ class GuiApp:
         None.
 
         """
-        self.fluxQChartView.zoomIn()
+        self.flux_chart_view.zoomIn()
 
     def doZoomOut(self, *args, **kwargs) -> None:
         """
@@ -1242,7 +1358,7 @@ class GuiApp:
         None.
 
         """
-        self.fluxQChartView.zoomOut()
+        self.flux_chart_view.zoomOut()
 
     def doZoomReset(self, *arg, **kwargs) -> None:
         """
@@ -1257,7 +1373,7 @@ class GuiApp:
         None
 
         """
-        self.fluxQChartView.zoomReset()
+        self.flux_chart_view.zoomReset()
 
     def mousePressedFlux(self, args) -> None:
         """
@@ -1295,12 +1411,12 @@ class GuiApp:
         )
         self.main_wnd.obj_prop_table_widget.setRowCount(0)
 
-        flux_chart = self.fluxQChartView.chart()
+        flux_chart = self.flux_chart_view.chart()
         flux_chart.removeAllSeries()
         for ax in flux_chart.axes():
             flux_chart.removeAxis(ax)
 
-        var_chart = self.varQChartView.chart()
+        var_chart = self.var_chart_view.chart()
         var_chart.removeAllSeries()
         for ax in var_chart.axes():
             var_chart.removeAxis(ax)
@@ -1393,7 +1509,13 @@ class GuiApp:
                     'data': z_info['data']
                 })
 
+            try:
+                redshift = obj_info['redshift']
+            except KeyError:
+                redshift = None
+
             self.object_state_dict[obj_uuid] = {
+                'redshift': redshift,
                 'lines': {
                     'list': lines_list,
                     'redshifts': z_list,
@@ -1523,6 +1645,7 @@ class GuiApp:
                 })
 
             serialized_info_dict: Dict[str, Dict] = {
+                'redshift': obj_info['redshift'],
                 'lines': {
                     'list': serialized_lines_list,
                     'redshifts': serialized_z_list,
@@ -1544,6 +1667,23 @@ class GuiApp:
 
         with open(file_name, 'w') as f:
             json.dump(project_dict, f, indent=2)
+
+    def setCurrentObjectRedshiftFromLines(self, row: int) -> None:
+        if row < 0:
+            return
+
+        self.main_wnd.z_dspinbox.setValue(
+            self.main_wnd.lines_match_list_widget.item(row).data(
+                QtCore.Qt.ItemDataRole.UserRole
+            )[0]
+        )
+
+    def setCurrentRedshift(self, redshift: Optional[float]) -> None:
+        if redshift is None:
+            redshift = 0
+
+        self.current_redshift = redshift
+        self.flux_chart_view.setRedshift(redshift=redshift)
 
     def setSmoothingFactor(self, smoothing_value: float) -> None:
         self.redrawCurrentSpec()
@@ -1578,10 +1718,10 @@ class GuiApp:
             QtCore.Qt.ItemDataRole.UserRole
         )
 
-        flux_chart = self.fluxQChartView.chart()
+        flux_chart = self.flux_chart_view.chart()
         flux_chart.removeAllSeries()
 
-        var_chart = self.varQChartView.chart()
+        var_chart = self.var_chart_view.chart()
         var_chart.removeAllSeries()
 
         self._backup_current_object_state()

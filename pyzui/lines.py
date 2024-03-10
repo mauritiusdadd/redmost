@@ -86,12 +86,18 @@ class Emission1D(Fittable1DModel):
 
     redshift = Parameter()
 
-    def __init__(self, lines_identifications, sigma=3, redshift=0, **kwargs):
+    def __init__(
+        self,
+        lines_identifications: List[float],
+        sigma: float = 1.0,
+        redshift: float = 0.0,
+        **kwargs
+    ):
         self.line_candidates = lines_identifications
         self.sigma = sigma
         super().__init__(redshift=redshift, **kwargs)
 
-    def evaluate(self, x: np.ndarray, redshift: float = 0) -> np.ndarray:
+    def evaluate(self, x: np.ndarray, redshift: float = 0.0) -> np.ndarray:
         """
         Evaluate the model.
 
@@ -249,7 +255,7 @@ def get_lines(
 
     Returns
     -------
-    selected_lines : list
+    selected_lines
         List of line data. Each element of the list is a 3-tuple in the form
         (wavelenght in Angstrom, Line name, Line type).
 
@@ -291,7 +297,7 @@ def get_redshift_from_lines(
     z_max: float = 6.0,
     z_min: float = 0.0,
     z_points: Optional[int] = None,
-    tol: Optional[float] = 1.0
+    tol: float = 1.0
 ) -> Union[None, Tuple[np.ndarray, np.ndarray]]:
     """
     Get the redshift of a set of line identifications.
