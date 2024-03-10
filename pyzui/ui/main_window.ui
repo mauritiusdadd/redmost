@@ -781,6 +781,13 @@ li.checked::marker { content: &quot;\2612&quot;; }
          </widget>
         </widget>
        </item>
+       <item>
+        <widget class="QPushButton" name="export_zcat_button">
+         <property name="text">
+          <string>Export redshift catalogue</string>
+         </property>
+        </widget>
+       </item>
       </layout>
      </widget>
     </item>

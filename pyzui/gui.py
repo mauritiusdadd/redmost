@@ -716,7 +716,19 @@ class GuiApp:
         )
 
         self.main_wnd.spec_list_widget.itemDoubleClicked.connect(
-            self.selectSimilarSpecItems
+            self.toggleSimilarSpecItems
+        )
+
+        self.main_wnd.toggle_done_button.clicked.connect(
+            self.doToggleDone
+        )
+
+        self.main_wnd.toggle_similar_button.clicked.connect(
+            self.doToggleSimilar
+        )
+
+        self.main_wnd.toggle_all_button.clicked.connect(
+            self.doToggleAll
         )
 
         self.main_wnd.action_import_spectra.triggered.connect(
@@ -996,6 +1008,7 @@ class GuiApp:
         if self.current_uuid is None:
             return
         self._update_spec_item_qf(self.current_uuid, df_index)
+        self._backup_current_object_state()
 
     def currentSpecItemChanged(self, new_item, *args, **kwargs) -> None:
         """
@@ -1504,6 +1517,45 @@ class GuiApp:
         self.current_project_file_path = dest_file_path
         return True
 
+    def doToggleDone(self) -> None:
+        check_state = None
+        for row in range(self.main_wnd.spec_list_widget.count()):
+            item = self.main_wnd.spec_list_widget.item(row)
+            item_uuid = item.data(QtCore.Qt.ItemDataRole.UserRole)
+
+            if item_uuid not in self.object_state_dict:
+                continue
+
+            if self.object_state_dict[item_uuid]['quality_flag'] == 0:
+                continue
+
+            if check_state is None:
+                if item.checkState() == QtCore.Qt.CheckState.Checked:
+                    check_state = QtCore.Qt.CheckState.Unchecked
+                else:
+                    check_state = QtCore.Qt.CheckState.Checked
+
+            item.setCheckState(check_state)
+
+    def doToggleSimilar(self) -> None:
+        self.toggleSimilarSpecItems(
+            self.main_wnd.spec_list_widget.currentItem()
+        )
+
+    def doToggleAll(self) -> None:
+        item = self.main_wnd.spec_list_widget.currentItem()
+        if item is None:
+            return
+
+        if item.checkState() == QtCore.Qt.CheckState.Checked:
+            ref_check_state = QtCore.Qt.CheckState.Unchecked
+        else:
+            ref_check_state = QtCore.Qt.CheckState.Checked
+
+        for row in range(self.main_wnd.spec_list_widget.count()):
+            other_item = self.main_wnd.spec_list_widget.item(row)
+            other_item.setCheckState(ref_check_state)
+
     def doZoomIn(self, *args, **kwargs) -> None:
         """
         Zoom In flux and var plots.
@@ -1857,7 +1909,13 @@ class GuiApp:
         with open(file_name, 'w') as f:
             json.dump(project_dict, f, indent=2)
 
-    def selectSimilarSpecItems(self, item: QtWidgets.QListWidgetItem) -> None:
+    def toggleSimilarSpecItems(
+        self,
+        item: Optional[QtWidgets.QListWidgetItem]
+    ) -> None:
+        if item is None:
+            return
+
         ref_uuid = item.data(QtCore.Qt.ItemDataRole.UserRole)
         if ref_uuid in self.object_state_dict:
             ref_qf = self.object_state_dict[ref_uuid]['quality_flag']
