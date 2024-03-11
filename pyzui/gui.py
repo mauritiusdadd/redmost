@@ -22,8 +22,8 @@ from astropy.table import Table
 
 from specutils import Spectrum1D
 
+from pyzui import loaders
 from pyzui import utils
-from pyzui import backends
 from pyzui import lines
 
 try:
@@ -72,9 +72,12 @@ class SpectrumQChartView(QtCharts.QChartView):
             "width": 1.5
         }
 
-        self.show_lines: bool = False
-        self.redshift: float = 0
         self.horizontall_lock: bool = False
+        self.master: bool = False
+        self.show_lines: bool = False
+        self.sync_height: bool = False
+        self.sync_width: bool = True
+        self.redshift: float = 0
         self.vertical_lock: bool = False
 
         self.setDragMode(QtCharts.QChartView.DragMode.NoDrag)
@@ -381,6 +384,11 @@ class SpectrumQChartView(QtCharts.QChartView):
     def showLines(self) -> None:
         self.setLinesVisible(True)
 
+    def resizeEvent(self, event, QResizeEvent=None) -> None:
+        super().resizeEvent(event)
+        if self.master:
+            self.syncSiblingAxes()
+
     def syncSiblingAxes(self) -> None:
         if self._sibling_locked:
             return
@@ -397,8 +405,26 @@ class SpectrumQChartView(QtCharts.QChartView):
         x_max = x_axis.max()
         y_max = y_axis.max()
 
+        plot_area: QtCore.QRectF = self.chart().plotArea()
+
         for sibling in self.siblings:
+
             sibling.setAxesRange(x_min, y_min, x_max, y_max)
+
+            if sibling.sync_width or sibling.sync_height:
+                sibling_plot_area: QtCore.QRectF = sibling.chart().plotArea()
+                if sibling.sync_width:
+                    sibling_plot_area.setX(plot_area.x())
+                    sibling_plot_area.setWidth(plot_area.width())
+
+                if sibling.sync_height:
+                    sibling_plot_area.setY(plot_area.y())
+                    sibling_plot_area.setHeight(plot_area.height())
+
+                sibling.chart().setPlotArea(sibling_plot_area)
+                sibling.chart().update()
+                sibling.update()
+
         self._sibling_locked = False
 
     def toSeriesPos(self, event: QtGui.QMouseEvent):
@@ -660,12 +686,12 @@ class GuiApp:
         self.statusbar.addPermanentWidget(self.cancel_button)
         self.statusbar.addPermanentWidget(self.mousePosLabel)
 
-        self.main_wnd.flux_container_widget.setContentsMargins(0, 0, 0, 0)
-        self.main_wnd.var_container_widget.setContentsMargins(0, 0, 0, 0)
+        # QChartView widget for flux
 
         self.flux_chart_view: SpectrumQChartView = SpectrumQChartView(
             self.main_wnd.flux_group_box
         )
+        self.flux_chart_view.master = True
         self.flux_chart_view.setObjectName("flux_chart_view")
         self.flux_chart_view.setRenderHint(
             QtGui.QPainter.RenderHint.Antialiasing
@@ -683,10 +709,12 @@ class GuiApp:
             QtCharts.QChartView.RubberBand.RectangleRubberBand
         )
 
-        self.main_wnd.fluxWidgetLayout.addWidget(self.flux_chart_view)
+        self.main_wnd.flux_widget_layout.addWidget(self.flux_chart_view)
+
+        # QChartView widget for variance
 
         self.var_chart_view: SpectrumQChartView = SpectrumQChartView(
-            self.main_wnd.variance_group_box
+            self.main_wnd.other_charts_tab_widget
         )
         self.var_chart_view.vertical_lock = True
         self.var_chart_view.setObjectName("var_chart_view")
@@ -705,10 +733,61 @@ class GuiApp:
         self.var_chart_view.setRubberBand(
             QtCharts.QChartView.RubberBand.NoRubberBand
         )
+        self.main_wnd.var_widget_layout.addWidget(self.var_chart_view)
 
-        self.main_wnd.varWidgetLayout.addWidget(self.var_chart_view)
+        # QChartView widget for resolution curve
+
+        self.rcurve_chart_view: SpectrumQChartView = SpectrumQChartView(
+            self.main_wnd.other_charts_tab_widget
+        )
+        self.rcurve_chart_view.vertical_lock = True
+        self.rcurve_chart_view.setObjectName("var_chart_view")
+        self.rcurve_chart_view.setRenderHint(
+            QtGui.QPainter.RenderHint.Antialiasing
+        )
+        self.rcurve_chart_view.setHorizontalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.rcurve_chart_view.setVerticalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.rcurve_chart_view.setContentsMargins(0, 0, 0, 0)
+        self.rcurve_chart_view.chart().setContentsMargins(0, 0, 0, 0)
+        self.rcurve_chart_view.chart().layout().setContentsMargins(0, 0, 0, 0)
+        self.rcurve_chart_view.setRubberBand(
+            QtCharts.QChartView.RubberBand.NoRubberBand
+        )
+        self.main_wnd.rcurve_widget_layout.addWidget(self.rcurve_chart_view)
+
+        # QChartView widget for sky
+
+        self.sky_chart_view: SpectrumQChartView = SpectrumQChartView(
+            self.main_wnd.other_charts_tab_widget
+        )
+        self.sky_chart_view.vertical_lock = True
+        self.sky_chart_view.setObjectName("var_chart_view")
+        self.sky_chart_view.setRenderHint(
+            QtGui.QPainter.RenderHint.Antialiasing
+        )
+        self.sky_chart_view.setHorizontalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.sky_chart_view.setVerticalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.sky_chart_view.setContentsMargins(0, 0, 0, 0)
+        self.sky_chart_view.chart().setContentsMargins(0, 0, 0, 0)
+        self.sky_chart_view.chart().layout().setContentsMargins(0, 0, 0, 0)
+        self.sky_chart_view.setRubberBand(
+            QtCharts.QChartView.RubberBand.NoRubberBand
+        )
+        self.main_wnd.sky_widget_layout.addWidget(self.sky_chart_view)
+
+        # Add siblings to main flux QChartView
 
         self.flux_chart_view.addSibling(self.var_chart_view)
+        self.flux_chart_view.addSibling(self.rcurve_chart_view)
+        self.flux_chart_view.addSibling(self.sky_chart_view)
 
         # Connect signals
 
@@ -823,6 +902,10 @@ class GuiApp:
 
         self.main_wnd.qflag_combo_box.currentIndexChanged.connect(
             self.currentQualityFlagChanged
+        )
+
+        self.main_wnd.show_lines_combo_box.currentIndexChanged.connect(
+            self.setShowLinesType
         )
 
         self.newProject()
@@ -1060,6 +1143,12 @@ class GuiApp:
         var_chart = self.var_chart_view.chart()
         var_chart.removeAllSeries()
 
+        rc_chart = self.var_chart_view.chart()
+        rc_chart.removeAllSeries()
+
+        sky_chart = self.var_chart_view.chart()
+        sky_chart.removeAllSeries()
+
         self._backup_current_object_state()
         if spec_uuid != self.current_uuid:
             # If we actually change the spectrum, then reset the view
@@ -1070,6 +1159,10 @@ class GuiApp:
                 flux_chart.removeAxis(ax)
             for ax in var_chart.axes():
                 var_chart.removeAxis(ax)
+            for ax in rc_chart.axes():
+                rc_chart.removeAxis(ax)
+            for ax in sky_chart.axes():
+                sky_chart.removeAxis(ax)
 
         sp: Spectrum1D = self.open_spectra[spec_uuid]
 
@@ -1081,6 +1174,12 @@ class GuiApp:
 
         var: np.ndarray | None = None
         var_unit: units.Unit | None = None
+
+        rcurve: np.ndarray | None = None
+        rcurve_unit: units.Unit | None = None
+
+        sky: np.ndarray | None = None
+        sky_unit: units.Unit | None = None
 
         if isinstance(sp.uncertainty, VarianceUncertainty):
             var = sp.uncertainty.array
@@ -1097,6 +1196,11 @@ class GuiApp:
             flux_axis_y = QtCharts.QValueAxis()
             var_axis_x = QtCharts.QValueAxis()
             var_axis_y = QtCharts.QValueAxis()
+            rc_axis_x = QtCharts.QValueAxis()
+            rc_axis_y = QtCharts.QValueAxis()
+            sky_axis_x = QtCharts.QValueAxis()
+            sky_axis_y = QtCharts.QValueAxis()
+
             flux_chart.addAxis(
                 flux_axis_x, QtCore.Qt.AlignmentFlag.AlignBottom
             )
@@ -1109,11 +1213,27 @@ class GuiApp:
             var_chart.addAxis(
                 var_axis_y, QtCore.Qt.AlignmentFlag.AlignLeft
             )
+            rc_chart.addAxis(
+                rc_axis_x, QtCore.Qt.AlignmentFlag.AlignBottom
+            )
+            rc_chart.addAxis(
+                rc_axis_y, QtCore.Qt.AlignmentFlag.AlignLeft
+            )
+            sky_chart.addAxis(
+                sky_axis_x, QtCore.Qt.AlignmentFlag.AlignBottom
+            )
+            sky_chart.addAxis(
+                sky_axis_y, QtCore.Qt.AlignmentFlag.AlignLeft
+            )
         else:
             flux_axis_x = flux_chart.axes()[0]
             flux_axis_y = flux_chart.axes()[1]
             var_axis_x = var_chart.axes()[0]
             var_axis_y = var_chart.axes()[1]
+            rc_axis_x = rc_chart.axes()[0]
+            rc_axis_y = rc_chart.axes()[1]
+            sky_axis_x = sky_chart.axes()[0]
+            sky_axis_y = sky_chart.axes()[1]
 
         flux_axis_x.setTickInterval(500)
         flux_axis_x.setLabelFormat("%.2f")
@@ -1145,14 +1265,10 @@ class GuiApp:
             smoothed_flux_series.attachAxis(flux_axis_x)
             smoothed_flux_series.attachAxis(flux_axis_y)
 
-        flux_chart.setContentsMargins(0, 0, 0, 0)
-        flux_chart.setBackgroundRoundness(0)
-        flux_chart.legend().hide()
-
         if var is None:
-            self.main_wnd.variance_group_box.setEnabled(False)
+            self.main_wnd.container_tab_var.setEnabled(False)
         else:
-            self.main_wnd.variance_group_box.setEnabled(True)
+            self.main_wnd.container_tab_var.setEnabled(True)
             var_series = values2series(wav, var, self.qapp.tr("Variance"))
             var_chart.addSeries(var_series)
 
@@ -1167,9 +1283,57 @@ class GuiApp:
             var_series.attachAxis(var_axis_x)
             var_series.attachAxis(var_axis_y)
 
+        if rcurve is None:
+            self.main_wnd.container_tab_rc.setEnabled(False)
+        else:
+            self.main_wnd.container_tab_rc.setEnabled(True)
+            rc_series = values2series(wav, rcurve, self.qapp.tr("Reso. curve"))
+            rc_chart.addSeries(rc_series)
+
+            rc_axis_x.setTickInterval(500)
+            rc_axis_x.setLabelFormat("%.2f")
+            rc_axis_x.setTitleText(str(wav_unit))
+
+            rc_axis_y.setTickCount(10)
+            rc_axis_y.setLabelFormat("%.2f")
+            rc_axis_y.setTitleText(str(rcurve_unit))
+
+            rc_series.attachAxis(rc_axis_x)
+            rc_series.attachAxis(rc_axis_y)
+
+        if sky is None:
+            self.main_wnd.container_tab_sky.setEnabled(False)
+        else:
+            self.main_wnd.container_tab_sky.setEnabled(True)
+            sky_series = values2series(wav, sky, self.qapp.tr("Sky"))
+            sky_chart.addSeries(sky_series)
+
+            sky_axis_x.setTickInterval(500)
+            sky_axis_x.setLabelFormat("%.2f")
+            sky_axis_x.setTitleText(str(wav_unit))
+
+            sky_axis_y.setTickCount(10)
+            sky_axis_y.setLabelFormat("%.2f")
+            sky_axis_y.setTitleText(str(sky_unit))
+
+            sky_series.attachAxis(sky_axis_x)
+            sky_series.attachAxis(sky_axis_y)
+
+        flux_chart.setContentsMargins(0, 0, 0, 0)
+        flux_chart.setBackgroundRoundness(0)
+        flux_chart.legend().hide()
+
         var_chart.setContentsMargins(0, 0, 0, 0)
         var_chart.setBackgroundRoundness(0)
         var_chart.legend().hide()
+
+        rc_chart.setContentsMargins(0, 0, 0, 0)
+        rc_chart.setBackgroundRoundness(0)
+        rc_chart.legend().hide()
+
+        sky_chart.setContentsMargins(0, 0, 0, 0)
+        sky_chart.setBackgroundRoundness(0)
+        sky_chart.legend().hide()
 
     def doAddNewLine(self, *args, **kwargs) -> None:
         """
@@ -2154,6 +2318,14 @@ class GuiApp:
 
         with open(file_name, 'w') as f:
             json.dump(project_dict, f, indent=2)
+
+    def setShowLinesType(self, type_index: int) -> None:
+        if type_index == 0:
+            self.flux_chart_view.setLinesType('')
+        elif type_index == 1:
+            self.flux_chart_view.setLinesType('E')
+        elif type_index == 2:
+            self.flux_chart_view.setLinesType('A')
 
     def toggleSimilarSpecItems(
         self,

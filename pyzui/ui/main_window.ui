@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1448</width>
-    <height>953</height>
+    <height>984</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -159,7 +159,7 @@
      </widget>
     </item>
     <item>
-     <layout class="QVBoxLayout" name="vertical_layout_2" stretch="6,3,0">
+     <layout class="QVBoxLayout" name="vertical_layout_2" stretch="6,5,0">
       <item>
        <widget class="QGroupBox" name="flux_group_box">
         <property name="sizePolicy">
@@ -193,12 +193,12 @@
          <item row="0" column="0">
           <widget class="QWidget" name="flux_container_widget" native="true">
            <property name="sizePolicy">
-            <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+            <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
              <horstretch>0</horstretch>
              <verstretch>0</verstretch>
             </sizepolicy>
            </property>
-           <layout class="QHBoxLayout" name="fluxWidgetLayout">
+           <layout class="QHBoxLayout" name="flux_widget_layout">
             <property name="spacing">
              <number>0</number>
             </property>
@@ -221,63 +221,76 @@
        </widget>
       </item>
       <item>
-       <widget class="QGroupBox" name="variance_group_box">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
+       <widget class="QTabWidget" name="other_charts_tab_widget">
+        <property name="currentIndex">
+         <number>0</number>
         </property>
-        <property name="title">
-         <string>Variance</string>
-        </property>
-        <property name="flat">
-         <bool>false</bool>
-        </property>
-        <layout class="QGridLayout" name="varGroupBoxGridLayout">
-         <property name="leftMargin">
-          <number>0</number>
-         </property>
-         <property name="topMargin">
-          <number>0</number>
-         </property>
-         <property name="rightMargin">
-          <number>0</number>
-         </property>
-         <property name="bottomMargin">
-          <number>0</number>
-         </property>
-         <property name="spacing">
-          <number>0</number>
-         </property>
-         <item row="0" column="0">
-          <widget class="QWidget" name="var_container_widget" native="true">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <layout class="QHBoxLayout" name="varWidgetLayout">
-            <property name="spacing">
-             <number>0</number>
-            </property>
-            <property name="leftMargin">
-             <number>0</number>
-            </property>
-            <property name="topMargin">
-             <number>0</number>
-            </property>
-            <property name="rightMargin">
-             <number>0</number>
-            </property>
-            <property name="bottomMargin">
-             <number>0</number>
-            </property>
-           </layout>
-          </widget>
-         </item>
-        </layout>
+        <widget class="QWidget" name="container_tab_var">
+         <attribute name="title">
+          <string>Variance</string>
+         </attribute>
+         <layout class="QGridLayout" name="var_widget_layout">
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <property name="spacing">
+           <number>0</number>
+          </property>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="container_tab_rc">
+         <attribute name="title">
+          <string>R curve</string>
+         </attribute>
+         <layout class="QGridLayout" name="rcurve_widget_layout">
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <property name="spacing">
+           <number>0</number>
+          </property>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="container_tab_sky">
+         <attribute name="title">
+          <string>Sky</string>
+         </attribute>
+         <layout class="QGridLayout" name="sky_widget_layout">
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <property name="spacing">
+           <number>0</number>
+          </property>
+         </layout>
+        </widget>
        </widget>
       </item>
       <item>
@@ -494,7 +507,7 @@
           <enum>QTabWidget::Rounded</enum>
          </property>
          <property name="currentIndex">
-          <number>1</number>
+          <number>0</number>
          </property>
          <widget class="QWidget" name="tab_lines">
           <attribute name="title">

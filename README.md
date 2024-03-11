@@ -1,2 +1,2 @@
 # pyzui
-A Qt6 GUI interface to do spectroscopic redshift measuremetns
+A Qt6 GUI interface to do spectroscopic redshift measurements
