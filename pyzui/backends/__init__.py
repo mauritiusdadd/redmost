@@ -1,4 +1,4 @@
 
-import pyzui.backends.redrock as redrock
+import pyzui.backends.rrock as rrock
 
-HAS_REDROCK = redrock.HAS_REDROCK
+HAS_REDROCK = rrock.HAS_REDROCK

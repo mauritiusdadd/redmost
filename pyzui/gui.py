@@ -8,6 +8,7 @@ Created on Fri Nov 24 10:33:40 2023.
 from __future__ import annotations
 
 import os
+import pickle
 import time
 import sys
 import json
@@ -32,7 +33,7 @@ from pyzui import lines
 from pyzui import backends
 
 try:
-    from PyQt6 import QtCore, QtGui, QtWidgets, QtCharts, uics
+    from PyQt6 import QtCore, QtGui, QtWidgets, QtCharts, uic
     from PyQt6.QtCore import pyqtSignal as Signal
 except (ImportError, ModuleNotFoundError):
     from PySide6 import QtCore, QtGui, QtUiTools, QtWidgets, QtCharts
@@ -48,45 +49,6 @@ def getQApp() -> QtWidgets.QApplication:
         # if it does not exist then a QApplication is created
         qapp = QtWidgets.QApplication(sys.argv)
     return qapp
-
-
-class BackendWorker(QtCore.QObject):
-
-    finished = Signal()
-    progress = Signal(int)
-    message = Signal(str)
-    flushed = Signal()
-    started = Signal()
-
-    def __init__(self) -> None:
-        super().__init__()
-        self._func: Union[Callable, None] = None
-        self._args: List[Any] = []
-        self._result: Any = None
-        self._text_widget: Union[None, QtWidgets.QWidget] = None
-
-    def set_function(self, func: Callable, args: List[Any]) -> None:
-        self._func = func
-        self._args = args
-
-    def set_text_widget(self, text_widget: QtWidgets.QWidget) -> None:
-        self._text_widget = text_widget
-
-    def write(self, text: str) -> None:
-        self.message.emit(text.strip('\n'))
-
-    def flush(self) -> None:
-        self.flushed.emit()
-
-    def run(self):
-        self.started.emit()
-        if self._func is not None:
-            old_stdout = sys.stdout
-            sys.stdout = self
-            self._result = self._func(*self._args)
-            sys.stdout = old_stdout
-        self.progress.emit(100)
-        self.finished.emit()
 
 
 class SpectrumQChartView(QtCharts.QChartView):
@@ -222,7 +184,7 @@ class SpectrumQChartView(QtCharts.QChartView):
 
             pen_color.setAlphaF(self.line_plot_options["alpha"])
             pen.setColor(pen_color)
-            pen.setWidth(self.line_plot_options["width"])
+            pen.setWidthF(self.line_plot_options["width"])
             pen.setDashPattern(self.line_plot_options["dash_pattern"])
             painter.setPen(pen)
 
@@ -678,6 +640,85 @@ class SpectrumQChartView(QtCharts.QChartView):
         self.setAxesRange(*self._getDataBounds())
 
 
+class QRedrockHandler(QtCore.QObject):
+
+    progress: Signal = Signal(int)
+    maximum: Signal = Signal(int)
+    reset: Signal = Signal()
+    message: Signal = Signal(str)
+    finished: Signal = Signal()
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.qapp = getQApp()
+        self.targets = []
+        self.results = None
+        self._t_dict: Union[None, Dict[str, uuid.UUID]] = None
+
+        self._target_dump_file = 'rr.targets'
+        self._result_dump_file = 'rr.result'
+        self.process: QtCore.QProcess = QtCore.QProcess(self)
+        self.process.readyReadStandardOutput.connect(
+            self._process_output
+        )
+        self.process.finished.connect(
+            self.retrieve_results
+        )
+
+        self._total_progress = 0
+        self._total_maximum = 0
+
+    def _process_output(self) -> None:
+        data_bytes: QtCore.QByteArray = self.process.readAllStandardOutput()
+        text = bytes(data_bytes).decode()
+        for line in text.splitlines():
+            simplified = ' '.join(line.lower().strip().split())
+            if (
+                ("progress: 100 %" in simplified) or
+                ("finding best fits" in simplified)
+            ):
+                self._total_progress += 1
+                self.progress.emit(self._total_progress)
+            elif "computing redshifts took:" in simplified:
+                self.progress.emit(self._total_maximum)
+
+        self.message.emit(str(text))
+
+    def retrieve_results(self) -> None:
+        try:
+            with open(self._result_dump_file, 'rb') as f:
+                self.results = pickle.load(f)
+        except Exception:
+            self.results = None
+        self.finished.emit()
+
+    def run_redrock(self, spectra: Dict[uuid.UUID, Spectrum1D]) -> None:
+        self.reset.emit()
+        self.maximum.emit(len(spectra))
+        self.message.emit(self.qapp.tr("Building targets"))
+        self.targets, self._t_dict = backends.rrock.build_redrock_targets(
+            spectra,
+            progress_callback=self.progress.emit
+        )
+
+        self.reset.emit()
+        self.maximum.emit(0)
+        backends.rrock.dump_targets(self.targets, self._target_dump_file)
+
+        self._total_maximum = 22
+        self._total_progress = 0
+        self.maximum.emit(self._total_maximum)
+        self.message.emit(self.qapp.tr("Running redrock backend"))
+        self.process.start(
+            sys.executable,
+            [
+                backends.rrock.__file__,
+                self._target_dump_file,
+                self._result_dump_file
+            ]
+        )
+
+
 class GlobalState(Enum):
     READY = 0
     WAITING = 1
@@ -745,32 +786,6 @@ class GuiApp:
         self.statusbar.addPermanentWidget(self.cancel_button)
         self.statusbar.addPermanentWidget(self.mousePosLabel)
 
-        # Main redshift backend worker
-        self.backend_worker = BackendWorker()
-        self.worker_thread = QtCore.QThread()
-        self.backend_worker.set_text_widget(self.main_wnd.redrock_text_edit)
-        self.backend_worker.moveToThread(self.worker_thread)
-        self.backend_worker.message.connect(
-            self.main_wnd.redrock_text_edit.append
-        )
-        self.backend_worker.flushed.connect(
-            self.qapp.processEvents
-        )
-
-        self.backend_worker.started.connect(
-            self.main_wnd.redrock_progress_bar.reset
-        )
-        self.backend_worker.progress.connect(
-            self.main_wnd.redrock_progress_bar.setValue
-        )
-        self.backend_worker.finished.connect(
-            self.main_wnd.redrock_progress_bar.reset
-        )
-
-        self.backend_worker.finished.connect(self.backend_worker.deleteLater)
-        self.worker_thread.finished.connect(self.worker_thread.deleteLater)
-        self.worker_thread.started.connect(self.backend_worker.run)
-
         # Fill single line combo box
         for lam, line_name, _ in lines.RESTFRAME_LINES:
             text = f"{line_name} - {lam:.2f} A"
@@ -788,10 +803,31 @@ class GuiApp:
                 "Cannot load redrock python module.\n"
                 "Please, check if redrock is correctly installed!\n"
             )
+
+            self.redrock_handler = None
         else:
             self.main_wnd.redrock_run_button.clicked.connect(
                 self.doStartRedrock
             )
+
+            self.redrock_handler = QRedrockHandler()
+            self.redrock_handler.reset.connect(
+                self.main_wnd.redrock_progress_bar.reset
+            )
+            self.redrock_handler.maximum.connect(
+                self.main_wnd.redrock_progress_bar.setMaximum
+            )
+            self.redrock_handler.progress.connect(
+                self.main_wnd.redrock_progress_bar.setValue
+            )
+            self.redrock_handler.message.connect(
+                self.main_wnd.redrock_text_edit.append
+            )
+            self.redrock_handler.finished.connect(
+                self.collectRedrockResults
+            )
+
+        self.main_wnd.redrock_current_radio.setEnabled(False)
 
         # QChartView widget for flux
 
@@ -1261,6 +1297,41 @@ class GuiApp:
             # Ignore the close event if Cancel button is pressed
             event.ignore()
 
+    def collectRedrockResults(self) -> None:
+        self.statusbar.showMessage(self.qapp.tr("Redrock results ready!"))
+        res = self.redrock_handler.results
+
+        if res is None:
+            return
+
+        zbest = res[1][res[1]['znum'] == 0]
+
+        self._lock()
+        self.global_state = GlobalState.LOAD_OBJECT_STATE
+        self._backup_current_object_state()
+        for row in zbest:
+            obj_uuid = self.redrock_handler._t_dict[row['targetid']]
+
+            try:
+                info_dict = self.object_state_dict[obj_uuid]
+            except KeyError:
+                info_dict = {
+                    'redshift': None,
+                    'quality_flag': 0,
+                    'lines': {
+                        'list': [],
+                        'redshifts': []
+                    }
+                }
+                self.object_state_dict[obj_uuid] = info_dict
+
+            info_dict['redshift'] = row['z']
+            if row['zwarn'] != 0:
+                self._update_spec_item_qf(obj_uuid, 1)
+        self._restore_object_state(self.current_uuid)
+        self.global_state = GlobalState.READY
+        self._unlock()
+
     def currentQualityFlagChanged(self, df_index):
         if self.current_uuid is None:
             return
@@ -1285,7 +1356,13 @@ class GuiApp:
         None.
 
         """
-        if (new_item is None) or (self.global_state != GlobalState.READY):
+        if new_item is None:
+            self.main_wnd.redrock_current_radio.setEnabled(False)
+            return
+        else:
+            self.main_wnd.redrock_current_radio.setEnabled(True)
+
+        if self.global_state != GlobalState.READY:
             return
 
         self._unlock()
@@ -2010,11 +2087,23 @@ class GuiApp:
         return True
 
     def doStartRedrock(self, *args, **kwargs) -> None:
-        self.backend_worker.set_function(
-            backends.redrock.run_redrock,
-            [self.open_spectra]
-        )
-        self.worker_thread.start()
+        self.main_wnd.redrock_text_edit.clear()
+        self.statusbar.showMessage("Running redrock backend...")
+
+        for_rr: Dict[uuid.UUID, Spectrum1D] = {}
+        if self.main_wnd.redrock_all_radio.isChecked():
+            for_rr = self.open_spectra
+        elif self.main_wnd.redrock_selected_radio.isChecked():
+            item: QtWidgets.QListWidgetItem
+            for row in range(self.main_wnd.spec_list_widget.count()):
+                item = self.main_wnd.spec_list_widget.item(row)
+                if item.checkState() == QtCore.Qt.CheckState.Checked:
+                    item_uuid = item.data(QtCore.Qt.ItemDataRole.UserRole)
+                    for_rr[item_uuid] = self.open_spectra[item_uuid]
+        else:
+            for_rr[self.current_uuid] = self.open_spectra[self.current_uuid]
+
+        self.redrock_handler.run_redrock(for_rr)
 
     def doToggleDone(self) -> None:
         check_state = None
