@@ -36,8 +36,16 @@ try:
     from PyQt6 import QtCore, QtGui, QtWidgets, QtCharts, uic
     from PyQt6.QtCore import pyqtSignal as Signal
 except (ImportError, ModuleNotFoundError):
-    from PySide6 import QtCore, QtGui, QtUiTools, QtWidgets, QtCharts
-    from PySide6.QtCore import Signal
+    try:
+        from PySide6 import QtCore, QtGui, QtUiTools, QtWidgets, QtCharts
+        from PySide6.QtCore import Signal
+    except (ImportError, ModuleNotFoundError):
+        from tkinter import messagebox
+
+        messagebox.showerror(
+            title="ERROR",
+            message="Please install either PyQt6 or PySide6"
+        )
     QT_BACKEND = 'PySide6'
 else:
     QT_BACKEND = 'PyQt6'
@@ -2794,7 +2802,6 @@ def main() -> None:
     None.
 
     """
-
     myapp: GuiApp = GuiApp(QT_BACKEND)
     myapp.run()
 

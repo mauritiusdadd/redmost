@@ -42,6 +42,10 @@ dependencies = [
     "specutils",
 ]
 
+[project.optional-dependencies]
+redrock = ["redrock"]
+pyqt = ["PyQt6"]
+pyside = ["PySide6"]
 
 [project.urls]
 repository = "https://github.com/mauritiusdadd/pyzui"
