@@ -27,6 +27,7 @@ from specutils import Spectrum1D
 from pyzui import loaders
 from pyzui import utils
 from pyzui import lines
+from pyzui import backends
 
 try:
     from PyQt6 import QtCore, QtGui, QtWidgets, QtCharts, uics
@@ -710,6 +711,16 @@ class GuiApp:
         self.main_wnd.single_line_combo_box.currentIndexChanged.connect(
             self.setCurrentObjectRedshiftFromSingleLine
         )
+
+        # Check for RedRock.
+        if not backends.HAS_REDROCK:
+            self.main_wnd.redrock_run_button.setEnabled(False)
+            self.main_wnd.redrock_text_edit.setText(
+                "*** WARNING ***\n"
+                "\n"
+                "Cannot load redrock python module.\n"
+                "Please, check if redrock is correctly installed!\n"
+            )
 
         # QChartView widget for flux
 

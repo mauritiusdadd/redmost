@@ -8,7 +8,7 @@ import numpy as np
 
 from pyzui import utils
 
-# Some important lines with corresponding wavelenghts in Angstrom
+# Some important lines with corresponding wavelengths in Angstrom
 RESTFRAME_LINES = [
     (10320, '[SII]', 'E'),
     (8863.0, 'TiO', 'A'),

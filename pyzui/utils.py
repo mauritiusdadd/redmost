@@ -3,14 +3,13 @@
 """
 Created on Fri Nov 24 20:38:29 2023.
 
-@author: daddona
+@author: Maurizio D'Addona
 """
-import os
-from typing import Union, Optional, List, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 
-from scipy.signal.windows import general_gaussian
+from scipy.signal.windows import general_gaussian   # type: ignore
 
 
 def smooth_fft(
@@ -96,8 +95,6 @@ def separate_continuum(
     sigma : float, optional
         Parameter to be passed to the function general_gaussian().
         The default value is 25.0.
-    axis : int, optional
-        The axis along with perform the smoothing. The default value is -1.
     mask : numpy.ndarray, optional
         An optional array containing a boolean mask of values that should be
         masked during the smoothing process, were a True means that the
