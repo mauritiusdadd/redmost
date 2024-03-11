@@ -1,13 +1,15 @@
 import os
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Tuple
 
 import numpy as np
 
 from astropy.nddata import VarianceUncertainty  # type: ignore
 from astropy.io import fits  # type: ignore
+from astropy.table import Table  # type: ignore
 from astropy import wcs  # type: ignore
 from astropy import units  # type: ignore
 from specutils import Spectrum1D  # type: ignore
+from specutils.io.registers import identify_spectrum_format  # type: ignore
 from specutils.io.registers import data_loader  # type: ignore
 
 KNOWN_SPEC_EXT_NAMES = ['spec', 'spectrum', 'flux', 'data', 'sci', 'science']
@@ -62,11 +64,17 @@ def identifySpecexFits(origin, *args, **kwargs):
     return False
 
 
-@data_loader("specex-1d", identifier=identifySpecexFits, extensions=['fits'])
-def specexFitsLoader(file_name: str,
-                     flux_hdu_index: Optional[Union[str, int]] = None,
-                     resolution: Union[int, float] = 1,
-                     **kwargs):
+@data_loader(
+    label="specex-1d",
+    identifier=identifySpecexFits,
+    extensions=['fits']
+)
+def specexFitsLoader(
+    file_name: str,
+    flux_hdu_index: Optional[Union[str, int]] = None,
+    resolution: Union[int, float] = 1,
+    **kwargs
+) -> Spectrum1D:
     """
     Load a python-specex spectrum.
 
@@ -105,7 +113,7 @@ def specexFitsLoader(file_name: str,
         flux_hdu = getHDU(hdulist, KNOWN_SPEC_EXT_NAMES, index=flux_hdu_index)
         var_hdu = getHDU(hdulist, KNOWN_VARIANCE_EXT_NAMES)
         mask_hdu = getHDU(hdulist, KNOWN_MASK_EXT_NAMES)
-        wd_hdu = getHDU(hdulist, KNOWN_RCURVE_EXT_NAMES)
+        rc_hdu = getHDU(hdulist, KNOWN_RCURVE_EXT_NAMES)
 
         valid_id_keys: List[str] = [
             f"{i}{j}"
@@ -136,10 +144,10 @@ def specexFitsLoader(file_name: str,
         else:
             mask = mask_hdu.data
 
-        if wd_hdu is None:
-            wd = None
+        if rc_hdu is None:
+            rc = None
         else:
-            wd = wd_hdu.data
+            rc = rc_hdu.data
 
         flux_wcs = wcs.WCS(flux_hdu.header)
 
@@ -174,17 +182,17 @@ def specexFitsLoader(file_name: str,
         var = var.copy() * (flux_units**2)
         lam = lam.copy() * wave_units
 
-        if wd is not None:
-            wd = wd.copy()
+        if rc is not None:
+            rc = rc.copy()
         else:
             # If now wavelenght dispersion information is present, then
             # compute it using the wavelenght
             delta_lambda = np.ones_like(lam)
             delta_lambda[1:] = (lam[1:] - lam[:-1])
             delta_lambda = delta_lambda.to('Angstrom').value
-            wd = resolution / delta_lambda
-            wd[0] = wd[1]
-        wd[wd < 1e-3] = 2.
+            rc = resolution / delta_lambda
+            rc[0] = rc[1]
+        rc[rc < 1e-3] = 2.
 
         meta = {'header': hdulist[0].header}
         uncertainty = VarianceUncertainty(var)
@@ -198,7 +206,44 @@ def specexFitsLoader(file_name: str,
         )
 
         sp.mask = flux_not_nan_mask
-        sp.wd = wd
+        sp.rc = rc
         sp.obj_id = obj_id
+
+    return sp
+
+def read_sdss_extra(
+    file: str
+) -> Tuple[Union[np.ndarray, None], Union[np.ndarray, None]]:
+    try:
+        myt = Table.read(file, hdu='COADD')
+    except KeyError:
+        return None, None
+
+    try:
+        wd = myt['wdisp']
+    except KeyError:
+        wd = None
+
+    try:
+        sky = myt['sky']
+    except KeyError:
+        sky = None
+
+    return sky, wd
+
+def read(file: str) -> Spectrum1D:
+    sp_formats = identify_spectrum_format(file)
+    sp = Spectrum1D.read(file)
+    sp.wd = None
+    sp.sky = None
+
+    # Try to read auxiliary data
+    if 'SDSS-V spec' in sp_formats:
+        sky, wd = read_sdss_extra(file)
+
+        if sky is not None:
+            sp.sky = sky * sp.flux.unit
+        if wd is not None:
+            sp.wd = ((10**wd)*units.Unit('Angstrom')).to(sp.spectral_axis.unit)
 
     return sp

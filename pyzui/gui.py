@@ -16,7 +16,9 @@ from typing import Optional, Union, Tuple, List, Dict, Any, cast
 import logging
 
 import numpy as np
-from astropy.nddata import VarianceUncertainty, StdDevUncertainty
+from astropy.nddata import VarianceUncertainty
+from astropy.nddata import StdDevUncertainty
+from astropy.nddata import InverseVariance
 from astropy import units
 from astropy.table import Table
 
@@ -76,7 +78,7 @@ class SpectrumQChartView(QtCharts.QChartView):
         self.master: bool = False
         self.show_lines: bool = False
         self.sync_height: bool = False
-        self.sync_width: bool = True
+        self.sync_width: bool = False
         self.redshift: float = 0
         self.vertical_lock: bool = False
 
@@ -93,6 +95,19 @@ class SpectrumQChartView(QtCharts.QChartView):
         # Pass events also to siblings
         self._sibling_locked: bool = False
         self.siblings: List[SpectrumQChartView] = []
+
+        self.setSizePolicy(
+            QtWidgets.QSizePolicy(
+                QtWidgets.QSizePolicy.Policy.Expanding,
+                QtWidgets.QSizePolicy.Policy.Expanding
+            )
+        )
+        self.chart().setSizePolicy(
+            QtWidgets.QSizePolicy(
+                QtWidgets.QSizePolicy.Policy.Expanding,
+                QtWidgets.QSizePolicy.Policy.Expanding
+            )
+        )
 
     def _getDataBounds(self) -> Union[
         Tuple[float, float, float, float],
@@ -384,11 +399,6 @@ class SpectrumQChartView(QtCharts.QChartView):
     def showLines(self) -> None:
         self.setLinesVisible(True)
 
-    def resizeEvent(self, event, QResizeEvent=None) -> None:
-        super().resizeEvent(event)
-        if self.master:
-            self.syncSiblingAxes()
-
     def syncSiblingAxes(self) -> None:
         if self._sibling_locked:
             return
@@ -412,7 +422,9 @@ class SpectrumQChartView(QtCharts.QChartView):
             sibling.setAxesRange(x_min, y_min, x_max, y_max)
 
             if sibling.sync_width or sibling.sync_height:
-                sibling_plot_area: QtCore.QRectF = sibling.chart().plotArea()
+                sibling_chart: QtCharts.QChart = sibling.chart()
+                sibling_chart.setPlotArea(QtCore.QRectF())
+                sibling_plot_area: QtCore.QRectF = sibling_chart.plotArea()
                 if sibling.sync_width:
                     sibling_plot_area.setX(plot_area.x())
                     sibling_plot_area.setWidth(plot_area.width())
@@ -421,11 +433,16 @@ class SpectrumQChartView(QtCharts.QChartView):
                     sibling_plot_area.setY(plot_area.y())
                     sibling_plot_area.setHeight(plot_area.height())
 
-                sibling.chart().setPlotArea(sibling_plot_area)
-                sibling.chart().update()
+                sibling_chart.setPlotArea(sibling_plot_area)
+                sibling_chart.update()
                 sibling.update()
 
         self._sibling_locked = False
+
+    def resizeEvent(self, event, QResizeEvent=None) -> None:
+        super().resizeEvent(event)
+        if self.master:
+            self.syncSiblingAxes()
 
     def toSeriesPos(self, event: QtGui.QMouseEvent):
         """
@@ -686,6 +703,14 @@ class GuiApp:
         self.statusbar.addPermanentWidget(self.cancel_button)
         self.statusbar.addPermanentWidget(self.mousePosLabel)
 
+        # Fill single line combo box
+        for lam, line_name, _ in lines.RESTFRAME_LINES:
+            text = f"{line_name} - {lam:.2f} A"
+            self.main_wnd.single_line_combo_box.addItem(text, lam)
+        self.main_wnd.single_line_combo_box.currentIndexChanged.connect(
+            self.setCurrentObjectRedshiftFromSingleLine
+        )
+
         # QChartView widget for flux
 
         self.flux_chart_view: SpectrumQChartView = SpectrumQChartView(
@@ -737,27 +762,27 @@ class GuiApp:
 
         # QChartView widget for resolution curve
 
-        self.rcurve_chart_view: SpectrumQChartView = SpectrumQChartView(
+        self.wdisp_chart_view: SpectrumQChartView = SpectrumQChartView(
             self.main_wnd.other_charts_tab_widget
         )
-        self.rcurve_chart_view.vertical_lock = True
-        self.rcurve_chart_view.setObjectName("var_chart_view")
-        self.rcurve_chart_view.setRenderHint(
+        self.wdisp_chart_view.vertical_lock = True
+        self.wdisp_chart_view.setObjectName("var_chart_view")
+        self.wdisp_chart_view.setRenderHint(
             QtGui.QPainter.RenderHint.Antialiasing
         )
-        self.rcurve_chart_view.setHorizontalScrollBarPolicy(
+        self.wdisp_chart_view.setHorizontalScrollBarPolicy(
             QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
-        self.rcurve_chart_view.setVerticalScrollBarPolicy(
+        self.wdisp_chart_view.setVerticalScrollBarPolicy(
             QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
-        self.rcurve_chart_view.setContentsMargins(0, 0, 0, 0)
-        self.rcurve_chart_view.chart().setContentsMargins(0, 0, 0, 0)
-        self.rcurve_chart_view.chart().layout().setContentsMargins(0, 0, 0, 0)
-        self.rcurve_chart_view.setRubberBand(
+        self.wdisp_chart_view.setContentsMargins(0, 0, 0, 0)
+        self.wdisp_chart_view.chart().setContentsMargins(0, 0, 0, 0)
+        self.wdisp_chart_view.chart().layout().setContentsMargins(0, 0, 0, 0)
+        self.wdisp_chart_view.setRubberBand(
             QtCharts.QChartView.RubberBand.NoRubberBand
         )
-        self.main_wnd.rcurve_widget_layout.addWidget(self.rcurve_chart_view)
+        self.main_wnd.wdisp_widget_layout.addWidget(self.wdisp_chart_view)
 
         # QChartView widget for sky
 
@@ -786,7 +811,7 @@ class GuiApp:
         # Add siblings to main flux QChartView
 
         self.flux_chart_view.addSibling(self.var_chart_view)
-        self.flux_chart_view.addSibling(self.rcurve_chart_view)
+        self.flux_chart_view.addSibling(self.wdisp_chart_view)
         self.flux_chart_view.addSibling(self.sky_chart_view)
 
         # Connect signals
@@ -1004,8 +1029,35 @@ class GuiApp:
             w_item = QtWidgets.QTableWidgetItem(line_info['text'])
             w_item.setData(QtCore.Qt.ItemDataRole.UserRole, line_info['data'])
             w_item.setCheckState(line_info['checked'])
+            w_item.setFlags(
+                QtCore.Qt.ItemFlag.ItemIsSelectable |
+                QtCore.Qt.ItemFlag.ItemIsEnabled |
+                QtCore.Qt.ItemFlag.ItemIsUserCheckable
+            )
+
+            r_item = QtWidgets.QTableWidgetItem("")
+            r_item.setFlags(
+                QtCore.Qt.ItemFlag.ItemIsSelectable |
+                QtCore.Qt.ItemFlag.ItemIsEnabled
+            )
+            r_item.setData(QtCore.Qt.ItemDataRole.UserRole, 0.0)
+
+            m_item = QtWidgets.QTableWidgetItem("")
+            m_item.setFlags(
+                QtCore.Qt.ItemFlag.ItemIsSelectable |
+                QtCore.Qt.ItemFlag.ItemIsEnabled
+            )
+
             self.main_wnd.lines_table_widget.setItem(
                 line_info['row'], 0, w_item
+            )
+
+            self.main_wnd.lines_table_widget.setItem(
+                line_info['row'], 1, r_item
+            )
+
+            self.main_wnd.lines_table_widget.setItem(
+                line_info['row'], 2, m_item
             )
 
         redshifts_form_lines = old_state['lines']['redshifts']
@@ -1065,17 +1117,40 @@ class GuiApp:
         None
 
         """
-        new_item = QtWidgets.QTableWidgetItem(f"{wavelength:.2f} A")
-        new_item.setFlags(
+        lam_item = QtWidgets.QTableWidgetItem(f"{wavelength:.2f} A")
+        lam_item.setFlags(
             QtCore.Qt.ItemFlag.ItemIsSelectable |
             QtCore.Qt.ItemFlag.ItemIsEnabled |
             QtCore.Qt.ItemFlag.ItemIsUserCheckable
         )
-        new_item.setCheckState(QtCore.Qt.CheckState.Checked)
+        lam_item.setCheckState(QtCore.Qt.CheckState.Checked)
+        lam_item.setData(QtCore.Qt.ItemDataRole.UserRole, wavelength)
+
+        rest_lam = wavelength / (1 + self.main_wnd.z_dspinbox.value())
+        rest_item = QtWidgets.QTableWidgetItem(f"{rest_lam:.2f} A")
+        rest_item.setFlags(
+            QtCore.Qt.ItemFlag.ItemIsSelectable |
+            QtCore.Qt.ItemFlag.ItemIsEnabled
+        )
+        rest_item.setData(QtCore.Qt.ItemDataRole.UserRole, 0.0)
+
+        best_matches = [
+            x[1]
+            for x in  lines.get_lines(wrange=[rest_lam - 5, rest_lam + 5])
+        ]
+
+        match_item = QtWidgets.QTableWidgetItem('; '.join(best_matches))
+        match_item.setFlags(
+            QtCore.Qt.ItemFlag.ItemIsSelectable |
+            QtCore.Qt.ItemFlag.ItemIsEnabled
+        )
+
         new_item_row: int = self.main_wnd.lines_table_widget.rowCount()
-        new_item.setData(QtCore.Qt.ItemDataRole.UserRole, wavelength)
+
         self.main_wnd.lines_table_widget.setRowCount(new_item_row + 1)
-        self.main_wnd.lines_table_widget.setItem(new_item_row, 0, new_item)
+        self.main_wnd.lines_table_widget.setItem(new_item_row, 0, lam_item)
+        self.main_wnd.lines_table_widget.setItem(new_item_row, 1, rest_item)
+        self.main_wnd.lines_table_widget.setItem(new_item_row, 2, match_item)
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         self.msgBox.setText(
@@ -1143,10 +1218,10 @@ class GuiApp:
         var_chart = self.var_chart_view.chart()
         var_chart.removeAllSeries()
 
-        rc_chart = self.var_chart_view.chart()
-        rc_chart.removeAllSeries()
+        wd_chart = self.wdisp_chart_view.chart()
+        wd_chart.removeAllSeries()
 
-        sky_chart = self.var_chart_view.chart()
+        sky_chart = self.sky_chart_view.chart()
         sky_chart.removeAllSeries()
 
         self._backup_current_object_state()
@@ -1159,8 +1234,8 @@ class GuiApp:
                 flux_chart.removeAxis(ax)
             for ax in var_chart.axes():
                 var_chart.removeAxis(ax)
-            for ax in rc_chart.axes():
-                rc_chart.removeAxis(ax)
+            for ax in wd_chart.axes():
+                wd_chart.removeAxis(ax)
             for ax in sky_chart.axes():
                 sky_chart.removeAxis(ax)
 
@@ -1175,8 +1250,8 @@ class GuiApp:
         var: np.ndarray | None = None
         var_unit: units.Unit | None = None
 
-        rcurve: np.ndarray | None = None
-        rcurve_unit: units.Unit | None = None
+        wdisp: np.ndarray | None = None
+        wdisp_unit: units.Unit | None = None
 
         sky: np.ndarray | None = None
         sky_unit: units.Unit | None = None
@@ -1184,9 +1259,30 @@ class GuiApp:
         if isinstance(sp.uncertainty, VarianceUncertainty):
             var = sp.uncertainty.array
             var_unit = sp.uncertainty.unit
+        elif isinstance(sp.uncertainty, InverseVariance):
+            var = 1 / sp.uncertainty.array
+            var_unit = 1 / sp.uncertainty.unit
         elif isinstance(sp.uncertainty, StdDevUncertainty):
             var = sp.uncertainty.array ** 2
             var_unit = sp.uncertainty.unit ** 2
+
+        try:
+            wd = sp.wd
+        except AttributeError:
+            pass
+        else:
+            if sp.wd is not None:
+                wdisp = sp.wd.value
+                wdisp_unit = sp.wd.unit
+
+        try:
+            sky = sp.sky
+        except AttributeError:
+            pass
+        else:
+            if sp.sky is not None:
+                sky = sp.sky.value
+                sky_unit = sp.sky.unit
 
         flux_series = values2series(wav, flux, self.qapp.tr("Flux"))
         flux_chart.addSeries(flux_series)
@@ -1196,8 +1292,8 @@ class GuiApp:
             flux_axis_y = QtCharts.QValueAxis()
             var_axis_x = QtCharts.QValueAxis()
             var_axis_y = QtCharts.QValueAxis()
-            rc_axis_x = QtCharts.QValueAxis()
-            rc_axis_y = QtCharts.QValueAxis()
+            wd_axis_x = QtCharts.QValueAxis()
+            wd_axis_y = QtCharts.QValueAxis()
             sky_axis_x = QtCharts.QValueAxis()
             sky_axis_y = QtCharts.QValueAxis()
 
@@ -1213,11 +1309,11 @@ class GuiApp:
             var_chart.addAxis(
                 var_axis_y, QtCore.Qt.AlignmentFlag.AlignLeft
             )
-            rc_chart.addAxis(
-                rc_axis_x, QtCore.Qt.AlignmentFlag.AlignBottom
+            wd_chart.addAxis(
+                wd_axis_x, QtCore.Qt.AlignmentFlag.AlignBottom
             )
-            rc_chart.addAxis(
-                rc_axis_y, QtCore.Qt.AlignmentFlag.AlignLeft
+            wd_chart.addAxis(
+                wd_axis_y, QtCore.Qt.AlignmentFlag.AlignLeft
             )
             sky_chart.addAxis(
                 sky_axis_x, QtCore.Qt.AlignmentFlag.AlignBottom
@@ -1230,8 +1326,8 @@ class GuiApp:
             flux_axis_y = flux_chart.axes()[1]
             var_axis_x = var_chart.axes()[0]
             var_axis_y = var_chart.axes()[1]
-            rc_axis_x = rc_chart.axes()[0]
-            rc_axis_y = rc_chart.axes()[1]
+            wd_axis_x = wd_chart.axes()[0]
+            wd_axis_y = wd_chart.axes()[1]
             sky_axis_x = sky_chart.axes()[0]
             sky_axis_y = sky_chart.axes()[1]
 
@@ -1283,23 +1379,23 @@ class GuiApp:
             var_series.attachAxis(var_axis_x)
             var_series.attachAxis(var_axis_y)
 
-        if rcurve is None:
-            self.main_wnd.container_tab_rc.setEnabled(False)
+        if wdisp is None:
+            self.main_wnd.container_tab_wd.setEnabled(False)
         else:
-            self.main_wnd.container_tab_rc.setEnabled(True)
-            rc_series = values2series(wav, rcurve, self.qapp.tr("Reso. curve"))
-            rc_chart.addSeries(rc_series)
+            self.main_wnd.container_tab_wd.setEnabled(True)
+            wd_series = values2series(wav, wdisp, self.qapp.tr("Reso. curve"))
+            wd_chart.addSeries(wd_series)
 
-            rc_axis_x.setTickInterval(500)
-            rc_axis_x.setLabelFormat("%.2f")
-            rc_axis_x.setTitleText(str(wav_unit))
+            wd_axis_x.setTickInterval(500)
+            wd_axis_x.setLabelFormat("%.2f")
+            wd_axis_x.setTitleText(str(wav_unit))
 
-            rc_axis_y.setTickCount(10)
-            rc_axis_y.setLabelFormat("%.2f")
-            rc_axis_y.setTitleText(str(rcurve_unit))
+            wd_axis_y.setTickCount(10)
+            wd_axis_y.setLabelFormat("%.2f")
+            wd_axis_y.setTitleText(str(wdisp_unit))
 
-            rc_series.attachAxis(rc_axis_x)
-            rc_series.attachAxis(rc_axis_y)
+            wd_series.attachAxis(wd_axis_x)
+            wd_series.attachAxis(wd_axis_y)
 
         if sky is None:
             self.main_wnd.container_tab_sky.setEnabled(False)
@@ -1327,9 +1423,9 @@ class GuiApp:
         var_chart.setBackgroundRoundness(0)
         var_chart.legend().hide()
 
-        rc_chart.setContentsMargins(0, 0, 0, 0)
-        rc_chart.setBackgroundRoundness(0)
-        rc_chart.legend().hide()
+        wd_chart.setContentsMargins(0, 0, 0, 0)
+        wd_chart.setBackgroundRoundness(0)
+        wd_chart.legend().hide()
 
         sky_chart.setContentsMargins(0, 0, 0, 0)
         sky_chart.setBackgroundRoundness(0)
@@ -1453,6 +1549,8 @@ class GuiApp:
 
         if isinstance(sp.uncertainty, VarianceUncertainty):
             var = sp.uncertainty.array
+        if isinstance(sp.uncertainty, InverseVariance):
+            var = 1 / sp.uncertainty.array
         elif isinstance(sp.uncertainty, StdDevUncertainty):
             var = sp.uncertainty.array ** 2
 
@@ -1566,7 +1664,7 @@ class GuiApp:
                 item_uuid = uuid.uuid4()
 
             try:
-                sp: Spectrum1D = Spectrum1D.read(file)
+                sp: Spectrum1D = loaders.read(file)
             except Exception as exc:
                 excetpion_tracker[item_uuid] = (file, str(exc))
                 continue
@@ -1686,20 +1784,24 @@ class GuiApp:
         # If no lines are selected, then use all lines.
         lines_lam = []
         for row_index in range(line_table.rowCount()):
-            item: QtWidgets.QTableWidgetItem = line_table.item(row_index, 0)
-
-            if item.checkState() != QtCore.Qt.CheckState.Checked:
+            item = line_table.item(row_index, 0)
+            if item is None:
+                continue
+            elif item.checkState() != QtCore.Qt.CheckState.Checked:
                 # Ignore lines that are not selected
                 continue
 
             lines_lam.append(float(item.data(QtCore.Qt.ItemDataRole.UserRole)))
 
-        best_z_values, best_z_probs = lines.get_redshift_from_lines(
+        res = lines.get_redshift_from_lines(
             lines_lam, z_min=z_min, z_max=z_max, tol=tol
         )
 
+        if res is None:
+            return
+
         z_list.clear()
-        for z, prob in zip(best_z_values, best_z_probs):
+        for z, prob in zip(res[0], res[1]):
             new_z_item = QtWidgets.QListWidgetItem(f"z={z:.4f} (p={prob:.4f})")
             new_z_item.setData(QtCore.Qt.ItemDataRole.UserRole, (z, prob))
             z_list.addItem(new_z_item)
@@ -2111,7 +2213,7 @@ class GuiApp:
             item_row = int(file_info['index'])
 
             try:
-                sp: Spectrum1D = Spectrum1D.read(file_info['path'])
+                sp: Spectrum1D = loaders.read(file_info['path'])
             except Exception as exc:
                 excetpion_tracker[item_uuid] = (file_info['path'], str(exc))
                 continue
@@ -2319,6 +2421,60 @@ class GuiApp:
         with open(file_name, 'w') as f:
             json.dump(project_dict, f, indent=2)
 
+    def setCurrentObjectRedshift(self, redshift: Optional[float]) -> None:
+        if redshift is None:
+            redshift = 0
+
+        self.flux_chart_view.setRedshift(redshift=redshift)
+
+        item_col_0: QtWidgets.QTableWidgetItem
+        item_col_1: QtWidgets.QTableWidgetItem
+        item_col_2: QtWidgets.QTableWidgetItem
+        for j in range(self.main_wnd.lines_table_widget.rowCount()):
+            item_col_0 = self.main_wnd.lines_table_widget.item(j, 0)
+            item_col_1 = self.main_wnd.lines_table_widget.item(j, 1)
+            item_col_2 = self.main_wnd.lines_table_widget.item(j, 2)
+
+            line_lam: float = item_col_0.data(QtCore.Qt.ItemDataRole.UserRole)
+            rest_lam = line_lam / (1 + redshift)
+            item_col_1.setText(f"{rest_lam:.2f} A")
+
+            best_matches = [
+                x[1]
+                for x in lines.get_lines(wrange=[rest_lam - 5, rest_lam + 5])
+            ]
+
+            item_col_2.setText('; '.join(best_matches))
+
+    def setCurrentObjectRedshiftFromLines(self, row: int) -> None:
+        if row < 0:
+            return
+
+        self.main_wnd.z_dspinbox.setValue(
+            self.main_wnd.lines_match_list_widget.item(row).data(
+                QtCore.Qt.ItemDataRole.UserRole
+            )[0]
+        )
+
+    def setCurrentObjectRedshiftFromSingleLine(self, row: int) -> None:
+        if row < 0:
+            return
+
+        lines_tbl_row = self.main_wnd.lines_table_widget.currentRow()
+        if  lines_tbl_row < 0:
+            return
+
+        w_item = self.main_wnd.lines_table_widget.item(lines_tbl_row, 0)
+        obs_lam = w_item.data(QtCore.Qt.ItemDataRole.UserRole)
+
+        rest_lam = self.main_wnd.single_line_combo_box.itemData(
+            row, QtCore.Qt.ItemDataRole.UserRole
+        )
+
+        redshift = (obs_lam/rest_lam) - 1
+
+        self.main_wnd.z_dspinbox.setValue(redshift)
+
     def setShowLinesType(self, type_index: int) -> None:
         if type_index == 0:
             self.flux_chart_view.setLinesType('')
@@ -2326,6 +2482,9 @@ class GuiApp:
             self.flux_chart_view.setLinesType('E')
         elif type_index == 2:
             self.flux_chart_view.setLinesType('A')
+
+    def setSmoothingFactor(self, smoothing_value: float) -> None:
+        self.redrawCurrentSpec()
 
     def toggleSimilarSpecItems(
         self,
@@ -2355,24 +2514,6 @@ class GuiApp:
 
             if other_qf == ref_qf:
                 other_item.setCheckState(ref_check_state)
-
-    def setCurrentObjectRedshiftFromLines(self, row: int) -> None:
-        if row < 0:
-            return
-
-        self.main_wnd.z_dspinbox.setValue(
-            self.main_wnd.lines_match_list_widget.item(row).data(
-                QtCore.Qt.ItemDataRole.UserRole
-            )[0]
-        )
-
-    def setCurrentObjectRedshift(self, redshift: Optional[float]) -> None:
-        if redshift is None:
-            redshift = 0
-        self.flux_chart_view.setRedshift(redshift=redshift)
-
-    def setSmoothingFactor(self, smoothing_value: float) -> None:
-        self.redrawCurrentSpec()
 
     def toggleSmothing(self, show_smoothing: int) -> None:
         self.redrawCurrentSpec()

@@ -247,11 +247,11 @@
           </property>
          </layout>
         </widget>
-        <widget class="QWidget" name="container_tab_rc">
+        <widget class="QWidget" name="container_tab_wd">
          <attribute name="title">
-          <string>R curve</string>
+          <string>Wavlength dispersion</string>
          </attribute>
-         <layout class="QGridLayout" name="rcurve_widget_layout">
+         <layout class="QGridLayout" name="wdisp_widget_layout">
           <property name="leftMargin">
            <number>0</number>
           </property>
@@ -393,6 +393,12 @@
         <verstretch>0</verstretch>
        </sizepolicy>
       </property>
+      <property name="minimumSize">
+       <size>
+        <width>0</width>
+        <height>0</height>
+       </size>
+      </property>
       <property name="title">
        <string>Redshift Tools</string>
       </property>
@@ -527,31 +533,6 @@
              </property>
              <layout class="QVBoxLayout" name="verticalLayout_6">
               <item>
-               <widget class="QPushButton" name="lines_auto_button">
-                <property name="text">
-                 <string>Auto identify</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <layout class="QHBoxLayout" name="horizontal_layout_4">
-                <item>
-                 <widget class="QPushButton" name="add_line_button">
-                  <property name="text">
-                   <string>Add line</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QPushButton" name="delete_line_button">
-                  <property name="text">
-                   <string>Delete</string>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
-              </item>
-              <item>
                <widget class="QTableWidget" name="lines_table_widget">
                 <property name="sizePolicy">
                  <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
@@ -572,20 +553,64 @@
                 </column>
                 <column>
                  <property name="text">
-                  <string>Restrame Wav</string>
+                  <string>Restframe Wav.</string>
                  </property>
                 </column>
                 <column>
                  <property name="text">
-                  <string>Name</string>
+                  <string>Best match</string>
                  </property>
                 </column>
                </widget>
               </item>
               <item>
-               <widget class="QPushButton" name="delete_lines_button">
+               <layout class="QGridLayout" name="grid_layout_2">
+                <item row="0" column="1">
+                 <widget class="QPushButton" name="delete_line_button">
+                  <property name="text">
+                   <string>Delete</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="0" column="0">
+                 <widget class="QPushButton" name="add_line_button">
+                  <property name="text">
+                   <string>Add line</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="0" column="2">
+                 <widget class="QPushButton" name="delete_lines_button">
+                  <property name="text">
+                   <string>Delete All</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+              <item>
+               <widget class="QPushButton" name="lines_auto_button">
                 <property name="text">
-                 <string>Delete All</string>
+                 <string>Auto identify</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item>
+            <widget class="QGroupBox" name="group_box">
+             <property name="title">
+              <string>Single line matching</string>
+             </property>
+             <layout class="QGridLayout" name="gridLayout_2">
+              <item row="0" column="1">
+               <widget class="QComboBox" name="single_line_combo_box"/>
+              </item>
+              <item row="0" column="0">
+               <widget class="QLabel" name="label_6">
+                <property name="text">
+                 <string>Set current line to</string>
                 </property>
                </widget>
               </item>
@@ -595,7 +620,7 @@
            <item>
             <widget class="QGroupBox" name="group_box_7">
              <property name="title">
-              <string>Matching</string>
+              <string>Multi lines matching</string>
              </property>
              <layout class="QVBoxLayout" name="verticalLayout_12">
               <item>
@@ -675,7 +700,7 @@
               <item>
                <widget class="QPushButton" name="match_lines_button">
                 <property name="text">
-                 <string>Match</string>
+                 <string>Match selected</string>
                 </property>
                </widget>
               </item>
