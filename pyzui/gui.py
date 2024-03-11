@@ -8,11 +8,13 @@ Created on Fri Nov 24 10:33:40 2023.
 from __future__ import annotations
 
 import os
+import time
 import sys
 import json
 import uuid
+from io import StringIO
 from enum import Enum
-from typing import Optional, Union, Tuple, List, Dict, Any, cast
+from typing import Optional, Union, Tuple, List, Dict, Any, cast, Callable
 import logging
 
 import numpy as np
@@ -46,6 +48,45 @@ def getQApp() -> QtWidgets.QApplication:
         # if it does not exist then a QApplication is created
         qapp = QtWidgets.QApplication(sys.argv)
     return qapp
+
+
+class BackendWorker(QtCore.QObject):
+
+    finished = Signal()
+    progress = Signal(int)
+    message = Signal(str)
+    flushed = Signal()
+    started = Signal()
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._func: Union[Callable, None] = None
+        self._args: List[Any] = []
+        self._result: Any = None
+        self._text_widget: Union[None, QtWidgets.QWidget] = None
+
+    def set_function(self, func: Callable, args: List[Any]) -> None:
+        self._func = func
+        self._args = args
+
+    def set_text_widget(self, text_widget: QtWidgets.QWidget) -> None:
+        self._text_widget = text_widget
+
+    def write(self, text: str) -> None:
+        self.message.emit(text.strip('\n'))
+
+    def flush(self) -> None:
+        self.flushed.emit()
+
+    def run(self):
+        self.started.emit()
+        if self._func is not None:
+            old_stdout = sys.stdout
+            sys.stdout = self
+            self._result = self._func(*self._args)
+            sys.stdout = old_stdout
+        self.progress.emit(100)
+        self.finished.emit()
 
 
 class SpectrumQChartView(QtCharts.QChartView):
@@ -704,6 +745,32 @@ class GuiApp:
         self.statusbar.addPermanentWidget(self.cancel_button)
         self.statusbar.addPermanentWidget(self.mousePosLabel)
 
+        # Main redshift backend worker
+        self.backend_worker = BackendWorker()
+        self.worker_thread = QtCore.QThread()
+        self.backend_worker.set_text_widget(self.main_wnd.redrock_text_edit)
+        self.backend_worker.moveToThread(self.worker_thread)
+        self.backend_worker.message.connect(
+            self.main_wnd.redrock_text_edit.append
+        )
+        self.backend_worker.flushed.connect(
+            self.qapp.processEvents
+        )
+
+        self.backend_worker.started.connect(
+            self.main_wnd.redrock_progress_bar.reset
+        )
+        self.backend_worker.progress.connect(
+            self.main_wnd.redrock_progress_bar.setValue
+        )
+        self.backend_worker.finished.connect(
+            self.main_wnd.redrock_progress_bar.reset
+        )
+
+        self.backend_worker.finished.connect(self.backend_worker.deleteLater)
+        self.worker_thread.finished.connect(self.worker_thread.deleteLater)
+        self.worker_thread.started.connect(self.backend_worker.run)
+
         # Fill single line combo box
         for lam, line_name, _ in lines.RESTFRAME_LINES:
             text = f"{line_name} - {lam:.2f} A"
@@ -720,6 +787,10 @@ class GuiApp:
                 "\n"
                 "Cannot load redrock python module.\n"
                 "Please, check if redrock is correctly installed!\n"
+            )
+        else:
+            self.main_wnd.redrock_run_button.clicked.connect(
+                self.doStartRedrock
             )
 
         # QChartView widget for flux
@@ -1730,7 +1801,7 @@ class GuiApp:
             )
             self.msgBox.exec()
 
-    def doNewProject(self, *args, **kwargs):
+    def doNewProject(self, *args, **kwargs) -> None:
         self.newProject()
 
     def doOpenProject(self, *args, **kwargs) -> bool:
@@ -1937,6 +2008,13 @@ class GuiApp:
         self.statusbar.showMessage(self.qapp.tr("Project saved"))
         self.current_project_file_path = dest_file_path
         return True
+
+    def doStartRedrock(self, *args, **kwargs) -> None:
+        self.backend_worker.set_function(
+            backends.redrock.run_redrock,
+            [self.open_spectra]
+        )
+        self.worker_thread.start()
 
     def doToggleDone(self) -> None:
         check_state = None
