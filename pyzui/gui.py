@@ -673,10 +673,7 @@ class QRedrockHandler(QtCore.QObject):
         text = bytes(data_bytes).decode()
         for line in text.splitlines():
             simplified = ' '.join(line.lower().strip().split())
-            if (
-                ("progress: 100 %" in simplified) or
-                ("finding best fits" in simplified)
-            ):
+            if ("finished in" in simplified):
                 self._total_progress += 1
                 self.progress.emit(self._total_progress)
             elif "computing redshifts took:" in simplified:
