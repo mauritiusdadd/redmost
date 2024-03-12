@@ -26,7 +26,7 @@ classifiers = [
         #   3 - Alpha
         #   4 - Beta
         #   5 - Production/Stable
-        "Development Status :: 4 - Beta",
+        "Development Status :: 3 - Alpha",
         # Indicate who your project is intended for
         "Intended Audience :: Science/Research",
         "Topic :: Multimedia :: Graphics :: Graphics Conversion",
@@ -44,8 +44,8 @@ dependencies = [
 
 [project.optional-dependencies]
 redrock = ["redrock"]
-pyqt = ["PyQt6"]
-pyside = ["PySide6"]
+pyqt6 = ["PyQt6", "PyQt6-Charts"]
+pyside6 = ["PySide6"]
 
 [project.urls]
 repository = "https://github.com/mauritiusdadd/pyzui"

@@ -1655,7 +1655,7 @@ class GuiApp:
         )
 
     def doExportZcat(self, *args, **kwargs) -> None:
-        dest_file_path, file_type = QtWidgets.QFileDialog.getSaveFileName(
+        open_list = QtWidgets.QFileDialog.getSaveFileName(
             self.main_wnd,
             self.qapp.tr("Export redshift catalogue to file"),
             '.',
@@ -1667,12 +1667,13 @@ class GuiApp:
         )
 
         try:
+            dest_file_path, file_type = open_list
             self.exportZcat(dest_file_path, file_type)
         except Exception as exc:
             self.msgBox.setWindowTitle(self.qapp.tr("Error"))
             self.msgBox.setText(
                  self.qapp.tr(
-                     "An error has occurred while saving the cataglogue."
+                     "An error has occurred while saving the catalogue."
                  )
             )
             self.msgBox.setInformativeText('')
@@ -1684,9 +1685,10 @@ class GuiApp:
                 QtWidgets.QMessageBox.StandardButton.Ok
             )
             self.msgBox.exec()
-
-        self.statusbar.showMessage(self.qapp.tr("Redshift catalogue saved"))
-        self.current_project_file_path = dest_file_path
+        else:
+            self.statusbar.showMessage(
+                self.qapp.tr("Redshift catalogue saved")
+            )
 
     def doIdentifyLines(self, *args, **kwargs) -> None:
         """
