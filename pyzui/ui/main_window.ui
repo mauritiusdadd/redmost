@@ -175,26 +175,27 @@
              <property name="verticalScrollBarPolicy">
               <enum>Qt::ScrollBarAlwaysOn</enum>
              </property>
-             <row>
-              <property name="text">
-               <string>ID</string>
-              </property>
-             </row>
-             <row>
-              <property name="text">
-               <string>FILE</string>
-              </property>
-             </row>
-             <row>
-              <property name="text">
-               <string>DEC</string>
-              </property>
-             </row>
-             <row>
-              <property name="text">
-               <string>RA</string>
-              </property>
-             </row>
+             <property name="horizontalScrollBarPolicy">
+              <enum>Qt::ScrollBarAlwaysOn</enum>
+             </property>
+             <property name="sizeAdjustPolicy">
+              <enum>QAbstractScrollArea::AdjustIgnored</enum>
+             </property>
+             <property name="editTriggers">
+              <set>QAbstractItemView::AnyKeyPressed|QAbstractItemView::EditKeyPressed</set>
+             </property>
+             <property name="alternatingRowColors">
+              <bool>true</bool>
+             </property>
+             <property name="verticalScrollMode">
+              <enum>QAbstractItemView::ScrollPerItem</enum>
+             </property>
+             <property name="horizontalScrollMode">
+              <enum>QAbstractItemView::ScrollPerPixel</enum>
+             </property>
+             <attribute name="horizontalHeaderCascadingSectionResizes">
+              <bool>true</bool>
+             </attribute>
              <column>
               <property name="text">
                <string>VALUE</string>
@@ -205,6 +206,11 @@
                </font>
               </property>
              </column>
+             <column>
+              <property name="text">
+               <string>COMMENTS</string>
+              </property>
+             </column>
             </widget>
            </item>
           </layout>
@@ -212,7 +218,7 @@
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <layout class="QVBoxLayout" name="vertical_layout_2" stretch="0,0">
         <item>
          <widget class="QSplitter" name="splitter_plots">
@@ -608,7 +614,7 @@
            <enum>QTabWidget::Rounded</enum>
           </property>
           <property name="currentIndex">
-           <number>1</number>
+           <number>0</number>
           </property>
           <widget class="QWidget" name="tab_lines">
            <attribute name="title">
@@ -1055,7 +1061,23 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <addaction name="separator"/>
     <addaction name="action_exit"/>
    </widget>
+   <widget class="QMenu" name="menu_settings">
+    <property name="title">
+     <string>Settings</string>
+    </property>
+   </widget>
+   <widget class="QMenu" name="menu_about">
+    <property name="title">
+     <string>Help</string>
+    </property>
+    <addaction name="separator"/>
+    <addaction name="action_online_user_manual"/>
+    <addaction name="separator"/>
+    <addaction name="action_about"/>
+   </widget>
    <addaction name="menuFile"/>
+   <addaction name="menu_settings"/>
+   <addaction name="menu_about"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <widget class="QToolBar" name="toolBar">
@@ -1071,7 +1093,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
-   <addaction name="actionNewProject"/>
+   <addaction name="action_new_project"/>
    <addaction name="action_open_project"/>
    <addaction name="action_save_project"/>
    <addaction name="action_import_spectra"/>
@@ -1180,7 +1202,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <enum>QAction::NoRole</enum>
    </property>
   </action>
-  <action name="actionNewProject">
+  <action name="action_new_project">
    <property name="icon">
     <iconset theme="document-new"/>
    </property>
@@ -1192,6 +1214,19 @@ li.checked::marker { content: &quot;\2612&quot;; }
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+  <action name="action_online_user_manual">
+   <property name="text">
+    <string>Online user manual</string>
+   </property>
+  </action>
+  <action name="action_about">
+   <property name="icon">
+    <iconset theme="dialog-information"/>
+   </property>
+   <property name="text">
+    <string>About</string>
    </property>
   </action>
  </widget>

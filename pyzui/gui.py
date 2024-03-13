@@ -733,6 +733,78 @@ class GlobalState(Enum):
     REUQUEST_CANCEL = 5
 
 
+class AboutDialog(QtWidgets.QDialog):
+
+    def __init__(
+        self,
+        parent: Optional[QtWidgets.QWidget] = None,
+        flags: QtCore.Qt.WindowType = QtCore.Qt.WindowType.Dialog
+    ):
+        super().__init__(parent, flags)
+
+        qapp = getQApp()
+
+        button_box = QtWidgets.QDialogButtonBox(self)
+        button_box.setStandardButtons(
+            QtWidgets.QDialogButtonBox.StandardButton.Ok
+        )
+
+        status_tbl = QtWidgets.QTableWidget()
+        status_tbl.setColumnCount(2)
+        status_tbl.setRowCount(2)
+        status_tbl.setSizePolicy(
+            QtWidgets.QSizePolicy(
+                QtWidgets.QSizePolicy.Policy.Expanding,
+                QtWidgets.QSizePolicy.Policy.Expanding
+            )
+        )
+
+        status_tbl.setHorizontalHeaderLabels(
+            [qapp.tr("PROPERTY"), qapp.tr("VALUE")]
+        )
+
+        item_qt_0 = QtWidgets.QTableWidgetItem(
+            qapp.tr("QT BACKEND: ")
+        )
+        item_qt_0.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
+
+        item_qt_1 = QtWidgets.QTableWidgetItem(
+            QT_BACKEND
+        )
+        item_qt_1.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
+
+        status_tbl.setItem(0, 0 ,item_qt_0)
+        status_tbl.setItem(0, 1, item_qt_1)
+
+        item_redrock_0 = QtWidgets.QTableWidgetItem(
+            qapp.tr("REDROCK BACKEND: ")
+        )
+        item_redrock_0.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
+
+        item_redrock_1 = QtWidgets.QTableWidgetItem(
+            qapp.tr("OK") if backends.HAS_REDROCK else qapp.tr("OK")
+        )
+        item_redrock_1.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
+
+        status_tbl.setItem(1, 0, item_redrock_0)
+        status_tbl.setItem(1, 1, item_redrock_1)
+
+        header: QtWidgets.QHeaderView = status_tbl.horizontalHeader()
+        header.setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Stretch)
+
+        main_layout = QtWidgets.QVBoxLayout()
+        main_layout.addWidget(status_tbl)
+        main_layout.addStretch()
+        main_layout.addWidget(button_box)
+
+        self.setLayout(main_layout)
+        self.setWindowTitle("About pyzui")
+
+        button_box.accepted.connect(
+            self.close
+        )
+
+
 class GuiApp:
     """General class for the main GUI."""
 
@@ -762,10 +834,15 @@ class GuiApp:
             "main_window.ui", qt_backend=qt_backend
         )
         self.main_wnd.closeEvent = self.closeEvent
+        self.main_wnd.setWindowTitle("pyzui")
 
         self.msgBox: QtWidgets.QMessageBox = QtWidgets.QMessageBox(
             parent=self.main_wnd
         )
+
+        # About dialog
+
+        self.about_wnd: AboutDialog = AboutDialog()
 
         # Status Bar
         self.mousePosLabel: QtWidgets.QLabel = QtWidgets.QLabel("")
@@ -937,7 +1014,7 @@ class GuiApp:
         self.flux_chart_view.addSibling(self.wdisp_chart_view)
         self.flux_chart_view.addSibling(self.sky_chart_view)
 
-        # Set QSplitter initial sizes
+        # Set QSplitters initial sizes
 
         self.main_wnd.splitter_main.setSizes([200, 1000, 200])
         self.main_wnd.splitter_plots.setSizes([500, 300])
@@ -1001,7 +1078,7 @@ class GuiApp:
         self.main_wnd.action_open_project.triggered.connect(
             self.doOpenProject
         )
-        self.main_wnd.actionNewProject.triggered.connect(
+        self.main_wnd.action_new_project.triggered.connect(
             self.doNewProject
         )
 
@@ -1059,6 +1136,10 @@ class GuiApp:
 
         self.main_wnd.show_lines_combo_box.currentIndexChanged.connect(
             self.setShowLinesType
+        )
+
+        self.main_wnd.action_about.triggered.connect(
+            self.about_wnd.exec
         )
 
         self.newProject()
@@ -1380,6 +1461,8 @@ class GuiApp:
         spec_uuid: uuid.UUID = new_item.data(
             QtCore.Qt.ItemDataRole.UserRole
         )
+
+        self.showObjectInfo(spec_uuid)
 
         flux_chart = self.flux_chart_view.chart()
         flux_chart.removeAllSeries()
@@ -2675,6 +2758,44 @@ class GuiApp:
 
     def setSmoothingFactor(self, smoothing_value: float) -> None:
         self.redrawCurrentSpec()
+
+    def showObjectInfo(self, object_uuid: uuid.UUID) -> None:
+        sp: Spectrum1D = self.open_spectra[object_uuid]
+
+        self.main_wnd.obj_prop_table_widget.setRowCount(0)
+
+        if sp.meta is None:
+            return
+
+        try:
+            header = sp.meta['header']
+        except KeyError:
+            return
+
+        self.main_wnd.obj_prop_table_widget.setRowCount(len(header))
+        self.main_wnd.obj_prop_table_widget.setVerticalHeaderLabels(
+            list(header.keys())
+        )
+        for j, (key, val, comment) in enumerate(header.cards):
+
+            val_item: QtWidgets.QTableWidgetItem = QtWidgets.QTableWidgetItem(
+                str(val)
+            )
+            val_item.setFlags(
+                QtCore.Qt.ItemFlag.ItemIsSelectable |
+                QtCore.Qt.ItemFlag.ItemIsEnabled
+            )
+
+            com_item: QtWidgets.QTableWidgetItem = QtWidgets.QTableWidgetItem(
+                str(comment)
+            )
+            com_item.setFlags(
+                QtCore.Qt.ItemFlag.ItemIsSelectable |
+                QtCore.Qt.ItemFlag.ItemIsEnabled
+            )
+
+            self.main_wnd.obj_prop_table_widget.setItem(j, 0, val_item)
+            self.main_wnd.obj_prop_table_widget.setItem(j, 1, com_item)
 
     def toggleSimilarSpecItems(
         self,
