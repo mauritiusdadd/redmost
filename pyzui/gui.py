@@ -937,6 +937,11 @@ class GuiApp:
         self.flux_chart_view.addSibling(self.wdisp_chart_view)
         self.flux_chart_view.addSibling(self.sky_chart_view)
 
+        # Set QSplitter initial sizes
+
+        self.main_wnd.splitter_main.setSizes([200, 1000, 200])
+        self.main_wnd.splitter_plots.setSizes([500, 300])
+
         # Connect signals
 
         self.main_wnd.spec_list_widget.currentItemChanged.connect(
