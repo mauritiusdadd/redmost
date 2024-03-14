@@ -9,23 +9,21 @@ from __future__ import annotations
 
 import os
 import pickle
-import time
 import sys
 import json
 import uuid
-from io import StringIO
 from enum import Enum
-from typing import Optional, Union, Tuple, List, Dict, Any, cast, Callable
+from typing import Optional, Union, Tuple, List, Dict, Any, cast
 import logging
 
 import numpy as np
-from astropy.nddata import VarianceUncertainty
-from astropy.nddata import StdDevUncertainty
-from astropy.nddata import InverseVariance
-from astropy import units
-from astropy.table import Table
+from astropy.nddata import VarianceUncertainty  # type: ignore
+from astropy.nddata import StdDevUncertainty  # type: ignore
+from astropy.nddata import InverseVariance  # type: ignore
+from astropy import units  # type: ignore
+from astropy.table import Table  # type: ignore
 
-from specutils import Spectrum1D
+from specutils import Spectrum1D  # type: ignore
 
 from pyzui import loaders
 from pyzui import utils
@@ -33,26 +31,34 @@ from pyzui import lines
 from pyzui import backends
 
 try:
-    from PyQt6 import QtCore, QtGui, QtWidgets, QtCharts, uic
+    from PyQt6 import QtCore, QtGui, QtWidgets, uic
+    from PyQt6 import QtCharts  # type: ignore
     from PyQt6.QtCore import pyqtSignal as Signal
 except (ImportError, ModuleNotFoundError):
     try:
-        from PySide6 import QtCore, QtGui, QtUiTools, QtWidgets, QtCharts
-        from PySide6.QtCore import Signal
+        from PySide6 import QtCore, QtGui, QtWidgets  # type: ignore
+        from PySide6 import QtUiTools
+        from PySide6 import QtCharts  # type: ignore
+        from PySide6.QtCore import Signal  # type: ignore
     except (ImportError, ModuleNotFoundError):
-        from tkinter import messagebox
+        try:
+            from tkinter import messagebox
 
-        messagebox.showerror(
-            title="ERROR",
-            message="Please install either PyQt6 or PySide6"
-        )
+            messagebox.showerror(
+                title="ERROR",
+                message="Please install either PyQt6 or PySide6"
+            )
+        except Exception:
+            print("Please install either PyQt6 or PySide6!")
+        sys.exit(1)
     QT_BACKEND = 'PySide6'
 else:
     QT_BACKEND = 'PyQt6'
 
 
 def getQApp() -> QtWidgets.QApplication:
-    qapp: QtWidgets.QApplication = QtWidgets.QApplication.instance()
+    qapp: Union[QtWidgets.QApplication, None]
+    qapp = cast(QtWidgets.QApplication, QtWidgets.QApplication.instance())
     if qapp is None:
         # if it does not exist then a QApplication is created
         qapp = QtWidgets.QApplication(sys.argv)
@@ -67,7 +73,7 @@ class SpectrumQChartView(QtCharts.QChartView):
     onMouseDoubleClickSeries = Signal(object)
     onMouseWheelEvent = Signal(object)
 
-    def __init__(self, *args: List[Any]) -> None:
+    def __init__(self, *args: Any) -> None:
         super().__init__(*args)
 
         self._last_mouse_pos: QtCore.QPointF | None = None
@@ -649,6 +655,7 @@ class SpectrumQChartView(QtCharts.QChartView):
 
 
 class QRedrockHandler(QtCore.QObject):
+    """Class to handle redrock subprocess."""
 
     progress: Signal = Signal(int)
     maximum: Signal = Signal(int)
@@ -659,17 +666,17 @@ class QRedrockHandler(QtCore.QObject):
     def __init__(self) -> None:
         super().__init__()
         self.qapp = getQApp()
-        self.targets = []
+        self.targets: List[Any] = []
         self.results = None
         self._t_dict: Union[None, Dict[str, uuid.UUID]] = None
 
         self._target_dump_file = 'rr.targets'
         self._result_dump_file = 'rr.result'
         self.process: QtCore.QProcess = QtCore.QProcess(self)
-        self.process.readyReadStandardOutput.connect(
+        self.process.readyReadStandardOutput.connect(  # type: ignore
             self._process_output
         )
-        self.process.finished.connect(
+        self.process.finished.connect(  # type: ignore
             self.retrieve_results
         )
 
@@ -678,7 +685,7 @@ class QRedrockHandler(QtCore.QObject):
 
     def _process_output(self) -> None:
         data_bytes: QtCore.QByteArray = self.process.readAllStandardOutput()
-        text = bytes(data_bytes).decode()
+        text = bytes(data_bytes).decode()  # type: ignore
         for line in text.splitlines():
             simplified = ' '.join(line.lower().strip().split())
             if ("finished in" in simplified):
@@ -773,7 +780,7 @@ class AboutDialog(QtWidgets.QDialog):
         )
         item_qt_1.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
 
-        status_tbl.setItem(0, 0 ,item_qt_0)
+        status_tbl.setItem(0, 0, item_qt_0)
         status_tbl.setItem(0, 1, item_qt_1)
 
         item_redrock_0 = QtWidgets.QTableWidgetItem(
@@ -789,7 +796,12 @@ class AboutDialog(QtWidgets.QDialog):
         status_tbl.setItem(1, 0, item_redrock_0)
         status_tbl.setItem(1, 1, item_redrock_1)
 
-        header: QtWidgets.QHeaderView = status_tbl.horizontalHeader()
+        header: Union[QtWidgets.QHeaderView, None]
+        header = status_tbl.horizontalHeader()
+        if header is None:
+            header = QtWidgets.QHeaderView(QtCore.Qt.Orientation.Horizontal)
+            status_tbl.setHorizontalHeader(header)
+
         header.setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Stretch)
 
         main_layout = QtWidgets.QVBoxLayout()
@@ -803,6 +815,70 @@ class AboutDialog(QtWidgets.QDialog):
         button_box.accepted.connect(
             self.close
         )
+
+
+class MainWindow(QtWidgets.QMainWindow):
+    """Class definition for the QMainWindow created with the deisnger."""
+
+    # actions
+    action_about: QtGui.QAction
+    action_import_spectra: QtGui.QAction
+    action_zoom_in: QtGui.QAction
+    action_zoom_out: QtGui.QAction
+    action_zoom_fit: QtGui.QAction
+    action_save_project_as: QtGui.QAction
+    action_save_project: QtGui.QAction
+    action_open_project: QtGui.QAction
+    action_new_project: QtGui.QAction
+
+    # Widgets
+    add_line_button: QtWidgets.QPushButton
+    container_tab_var: QtWidgets.QWidget
+    container_tab_wd: QtWidgets.QWidget
+    container_tab_sky: QtWidgets.QWidget
+    delete_line_button: QtWidgets.QPushButton
+    delete_lines_button: QtWidgets.QPushButton
+    export_zcat_button: QtWidgets.QPushButton
+    flux_group_box: QtWidgets.QGroupBox
+    flux_widget_layout: QtWidgets.QHBoxLayout
+    import_zcat_button: QtWidgets.QPushButton
+    info_group_box: QtWidgets.QGroupBox
+    lines_auto_button: QtWidgets.QPushButton
+    lines_tol_dspinbox: QtWidgets.QDoubleSpinBox
+    lines_match_list_widget: QtWidgets.QListWidget
+    lines_table_widget: QtWidgets.QTableWidget
+    match_lines_button: QtWidgets.QPushButton
+    obj_prop_table_widget: QtWidgets.QTableWidget
+    other_charts_tab_widget: QtWidgets.QTabWidget
+    plot_group_box: QtWidgets.QGroupBox
+    qflag_combo_box: QtWidgets.QComboBox
+    red_group_box: QtWidgets.QGroupBox
+    redrock_all_radio: QtWidgets.QRadioButton
+    redrock_selected_radio: QtWidgets.QRadioButton
+    redrock_run_button: QtWidgets.QPushButton
+    redrock_text_edit: QtWidgets.QTextEdit
+    redrock_progress_bar: QtWidgets.QProgressBar
+    redrock_current_radio: QtWidgets.QRadioButton
+    remove_selected_button: QtWidgets.QPushButton
+    remove_spec_button: QtWidgets.QPushButton
+    show_lines_check_box: QtWidgets.QCheckBox
+    show_lines_combo_box: QtWidgets.QComboBox
+    single_line_combo_box: QtWidgets.QComboBox
+    sky_widget_layout: QtWidgets.QHBoxLayout
+    smoothing_dspinbox: QtWidgets.QDoubleSpinBox
+    smoothing_check_box: QtWidgets.QCheckBox
+    spec_group_box: QtWidgets.QGroupBox
+    spec_list_widget: QtWidgets.QListWidget
+    splitter_main: QtWidgets.QSplitter
+    splitter_plots: QtWidgets.QSplitter
+    toggle_all_button: QtWidgets.QPushButton
+    toggle_done_button: QtWidgets.QPushButton
+    toggle_similar_button: QtWidgets.QPushButton
+    var_widget_layout: QtWidgets.QHBoxLayout
+    wdisp_widget_layout: QtWidgets.QHBoxLayout
+    z_dspinbox: QtWidgets.QDoubleSpinBox
+    z_min_dspinbox: QtWidgets.QDoubleSpinBox
+    z_max_dspinbox: QtWidgets.QDoubleSpinBox
 
 
 class GuiApp:
@@ -830,10 +906,14 @@ class GuiApp:
             4: "#55012d66"
         }
 
-        self.main_wnd: QtWidgets.QMainWindow = loadUiWidget(
-            "main_window.ui", qt_backend=qt_backend
+        self.main_wnd: MainWindow = cast(
+            MainWindow,
+            loadUiWidget(
+                "main_window.ui", qt_backend=qt_backend
+            )
         )
-        self.main_wnd.closeEvent = self.closeEvent
+
+        setattr(self.main_wnd, "closeEvent", self.closeEvent)
         self.main_wnd.setWindowTitle("pyzui")
 
         self.msgBox: QtWidgets.QMessageBox = QtWidgets.QMessageBox(
@@ -855,14 +935,12 @@ class GuiApp:
             self.requestCancelCurrentOperation
         )
 
-        # Globsal progress bar
+        # Global progress bar
         self.pbar: QtWidgets.QProgressBar = QtWidgets.QProgressBar()
         self.pbar.hide()
 
-        self.statusbar: QtWidgets.QStatusBar = self.main_wnd.statusBar()
-        if self.statusbar is None:
-            self.statusbar = QtWidgets.QStatusBar()
-            self.main_wnd.setStatusBar(self.statusbar)
+        self.statusbar: QtWidgets.QStatusBar = QtWidgets.QStatusBar()
+        self.main_wnd.setStatusBar(self.statusbar)
 
         self.statusbar.addPermanentWidget(self.pbar)
         self.statusbar.addPermanentWidget(self.cancel_button)
@@ -1160,7 +1238,11 @@ class GuiApp:
 
         lines_list = []
         for row_index in range(self.main_wnd.lines_table_widget.rowCount()):
+            w_item: Union[None, QtWidgets.QTableWidgetItem]
             w_item = self.main_wnd.lines_table_widget.item(row_index, 0)
+            if w_item is None:
+                continue
+
             line_info = {
                 'row': row_index,
                 'data': float(w_item.data(QtCore.Qt.ItemDataRole.UserRole)),
@@ -1171,7 +1253,11 @@ class GuiApp:
 
         redshifts_form_lines = []
         for row_index in range(self.main_wnd.lines_match_list_widget.count()):
+            z_item: Union[None, QtWidgets.QListWidgetItem]
             z_item = self.main_wnd.lines_match_list_widget.item(row_index)
+            if z_item is None:
+                continue
+
             z_info = {
                 'row': row_index,
                 'text': z_item.text(),
@@ -1191,7 +1277,7 @@ class GuiApp:
         self.object_state_dict[self.current_uuid] = obj_state
         self.global_state = GlobalState.READY
 
-    def _update_spec_item_qf(self, item_uuid: uuid.UUID, qf: float) -> None:
+    def _update_spec_item_qf(self, item_uuid: uuid.UUID, qf: int) -> None:
         item: QtWidgets.QListWidgetItem = self.open_spectra_items[item_uuid]
         item.setBackground(QtGui.QColor(self.qf_color[qf]))
 
@@ -1345,7 +1431,7 @@ class GuiApp:
 
         best_matches = [
             x[1]
-            for x in  lines.get_lines(wrange=[rest_lam - 5, rest_lam + 5])
+            for x in lines.get_lines(wrange=[rest_lam - 5, rest_lam + 5])
         ]
 
         match_item = QtWidgets.QTableWidgetItem('; '.join(best_matches))
@@ -1389,7 +1475,11 @@ class GuiApp:
             event.ignore()
 
     def collectRedrockResults(self) -> None:
+        if self.redrock_handler is None:
+            return
+
         self.statusbar.showMessage(self.qapp.tr("Redrock results ready!"))
+
         res = self.redrock_handler.results
 
         if res is None:
@@ -1499,14 +1589,14 @@ class GuiApp:
         flux: np.ndarray = sp.flux.value
         flux_unit: units.Unit = sp.flux.unit
 
-        var: np.ndarray | None = None
-        var_unit: units.Unit | None = None
+        var: Union[np.ndarray, None] = None
+        var_unit: Union[units.Unit, None] = None
 
-        wdisp: np.ndarray | None = None
-        wdisp_unit: units.Unit | None = None
+        wdisp: Union[np.ndarray, None] = None
+        wdisp_unit: Union[units.Unit, None] = None
 
-        sky: np.ndarray | None = None
-        sky_unit: units.Unit | None = None
+        sky: Union[np.ndarray, None] = None
+        sky_unit: Union[units.Unit, None] = None
 
         if isinstance(sp.uncertainty, VarianceUncertainty):
             var = sp.uncertainty.array
@@ -1519,22 +1609,22 @@ class GuiApp:
             var_unit = sp.uncertainty.unit ** 2
 
         try:
-            wd = sp.wd
+            wd_data = sp.wd  # type: ignore
         except AttributeError:
             pass
         else:
-            if sp.wd is not None:
-                wdisp = sp.wd.value
-                wdisp_unit = sp.wd.unit
+            if wd_data is not None:
+                wdisp = wd_data.value
+                wdisp_unit = wd_data.unit
 
         try:
-            sky = sp.sky
+            sky_data = sp.sky  # type: ignore
         except AttributeError:
             pass
         else:
-            if sp.sky is not None:
-                sky = sp.sky.value
-                sky_unit = sp.sky.unit
+            if sky_data is not None:
+                sky = sky_data.value
+                sky_unit = sky_data.unit
 
         flux_series = values2series(wav, flux, self.qapp.tr("Flux"))
         flux_chart.addSeries(flux_series)
@@ -1913,7 +2003,7 @@ class GuiApp:
 
             item_uuid: uuid.UUID = uuid.uuid4()
 
-            # Check for a possible collision, even if it should neve happem
+            # Check for a possible collision, even if it should never happen
             while item_uuid in self.open_spectra_files.keys():
                 item_uuid = uuid.uuid4()
 
@@ -2066,6 +2156,9 @@ class GuiApp:
 
         current_row = self.main_wnd.spec_list_widget.currentRow()
         item = self.main_wnd.spec_list_widget.item(current_row)
+        if item is None:
+            return
+
         item_uuid = item.data(QtCore.Qt.ItemDataRole.UserRole)
         self.main_wnd.spec_list_widget.takeItem(current_row)
         self.open_spectra_items.pop(item_uuid)
@@ -2182,6 +2275,11 @@ class GuiApp:
         return True
 
     def doStartRedrock(self, *args, **kwargs) -> None:
+        if self.redrock_handler is None:
+            # Should never happen since we lock the button to start this
+            # action if the redrock backend is not found
+            return
+
         self.main_wnd.redrock_text_edit.clear()
         self.statusbar.showMessage("Running redrock backend...")
 
@@ -2189,21 +2287,33 @@ class GuiApp:
         if self.main_wnd.redrock_all_radio.isChecked():
             for_rr = self.open_spectra
         elif self.main_wnd.redrock_selected_radio.isChecked():
-            item: QtWidgets.QListWidgetItem
+
+            item: Union[None, QtWidgets.QListWidgetItem]
             for row in range(self.main_wnd.spec_list_widget.count()):
                 item = self.main_wnd.spec_list_widget.item(row)
+
+                if item is None:
+                    # should never happen!
+                    continue
+
                 if item.checkState() == QtCore.Qt.CheckState.Checked:
                     item_uuid = item.data(QtCore.Qt.ItemDataRole.UserRole)
                     for_rr[item_uuid] = self.open_spectra[item_uuid]
         else:
+            if self.current_uuid is None:
+                return
             for_rr[self.current_uuid] = self.open_spectra[self.current_uuid]
 
         self.redrock_handler.run_redrock(for_rr)
 
     def doToggleDone(self) -> None:
         check_state = None
+        item: Union[QtWidgets.QListWidgetItem, None]
         for row in range(self.main_wnd.spec_list_widget.count()):
             item = self.main_wnd.spec_list_widget.item(row)
+            if item is None:
+                continue
+
             item_uuid = item.data(QtCore.Qt.ItemDataRole.UserRole)
 
             if item_uuid not in self.object_state_dict:
@@ -2235,8 +2345,11 @@ class GuiApp:
         else:
             ref_check_state = QtCore.Qt.CheckState.Checked
 
+        other_item: Union[None, QtWidgets.QListWidgetItem]
         for row in range(self.main_wnd.spec_list_widget.count()):
             other_item = self.main_wnd.spec_list_widget.item(row)
+            if other_item is None:
+                continue
             other_item.setCheckState(ref_check_state)
 
     def doZoomIn(self, *args, **kwargs) -> None:
@@ -2632,8 +2745,11 @@ class GuiApp:
 
         # Serialize program state for json dumping
         serialized_open_file_list = []
+        item: Union[QtWidgets.QListWidgetItem, None]
         for k in range(self.main_wnd.spec_list_widget.count()):
             item = self.main_wnd.spec_list_widget.item(k)
+            if item is None:
+                continue
             item_uuid: uuid.UUID = item.data(
                 QtCore.Qt.ItemDataRole.UserRole
             )
@@ -2643,7 +2759,7 @@ class GuiApp:
                 'uuid': item_uuid.hex,
                 'text': item.text(),
                 'path': self.open_spectra_files[item_uuid],
-                'checked': int(item.checkState().value)
+                'checked': int(item.checkState().value)  # type: ignore
             }
 
             serialized_open_file_list.append(file_info)
@@ -2700,13 +2816,16 @@ class GuiApp:
 
         self.flux_chart_view.setRedshift(redshift=redshift)
 
-        item_col_0: QtWidgets.QTableWidgetItem
-        item_col_1: QtWidgets.QTableWidgetItem
-        item_col_2: QtWidgets.QTableWidgetItem
+        item_col_0: Union[QtWidgets.QTableWidgetItem, None]
+        item_col_1: Union[QtWidgets.QTableWidgetItem, None]
+        item_col_2: Union[QtWidgets.QTableWidgetItem, None]
         for j in range(self.main_wnd.lines_table_widget.rowCount()):
             item_col_0 = self.main_wnd.lines_table_widget.item(j, 0)
             item_col_1 = self.main_wnd.lines_table_widget.item(j, 1)
             item_col_2 = self.main_wnd.lines_table_widget.item(j, 2)
+
+            if item_col_0 is None or item_col_1 is None or item_col_2 is None:
+                continue
 
             line_lam: float = item_col_0.data(QtCore.Qt.ItemDataRole.UserRole)
             rest_lam = line_lam / (1 + redshift)
@@ -2723,21 +2842,31 @@ class GuiApp:
         if row < 0:
             return
 
-        self.main_wnd.z_dspinbox.setValue(
-            self.main_wnd.lines_match_list_widget.item(row).data(
-                QtCore.Qt.ItemDataRole.UserRole
-            )[0]
-        )
+        item: Union[QtWidgets.QListWidgetItem, None]
+        item = self.main_wnd.lines_match_list_widget.item(row)
+        if item is None:
+            return
+
+        try:
+            self.main_wnd.z_dspinbox.setValue(
+                item.data(QtCore.Qt.ItemDataRole.UserRole)[0]
+            )
+        except (IndexError, TypeError):
+            return
 
     def setCurrentObjectRedshiftFromSingleLine(self, row: int) -> None:
         if row < 0:
             return
 
         lines_tbl_row = self.main_wnd.lines_table_widget.currentRow()
-        if  lines_tbl_row < 0:
+        if lines_tbl_row < 0:
             return
 
+        w_item: Union[None, QtWidgets.QTableWidgetItem]
         w_item = self.main_wnd.lines_table_widget.item(lines_tbl_row, 0)
+        if w_item is None:
+            return
+
         obs_lam = w_item.data(QtCore.Qt.ItemDataRole.UserRole)
 
         rest_lam = self.main_wnd.single_line_combo_box.itemData(
@@ -2815,8 +2944,13 @@ class GuiApp:
         else:
             ref_check_state = QtCore.Qt.CheckState.Checked
 
+        other_item: Union[None, QtWidgets.QListWidgetItem]
         for row in range(self.main_wnd.spec_list_widget.count()):
             other_item = self.main_wnd.spec_list_widget.item(row)
+
+            if other_item is None:
+                continue
+
             other_uuid = other_item.data(QtCore.Qt.ItemDataRole.UserRole)
             if other_uuid in self.object_state_dict:
                 other_qf = self.object_state_dict[other_uuid]['quality_flag']
