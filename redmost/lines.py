@@ -6,7 +6,7 @@ from scipy.signal import find_peaks_cwt  # type: ignore
 
 import numpy as np
 
-from pyzui import utils
+from redmost import utils
 
 # Some important lines with corresponding wavelengths in Angstrom
 RESTFRAME_LINES = [

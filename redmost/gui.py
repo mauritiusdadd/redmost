@@ -25,11 +25,11 @@ from astropy.table import Table  # type: ignore
 
 from specutils import Spectrum1D  # type: ignore
 
-import pyzui
-from pyzui import loaders
-from pyzui import utils
-from pyzui import lines
-from pyzui import backends
+import redmost
+from redmost import loaders
+from redmost import utils
+from redmost import lines
+from redmost import backends
 
 try:
     from PyQt6 import QtCore, QtGui, QtWidgets, uic
@@ -753,7 +753,7 @@ class AboutDialog(QtWidgets.QDialog):
         qapp = getQApp()
 
         properties: Dict[str, str] = {
-            qapp.tr("PROGRAM VERSION"): pyzui.__version__,
+            qapp.tr("PROGRAM VERSION"): redmost.__version__,
             qapp.tr("QT BACKEND"): QT_BACKEND,
             qapp.tr("HAS REDROCK"): (
                 qapp.tr("YES") if backends.HAS_REDROCK else qapp.tr("NO")
@@ -766,7 +766,7 @@ class AboutDialog(QtWidgets.QDialog):
         )
 
         text_edit: QtWidgets.QTextEdit = QtWidgets.QTextEdit()
-        text_edit.setText(pyzui.LICENSE)
+        text_edit.setText(redmost.LICENSE)
         text_edit.setReadOnly(True)
         text_edit.setWordWrapMode(QtGui.QTextOption.WrapMode.NoWrap)
 
@@ -809,7 +809,7 @@ class AboutDialog(QtWidgets.QDialog):
         main_layout.addWidget(button_box)
 
         self.setLayout(main_layout)
-        self.setWindowTitle("About pyzui")
+        self.setWindowTitle("About redmost")
 
         button_box.accepted.connect(
             self.close
@@ -915,7 +915,7 @@ class GuiApp:
         )
 
         setattr(self.main_wnd, "closeEvent", self.closeEvent)
-        self.main_wnd.setWindowTitle("pyzui")
+        self.main_wnd.setWindowTitle("redmost")
 
         self.msgBox: QtWidgets.QMessageBox = QtWidgets.QMessageBox(
             parent=self.main_wnd
