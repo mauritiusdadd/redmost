@@ -1,13 +1,17 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+version_scheme = "post-release"
+write_to = "pyzui/_version.py"
 
 [tool.setuptools.package-data]
 pyzui = ["ui/*.ui", "py.typed"]
 
 [project]
 name = "pyzui"
-version = "0.1.1"
+dynamic = ["version"]
 description = "Display spectra and estimate their redshifts."
 readme = "README.md"
 requires-python = ">=3.8"
