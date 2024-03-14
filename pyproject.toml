@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
 version_scheme = "post-release"
-write_to = "pyzui/_version.py"
+write_to = "redmost/_version.py"
 
 [tool.setuptools.package-data]
-pyzui = ["ui/*.ui", "py.typed"]
+redmost = ["ui/*.ui", "py.typed"]
 
 [project]
-name = "pyzui"
+name = "redmost"
 dynamic = ["version"]
 description = "Display spectra and estimate their redshifts."
 readme = "README.md"
@@ -52,7 +52,7 @@ pyqt6 = ["PyQt6", "PyQt6-Charts"]
 pyside6 = ["PySide6"]
 
 [project.urls]
-repository = "https://github.com/mauritiusdadd/pyzui"
+repository = "https://github.com/mauritiusdadd/redmost"
 
 [project.scripts]
-pyzui = "pyzui.gui:main"
+redmost = "redmost.gui:main"

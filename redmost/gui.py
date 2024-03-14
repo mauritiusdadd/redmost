@@ -25,6 +25,7 @@ from astropy.table import Table  # type: ignore
 
 from specutils import Spectrum1D  # type: ignore
 
+import pyzui
 from pyzui import loaders
 from pyzui import utils
 from pyzui import lines
@@ -751,14 +752,27 @@ class AboutDialog(QtWidgets.QDialog):
 
         qapp = getQApp()
 
+        properties: Dict[str, str] = {
+            qapp.tr("PROGRAM VERSION"): pyzui.__version__,
+            qapp.tr("QT BACKEND"): QT_BACKEND,
+            qapp.tr("HAS REDROCK"): (
+                qapp.tr("YES") if backends.HAS_REDROCK else qapp.tr("NO")
+            )
+        }
+
         button_box = QtWidgets.QDialogButtonBox(self)
         button_box.setStandardButtons(
             QtWidgets.QDialogButtonBox.StandardButton.Ok
         )
 
+        text_edit: QtWidgets.QTextEdit = QtWidgets.QTextEdit()
+        text_edit.setText(pyzui.LICENSE)
+        text_edit.setReadOnly(True)
+        text_edit.setWordWrapMode(QtGui.QTextOption.WrapMode.NoWrap)
+
         status_tbl = QtWidgets.QTableWidget()
         status_tbl.setColumnCount(2)
-        status_tbl.setRowCount(2)
+        status_tbl.setRowCount(len(properties))
         status_tbl.setSizePolicy(
             QtWidgets.QSizePolicy(
                 QtWidgets.QSizePolicy.Policy.Expanding,
@@ -770,31 +784,15 @@ class AboutDialog(QtWidgets.QDialog):
             [qapp.tr("PROPERTY"), qapp.tr("VALUE")]
         )
 
-        item_qt_0 = QtWidgets.QTableWidgetItem(
-            qapp.tr("QT BACKEND: ")
-        )
-        item_qt_0.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
+        for j, (key, val) in enumerate(properties.items()):
+            item_key = QtWidgets.QTableWidgetItem(key)
+            item_key.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
 
-        item_qt_1 = QtWidgets.QTableWidgetItem(
-            QT_BACKEND
-        )
-        item_qt_1.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
+            item_val = QtWidgets.QTableWidgetItem(val)
+            item_val.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
 
-        status_tbl.setItem(0, 0, item_qt_0)
-        status_tbl.setItem(0, 1, item_qt_1)
-
-        item_redrock_0 = QtWidgets.QTableWidgetItem(
-            qapp.tr("REDROCK BACKEND: ")
-        )
-        item_redrock_0.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
-
-        item_redrock_1 = QtWidgets.QTableWidgetItem(
-            qapp.tr("OK") if backends.HAS_REDROCK else qapp.tr("OK")
-        )
-        item_redrock_1.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
-
-        status_tbl.setItem(1, 0, item_redrock_0)
-        status_tbl.setItem(1, 1, item_redrock_1)
+            status_tbl.setItem(j, 0, item_key)
+            status_tbl.setItem(j, 1, item_val)
 
         header: Union[QtWidgets.QHeaderView, None]
         header = status_tbl.horizontalHeader()
@@ -805,6 +803,7 @@ class AboutDialog(QtWidgets.QDialog):
         header.setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Stretch)
 
         main_layout = QtWidgets.QVBoxLayout()
+        main_layout.addWidget(text_edit)
         main_layout.addWidget(status_tbl)
         main_layout.addStretch()
         main_layout.addWidget(button_box)
@@ -815,6 +814,8 @@ class AboutDialog(QtWidgets.QDialog):
         button_box.accepted.connect(
             self.close
         )
+
+        self.setMinimumWidth(640)
 
 
 class MainWindow(QtWidgets.QMainWindow):

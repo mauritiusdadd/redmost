@@ -1,7 +1,7 @@
 
-# pyzui
+# REDMOST
 
-A Qt6 GUI interface to do spectroscopic redshift measurements.
+REDshift Measurement Of SpecTra is a Qt6 Graphical User Interface (GUI) to do spectroscopic redshift measurements for 1D spectra.
 If redrock is correcly installed, it cat be used as a backend to measure the redshift.
 
 # Installation
@@ -24,8 +24,8 @@ and you can activate it with
 To install the bleeding edge version, first clone this repository
  
 ```
-git clone https://github.com/mauritiusdadd/pyzui.git
-cd pyzui
+git clone https://github.com/mauritiusdadd/redmost.git
+cd redmost
 ```
 
 and then run pip specifyng which Qt backend you want to use:
@@ -35,4 +35,4 @@ and then run pip specifyng which Qt backend you want to use:
 
 # Run
 
-To run the program just run the command ```pyzui``` in a terminal
+To run the program just run the command ```redmost``` in a terminal
