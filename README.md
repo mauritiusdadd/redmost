@@ -1,8 +1,10 @@
 
+
 # REDMOST
 
-REDshift Measurement Of SpecTra is a Qt6 Graphical User Interface (GUI) to do spectroscopic redshift measurements for 1D spectra.
-If redrock is correcly installed, it cat be used as a backend to measure the redshift.
+<b>RED</b>shift <b>M</b>easurement <b>O</b>f <b>S</b>pec<b>T</b>ra is a Qt6 Graphical User Interface (GUI) to do spectroscopic redshift measurements for 1D spectra.
+
+If [redrock][1] is correcly installed, it cat be used as a backend to measure the redshift.
 
 # Installation
 
@@ -20,7 +22,7 @@ and you can activate it with
 ```. astro/bin/activate```
 
 
-### From this GIT repository
+## From this GIT repository
 To install the bleeding edge version, first clone this repository
  
 ```
@@ -33,6 +35,26 @@ and then run pip specifyng which Qt backend you want to use:
 - for PyQt6: ```pip install .[pyqt6]```
 - for PySide6: ```pip install .[pyside6]```
 
+## Install third party backends
+
+Redmost can use modular backends to measure the redshift, although only redrock is currently supported. Please check and follow the installation instructions of the single packages!
+
+- redrock backend: [https://github.com/desihub/redrock][1]
+
 # Run
 
 To run the program just run the command ```redmost``` in a terminal
+
+# Aknowledgemnts
+
+If you use this software for your work, please consider to include a citation to 10.5281/zenodo.10817884
+Also remember to aknowledge:
+
+- astropy: [https://www.astropy.org/acknowledging.html][3]
+- specutils: [https://github.com/astropy/specutils/blob/main/specutils/CITATION][2]
+- redrock: [https://github.com/desihub/redrock][1] (if you use the redrock backend)
+
+
+[1]: https://github.com/desihub/redrock
+[2]: https://www.astropy.org/acknowledging.html
+[3]: https://github.com/astropy/specutils/blob/main/specutils/CITATION
