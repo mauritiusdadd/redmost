@@ -2901,7 +2901,7 @@ class GuiApp:
                     'data': z_info['data']
                 })
 
-            serialized_info_dict: Dict[str, Dict] = {
+            serialized_info_dict: Dict[str, Any] = {
                 'redshift': float(obj_info['redshift']),
                 'quality_flag': int(obj_info['quality_flag']),
                 'lines': {
