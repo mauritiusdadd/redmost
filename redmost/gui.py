@@ -818,6 +818,100 @@ class AboutDialog(QtWidgets.QDialog):
         self.setMinimumWidth(640)
 
 
+class ImportZcatDialog(QtWidgets.QDialog):
+
+    def __init__(self) -> None:
+        super().__init__()
+        qapp: QtWidgets.QApplication = getQApp()
+
+        self.zcat_tbl: Union[Table, None] = None
+
+        button_box: QtWidgets.QDialogButtonBox
+        button_box = QtWidgets.QDialogButtonBox(self)
+        button_box.setStandardButtons(
+            QtWidgets.QDialogButtonBox.StandardButton.Ok |
+            QtWidgets.QDialogButtonBox.StandardButton.Cancel
+        )
+
+        main_layout: QtWidgets.QVBoxLayout = QtWidgets.QVBoxLayout()
+
+        mapping_widgets_layout = QtWidgets.QGridLayout()
+
+        id_select_label: QtWidgets.QLabel
+        id_select_label = QtWidgets.QLabel(
+            qapp.tr("Match with catalogue:")
+        )
+
+        self.id_combo_box: QtWidgets.QComboBox
+        self.id_combo_box = QtWidgets.QComboBox()
+
+        z_select_label: QtWidgets.QLabel
+        z_select_label = QtWidgets.QLabel(
+            qapp.tr("Get redshift from column:")
+        )
+
+        self.z_combo_box: QtWidgets.QComboBox
+        self.z_combo_box = QtWidgets.QComboBox()
+
+        qf_select_label: QtWidgets.QLabel
+        qf_select_label = QtWidgets.QLabel(
+            qapp.tr("Quality flag (optional):")
+        )
+
+        self.qf_combo_box: QtWidgets.QComboBox
+        self.qf_combo_box = QtWidgets.QComboBox()
+
+        mapping_widgets_layout.addWidget(id_select_label)
+        mapping_widgets_layout.addWidget(self.id_combo_box)
+        mapping_widgets_layout.addWidget(z_select_label)
+        mapping_widgets_layout.addWidget(self.z_combo_box)
+        mapping_widgets_layout.addWidget(qf_select_label)
+        mapping_widgets_layout.addWidget(self.qf_combo_box)
+
+        main_layout.addLayout(mapping_widgets_layout)
+        main_layout.addStretch()
+        main_layout.addWidget(button_box)
+
+        self.setLayout(main_layout)
+        self.setWindowTitle(qapp.tr("Import Catalogue"))
+
+        button_box.accepted.connect(
+            self.accept
+        )
+
+        button_box.rejected.connect(
+            self.reject
+        )
+
+    def setup(self, zcat_tbl: Table) -> None:
+
+        self.zcat_tbl = zcat_tbl
+
+        self.id_combo_box.clear()
+        self.z_combo_box.clear()
+        self.qf_combo_box.clear()
+
+        self.qf_combo_box.addItem("None", None)
+        for col_name in zcat_tbl.colnames:
+            self.id_combo_box.addItem(col_name, col_name)
+            self.z_combo_box.addItem(col_name, col_name)
+            self.qf_combo_box.addItem(col_name, col_name)
+
+    def get_mapping(self) -> Tuple[str, str, Union[str, None]]:
+        id_col = str(
+            self.id_combo_box.currentData(QtCore.Qt.ItemDataRole.UserRole)
+        )
+        z_col = str(
+            self.z_combo_box.currentData(QtCore.Qt.ItemDataRole.UserRole)
+        )
+
+        qf_col = self.qf_combo_box.currentData(QtCore.Qt.ItemDataRole.UserRole)
+        if qf_col is not None:
+            qf_col = str(qf_col)
+
+        return id_col, z_col, qf_col
+
+
 class MainWindow(QtWidgets.QMainWindow):
     """Class definition for the QMainWindow created with the deisnger."""
 
@@ -989,6 +1083,11 @@ class GuiApp:
             )
 
         self.main_wnd.redrock_current_radio.setEnabled(False)
+
+        # Dialog for importing zcat
+
+        self.zcat_mapping_dialog = ImportZcatDialog()
+        self.zcat_mapping_dialog.finished.connect(self.getZcatColumnMapping)
 
         # QChartView widget for flux
 
@@ -1921,7 +2020,7 @@ class GuiApp:
             self.main_wnd.lines_table_widget.setItem(j, 0, new_item)
 
     def doImportZcat(self, *args, **kwargs) -> None:
-        proj_file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+        catalogue_file, _ = QtWidgets.QFileDialog.getOpenFileName(
             self.main_wnd,
             self.qapp.tr("Import a zcat"),
             '.',
@@ -1933,11 +2032,11 @@ class GuiApp:
             )
         )
 
-        if not proj_file_path:
+        if not catalogue_file:
             return
 
         try:
-            self.importZcat(proj_file_path)
+            zcat_tbl = Table.read(catalogue_file)
         except Exception as exc:
             self.msgBox.setWindowTitle(self.qapp.tr("Error"))
             self.msgBox.setText(
@@ -1954,6 +2053,10 @@ class GuiApp:
                 QtWidgets.QMessageBox.StandardButton.Ok
             )
             self.msgBox.exec()
+            return
+
+        self.zcat_mapping_dialog.setup(zcat_tbl)
+        self.zcat_mapping_dialog.open()
 
     def doImportSpectra(self, *args, **kwargs) -> None:
         """
@@ -2037,7 +2140,8 @@ class GuiApp:
 
         self.cancel_button.hide()
         self.pbar.hide()
-        self._unlock()
+        if len(self.open_spectra) > 0:
+            self._unlock()
         self.global_state = GlobalState.READY
 
         if excetpion_tracker:
@@ -2235,7 +2339,7 @@ class GuiApp:
             True if the project is saved correctly, False otherwise.
 
         """
-        if (dest is None) or (not os.path.exists(dest)):
+        if (dest is None) or (not os.path.exists(str(dest))):
             dest_file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
                 self.main_wnd,
                 self.qapp.tr("Save project to file"),
@@ -2249,7 +2353,7 @@ class GuiApp:
             if not dest_file_path:
                 return False
         else:
-            dest_file_path = dest
+            dest_file_path = str(dest)
 
         try:
             self.saveProject(dest_file_path)
@@ -2441,18 +2545,29 @@ class GuiApp:
 
         zcat_tbl.write(dest_file, overwrite=True)
 
-    def importZcat(self, catalogue_file) -> None:
-        zcat_tbl = Table.read(catalogue_file)
+    def getZcatColumnMapping(self, result: int) -> None:
 
-        needed_cols = ['SPEC_FILE', 'Z']
-
-        for col in needed_cols:
-            if col not in zcat_tbl.colnames:
-                raise ValueError(
-                    self.qapp.tr(
-                        "Catalogue format not supported"
-                    )
+        try:
+            self.importZcat(self.zcat_mapping_dialog.zcat_tbl)
+        except Exception as exc:
+            self.msgBox.setWindowTitle(self.qapp.tr("Error"))
+            self.msgBox.setText(
+                self.qapp.tr(
+                    "An error has occurred while importing the catalogue."
                 )
+            )
+            self.msgBox.setInformativeText('')
+            self.msgBox.setDetailedText(str(exc))
+            self.msgBox.setIcon(
+                QtWidgets.QMessageBox.Icon.Critical
+            )
+            self.msgBox.setStandardButtons(
+                QtWidgets.QMessageBox.StandardButton.Ok
+            )
+            self.msgBox.exec()
+
+    def importZcat(self, zcat_tbl) -> None:
+        id_col, z_col, qf_col = self.zcat_mapping_dialog.get_mapping()
 
         self._lock()
         self.global_state = GlobalState.LOAD_OBJECT_STATE
@@ -2468,7 +2583,7 @@ class GuiApp:
             if self.global_state == GlobalState.REUQUEST_CANCEL:
                 break
 
-            spec_file = str(row['SPEC_FILE']).strip()
+            spec_file = str(row[id_col]).strip()
 
             for obj_uuid, obj_file in self.open_spectra_files.items():
                 if obj_uuid in matched_uuids:
@@ -2488,17 +2603,17 @@ class GuiApp:
                         }
                         self.object_state_dict[obj_uuid] = info_dict
 
-                    if row['Z'] == -99:
+                    if row[z_col] == -99:
                         info_dict["redshift"] = None
                     else:
-                        info_dict["redshift"] = row['Z']
+                        info_dict["redshift"] = row[z_col]
 
                     try:
-                        info_dict["quality_flag"] = row['QF']
+                        info_dict["quality_flag"] = row[qf_col]
                     except KeyError:
                         pass
                     else:
-                        self._update_spec_item_qf(obj_uuid, row['QF'])
+                        self._update_spec_item_qf(obj_uuid, row[qf_col])
                     break
 
         self.global_state = GlobalState.READY
@@ -2787,8 +2902,8 @@ class GuiApp:
                 })
 
             serialized_info_dict: Dict[str, Dict] = {
-                'redshift': obj_info['redshift'],
-                'quality_flag': obj_info['quality_flag'],
+                'redshift': float(obj_info['redshift']),
+                'quality_flag': int(obj_info['quality_flag']),
                 'lines': {
                     'list': serialized_lines_list,
                     'redshifts': serialized_z_list,

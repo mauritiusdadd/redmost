@@ -2,7 +2,7 @@
 
 # REDMOST
 
-<b>RED</b>shift <b>M</b>easurement <b>O</b>f <b>S</b>pec<b>T</b>ra is a Qt6 Graphical User Interface (GUI) to do spectroscopic redshift measurements for 1D spectra.
+<b>RED</b>shift <b>M</b>easurement <b>O</b>f <b>S</b>pec<b>T</b>ra is a Qt6 Graphical User Interface (GUI) to do redshift measurements on 1D spectra.
 
 If [redrock][1] is correcly installed, it cat be used as a backend to measure the redshift.
 
@@ -35,6 +35,17 @@ and then run pip specifyng which Qt backend you want to use:
 - for PyQt6: ```pip install .[pyqt6]```
 - for PySide6: ```pip install .[pyside6]```
 
+## From PyPi
+
+just use pip, like for any other packages. Keep in mind that packaged releases may be older than the git version and could lack of some newly implemented functionalities.
+
+- for PyQt6: ```pip install redmost[pyqt6]```
+- for PySide6: ```pip install redmost[pyside6]```
+
+After the installation, to update redmost to the most recent release, use
+
+```pip install redmost --upgrade```
+
 ## Install third party backends
 
 Redmost can use modular backends to measure the redshift, although only redrock is currently supported. Please check and follow the installation instructions of the single packages!
@@ -47,7 +58,8 @@ To run the program just run the command ```redmost``` in a terminal
 
 # Aknowledgemnts
 
-If you use this software for your work, please consider to include a citation to 10.5281/zenodo.10817884
+If you use this software for your work, please consider to include a citation to [10.5281/zenodo.10817884][4].
+
 Also remember to aknowledge:
 
 - astropy: [https://www.astropy.org/acknowledging.html][3]
@@ -58,3 +70,4 @@ Also remember to aknowledge:
 [1]: https://github.com/desihub/redrock
 [2]: https://www.astropy.org/acknowledging.html
 [3]: https://github.com/astropy/specutils/blob/main/specutils/CITATION
+[4]: https://zenodo.org/records/10818017
