@@ -59,6 +59,15 @@ or
 
     pip install .[pyside6]
 
+Updating
+========
+
+After the installation, to update redmost to the most recent release, use
+
+.. code-block:: bash
+
+    pip install redmost --upgrade
+
 Install third party backends
 ============================
 

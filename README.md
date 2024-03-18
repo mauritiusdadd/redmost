@@ -1,5 +1,5 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10817885.svg)](https://doi.org/10.5281/zenodo.10817885)
-
+[![DOCS](https://readthedocs.org/projects/redmost/badge/?version=latest)](https://redmost.readthedocs.io/en/latest/)
 # REDMOST 
 
 <b>RED</b>shift <b>M</b>easurement <b>O</b>f <b>S</b>pec<b>T</b>ra is a Qt6 Graphical User Interface (GUI) to do redshift measurements on 1D spectra.
@@ -30,7 +30,7 @@ git clone https://github.com/mauritiusdadd/redmost.git
 cd redmost
 ```
 
-and then run pip specifyng which Qt backend you want to use:
+and then run pip specifying which Qt backend you want to use:
 
 - for PyQt6: ```pip install .[pyqt6]```
 - for PySide6: ```pip install .[pyside6]```
@@ -55,6 +55,10 @@ Redmost can use modular backends to measure the redshift, although only redrock 
 # Run
 
 To run the program just run the command ```redmost``` in a terminal
+
+# Docs and tutorials
+
+The full documentation is available at: https://redmost.readthedocs.io/en/latest
 
 # Acknowledgements
 
