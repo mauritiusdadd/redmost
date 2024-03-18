@@ -1,0 +1,77 @@
+{
+  "current_uuid": "051ca4d3e0924f54a728aee1aadf1e8a",
+  "open_files": [
+    {
+      "index": 0,
+      "uuid": "8a0670ca364645eab2825817d5fa785a",
+      "text": "spec_997.fits",
+      "path": "./test/data/spec_997.fits",
+      "checked": 2
+    },
+    {
+      "index": 1,
+      "uuid": "918d0444fd70420a81ef2ed400382e27",
+      "text": "spec_994.fits",
+      "path": "./test/data/spec_994.fits",
+      "checked": 2
+    },
+    {
+      "index": 2,
+      "uuid": "051ca4d3e0924f54a728aee1aadf1e8a",
+      "text": "spec_991.fits",
+      "path": "./test/data/spec_991.fits",
+      "checked": 2
+    },
+    {
+      "index": 3,
+      "uuid": "35757f14af9a4d7594dadafacf7b5be5",
+      "text": "spec_988.fits",
+      "path": "./test/data/spec_988.fits",
+      "checked": 2
+    },
+    {
+      "index": 4,
+      "uuid": "8f0ea036283d461bb6e583652ca90fb2",
+      "text": "spec_971.fits",
+      "path": "./test/data/spec_971.fits",
+      "checked": 2
+    },
+    {
+      "index": 5,
+      "uuid": "9cd783a659e24b688876ec25dffc0fe3",
+      "text": "spec_966.fits",
+      "path": "./test/data/spec_966.fits",
+      "checked": 2
+    },
+    {
+      "index": 6,
+      "uuid": "44125ad6d80f41a6868902fdd3b6cc9a",
+      "text": "spec_965.fits",
+      "path": "./test/data/spec_965.fits",
+      "checked": 2
+    },
+    {
+      "index": 7,
+      "uuid": "1818ca3b5ede4378a6f5506442d709d5",
+      "text": "spec_963.fits",
+      "path": "./test/data/spec_963.fits",
+      "checked": 2
+    },
+    {
+      "index": 8,
+      "uuid": "0a6955f1393e4ae5b502cef211c23978",
+      "text": "spec_955.fits",
+      "path": "./test/data/spec_955.fits",
+      "checked": 2
+    },
+    {
+      "index": 9,
+      "uuid": "d00c27ee1e74419688f2eebb650096fb",
+      "text": "spec_95.fits",
+      "path": "./test/data/spec_95.fits",
+      "checked": 2
+    }
+  ],
+  "objects_properties": {
+  }
+}

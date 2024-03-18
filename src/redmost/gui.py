@@ -52,9 +52,9 @@ except (ImportError, ModuleNotFoundError):
         except Exception:
             print("Please install either PyQt6 or PySide6!")
         sys.exit(1)
-    QT_BACKEND = 'PySide6'
+    QT_BACKEND = 'pyside6'
 else:
-    QT_BACKEND = 'PyQt6'
+    QT_BACKEND = 'pyqt6'
 
 
 def getQApp() -> QtWidgets.QApplication:
@@ -1830,12 +1830,13 @@ class GuiApp:
         open_list = QtWidgets.QFileDialog.getSaveFileName(
             self.main_wnd,
             self.qapp.tr("Export redshift catalogue to file"),
-            '.',
+            './zcat.fits',
             (
                 f"{self.qapp.tr('FITS table')} (*.fits *.fit);;"
                 f"{self.qapp.tr('CSV table')} (*.csv);;"
-                f"{self.qapp.tr('VO table')} (*.votable);;"
-            )
+                f"{self.qapp.tr('VO table')} (*.votable)"
+            ),
+            f"{self.qapp.tr('FITS table')} (*.fits *.fit)"
         )
 
         try:
@@ -1901,7 +1902,14 @@ class GuiApp:
             new_item.setCheckState(QtCore.Qt.CheckState.Checked)
             self.main_wnd.lines_table_widget.setItem(j, 0, new_item)
 
-    def doImportZcat(self, *args, **kwargs) -> None:
+    def doImportZcat(self, *args, **kwargs) -> str:
+        """
+        Open a catalogue file
+
+        :param args: A placeholder
+        :param kwargs: A placeholder
+        :return: THe path of the catalogue file.
+        """
         catalogue_file, _ = QtWidgets.QFileDialog.getOpenFileName(
             self.main_wnd,
             self.qapp.tr("Import a zcat"),
@@ -1910,10 +1918,14 @@ class GuiApp:
                 f"{self.qapp.tr('FITS table')} (*.fits *.fit);;"
                 f"{self.qapp.tr('CSV table')} (*.csv);;"
                 f"{self.qapp.tr('VO table')} (*.votable);;"
-                f"{self.qapp.tr('All files')} (*.*);;"
-            )
+                f"{self.qapp.tr('All files')} (*.*)"
+            ),
+            f"{self.qapp.tr('FITS table')} (*.fits *.fit)"
         )
+        self._doImportZcat(catalogue_file)
 
+
+    def _doImportZcat(self, catalogue_file: Optional[str]) -> None:
         if not catalogue_file:
             return
 
@@ -2882,9 +2894,9 @@ def loadUiWidget(
         ui_filename
     )
 
-    if qt_backend == 'PyQt6':
+    if qt_backend == 'pyqt6':
         ui: QtWidgets.QMainWindow = uic.loadUi(ui_file_path)
-    elif qt_backend == 'PySide6':
+    elif qt_backend == 'pyside6':
         loader = QtUiTools.QUiLoader()
         uifile = QtCore.QFile(ui_file_path)
         uifile.open(QtCore.QIODeviceBase.OpenModeFlag.ReadOnly)

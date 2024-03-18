@@ -50,6 +50,7 @@ dependencies = [
 redrock = ["redrock"]
 pyqt6 = ["PyQt6", "PyQt6-Charts"]
 pyside6 = ["PySide6"]
+test = ["pytest", "pytest-qt"]
 
 [project.urls]
 repository = "https://github.com/mauritiusdadd/redmost"
