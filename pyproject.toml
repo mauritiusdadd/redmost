@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
 version_scheme = "post-release"
-write_to = "redmost/_version.py"
+write_to = "src/redmost/_version.py"
 
 [tool.setuptools.package-data]
 redmost = ["ui/*.ui", "py.typed"]

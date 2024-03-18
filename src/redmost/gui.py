@@ -13,7 +13,7 @@ import sys
 import json
 import uuid
 from enum import Enum
-from typing import Optional, Union, Tuple, List, Dict, Any, cast
+from typing import Optional, Union, Tuple, List, Dict, Callable, Any, cast
 import logging
 
 import numpy as np
@@ -180,7 +180,7 @@ class SpectrumQChartView(QtCharts.QChartView):
     ) -> None:
         super().drawForeground(painter, rect)
 
-        if not self.show_lines:
+        if (not self.show_lines) or (len(self.chart().series()) == 0):
             return
 
         painter.save()
@@ -510,24 +510,27 @@ class SpectrumQChartView(QtCharts.QChartView):
         """
 
         super().wheelEvent(event)
-        delta_pix = event.pixelDelta().y() / 5
+        if not event.angleDelta().isNull():
+            delta_y = event.angleDelta().y() / 5
+            delta_x = event.angleDelta().x() / 5
+        elif not event.pixelDelta().isNull():
+            delta_y = event.pixelDelta().y()
+            delta_x = event.pixelDelta().x()
 
         modifiers = QtWidgets.QApplication.keyboardModifiers()
 
         if modifiers == QtCore.Qt.KeyboardModifier.ShiftModifier:
             # Vertical scroll
-            if not self.vertical_lock:
-                self.scroll(0, delta_pix)
+            self.scroll(delta_y, delta_x)
         elif modifiers == QtCore.Qt.KeyboardModifier.ControlModifier:
             # Horizontal scroll
-            if not self.horizontall_lock:
-                self.scroll(delta_pix, 0)
-        else:
-            # Zoom
-            if delta_pix > 0:
+            if delta_y > 0:
                 self.zoomIn()
             else:
                 self.zoomOut()
+        else:
+            self.scroll(delta_x, delta_y)
+
 
         self.onMouseWheelEvent.emit(event)
 
@@ -981,6 +984,13 @@ class GuiApp:
 
     def __init__(self, qt_backend: str) -> None:
         self.qapp: QtWidgets.QApplication = getQApp()
+        self.qapp.setApplicationName("Redmost")
+        self.qapp.setOrganizationName("DAddona")
+        self.qapp.setOrganizationDomain(
+            "github.com/mauritiusdadd/redmost"
+        )
+
+        self.settings: QtCore.QSettings = QtCore.QSettings()
 
         self.open_spectra: Dict[uuid.UUID, Spectrum1D] = {}
         self.open_spectra_files: Dict[uuid.UUID, str] = {}
@@ -1320,6 +1330,50 @@ class GuiApp:
             self.about_wnd.exec
         )
 
+        # Final steps
+
+        # This dictionary contains the global settings that should be saved
+        # upon closing and restored when the application is started again.
+        #
+        # Keys are strings containing a unique name for the properties.
+        # Values are tuples of three elements, and each element is a callable
+        # object: the first one is used to retrieve the property value, the
+        # second one is used to set the property value and the third one is
+        # used to cast the valued read from the settings to the appropriate
+        # type. This last callable is optional and can be replaced with a
+        # None if no casting is required.
+        self._globsal_setting: Dict[
+            str,
+            Tuple[Callable, Callable, Optional[Callable]]
+        ] = {
+            "geometry": (
+                self.main_wnd.saveGeometry,
+                self.main_wnd.restoreGeometry,
+                None
+            ),
+            "smoothing_state": (
+                self.main_wnd.smoothing_check_box.checkState,
+                self.main_wnd.smoothing_check_box.setCheckState,
+                None
+            ),
+            "smoothing_value": (
+                self.main_wnd.smoothing_dspinbox.value,
+                self.main_wnd.smoothing_dspinbox.setValue,
+                float,
+            ),
+            "show_lines": (
+                self.main_wnd.show_lines_check_box.checkState,
+                self.main_wnd.show_lines_check_box.setCheckState,
+                None
+            ),
+            "lines_type": (
+                self.main_wnd.show_lines_combo_box.currentIndex,
+                self.main_wnd.show_lines_combo_box.setCurrentIndex,
+                int
+            )
+        }
+
+        self.loadSettings()
         self.newProject()
 
     def _backup_current_object_state(self) -> None:
@@ -1385,7 +1439,6 @@ class GuiApp:
         self.main_wnd.spec_group_box.setEnabled(False)
         self.main_wnd.red_group_box.setEnabled(False)
         self.main_wnd.info_group_box.setEnabled(False)
-        self.main_wnd.plot_group_box.setEnabled(False)
         self.flux_chart_view.setRubberBand(
             QtCharts.QChartView.RubberBand.NoRubberBand
         )
@@ -1573,6 +1626,8 @@ class GuiApp:
         else:
             # Ignore the close event if Cancel button is pressed
             event.ignore()
+
+        self.saveSettings()
 
     def collectRedrockResults(self) -> None:
         if self.redrock_handler is None:
@@ -2621,6 +2676,14 @@ class GuiApp:
         self.cancel_button.hide()
         self._unlock()
 
+    def loadSettings(self) -> None:
+        for key, (_, set_func, cast_func) in self._globsal_setting.items():
+            if self.settings.contains(key):
+                value = self.settings.value(key)
+                if cast_func is not None:
+                    value = cast_func(value)
+                set_func(value)
+
     def mousePressedFlux(self, args) -> None:
         """
         Handle mouse button pressed events.
@@ -2651,10 +2714,6 @@ class GuiApp:
         self.main_wnd.spec_list_widget.clear()
         self.main_wnd.lines_match_list_widget.clear()
         self.main_wnd.lines_table_widget.setRowCount(0)
-        self.main_wnd.smoothing_dspinbox.setValue(3.0)
-        self.main_wnd.smoothing_check_box.setCheckState(
-            QtCore.Qt.CheckState.Unchecked
-        )
         self.main_wnd.obj_prop_table_widget.setRowCount(0)
 
         flux_chart = self.flux_chart_view.chart()
@@ -2925,6 +2984,11 @@ class GuiApp:
 
         with open(file_name, 'w') as f:
             json.dump(project_dict, f, indent=2)
+
+
+    def saveSettings(self) -> None:
+        for key, (get_func, _, _) in self._globsal_setting.items():
+            self.settings.setValue(key, get_func())
 
     def setCurrentObjectRedshift(self, redshift: Optional[float]) -> None:
         if redshift is None:

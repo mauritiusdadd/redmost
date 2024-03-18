@@ -1,6 +1,6 @@
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10817885.svg)](https://doi.org/10.5281/zenodo.10817885)
 
-
-# REDMOST
+# REDMOST 
 
 <b>RED</b>shift <b>M</b>easurement <b>O</b>f <b>S</b>pec<b>T</b>ra is a Qt6 Graphical User Interface (GUI) to do redshift measurements on 1D spectra.
 
