@@ -21,25 +21,8 @@ KNOWN_RCURVE_EXT_NAMES = ['r', 'reso', 'resolution', 'rcurve', 'wd']
 KNOWN_RGB_EXT_NAMES = ['r', 'g', 'b', 'red', 'green', 'blue']
 
 
-def identifySpecexFits(origin, *args, **kwargs):
-    """
-    Identify spectra extracted with python-specex.
-
-    Parameters
-    ----------
-    origin : TYPE
-        DESCRIPTION.
-    *args : TYPE
-        DESCRIPTION.
-    **kwargs : TYPE
-        DESCRIPTION.
-
-    Returns
-    -------
-    bool
-        DESCRIPTION.
-
-    """
+def identifySpecexFits(origin, *args, **kwargs) -> bool:
+    """Identify spectra extracted with python-specex."""
     if not (
         isinstance(args[0], str) and
         os.path.splitext(args[0].lower())[1] == '.fits'
@@ -78,22 +61,13 @@ def specexFitsLoader(
     """
     Load a python-specex spectrum.
 
-    Parameters
-    ----------
-    file_name : str
+    :param file_name:
         The path of the FITS file to read.
-    flux_hdu_index : str or int
+    :param flux_hdu_index:
         The extension name or index from which to read the spectrum
-    resolution : int or float
+    :param resolution:
         The spectral resolution parameter
-    **kwargs : TYPE
-        DESCRIPTION.
-
-    Returns
-    -------
-    TYPE
-        DESCRIPTION.
-
+    :return: A Spectrum1D object.
     """
     def getHDU(
         hdul: fits.HDUList,

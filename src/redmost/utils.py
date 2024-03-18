@@ -30,26 +30,21 @@ def smooth_fft(
     """
     Return a smoothed version of an array.
 
-    Parameters
-    ----------
-    data : numpy.ndarray
+    :param data:
         The input array to be smoothed.
-    m : float, optional
+    :param m:
         parameter to be passed to the function general_gaussian().
         The default value is 1.0.
-    sigma : float, optional
+    :param sigma:
         Parameter to be passed to the function general_gaussian().
         The default value is 25.0.
-    axis : int, optional
+    :param axis:
         The axis along with perform the smoothing. The default value is -1.
-    mask : numpy.ndarray, optional
+    :param mask:
         An optional array containing a boolean mask of values that should be
         masked during the smoothing process, were a True means that the
         corresponding value in the input array is masked.
-    Returns
-    -------
-    numpy.ndarray
-        The smoothed array.
+    :return: The smoothed array.
     """
     data = np.copy(data)
     if mask is None:
@@ -93,25 +88,21 @@ def separate_continuum(
     """
     Split a numpy array in a smoothed continuum and a residual.
 
-    Parameters
-    ----------
-    data : numpy.ndarray
+    :param data:
         The input array to be smoothed.
-    m : float, optional
+    :param m:
         parameter to be passed to the function general_gaussian().
         The default value is 1.0.
-    sigma : float, optional
+    :param sigma:
         Parameter to be passed to the function general_gaussian().
         The default value is 25.0.
-    mask : numpy.ndarray, optional
+    :param mask:
         An optional array containing a boolean mask of values that should be
         masked during the smoothing process, were a True means that the
         corresponding value in the input array is masked.
 
-    Returns
-    -------
-    continuum : np.ndarray
-    residuals : np.ndarray
+    :return continuum: The continuum.
+    :return residuals: The continuum subtracted spectrum.
     """
     continuum = smooth_fft(data, m, sigma, mask=mask)
     residuals = data - continuum

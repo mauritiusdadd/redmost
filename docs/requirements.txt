@@ -1,0 +1,8 @@
+sphinx
+sphinx-rtd-theme
+sphinx-copybutton
+pyside6
+astropy
+specutils
+numpy
+scipy

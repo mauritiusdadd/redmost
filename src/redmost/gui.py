@@ -3,7 +3,7 @@
 """
 Created on Fri Nov 24 10:33:40 2023.
 
-@author: daddona
+@author: Maurizio D'Addona
 """
 from __future__ import annotations
 
@@ -159,15 +159,7 @@ class SpectrumQChartView(QtCharts.QChartView):
         """
         Add sibling to this widget.
 
-        Parameters
-        ----------
-        sibling : SpectrumQChartView
-            A new sibling SpectrumQChartView
-
-        Returns
-        -------
-        None
-
+        :param sibling: A new sibling SpectrumQChartView
         """
         if sibling not in self.siblings:
             self.siblings.append(sibling)
@@ -223,15 +215,7 @@ class SpectrumQChartView(QtCharts.QChartView):
         """
         Handle mouse double click events.
 
-        Parameters
-        ----------
-        event : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        None.
-
+        :param event: The input event.
         """
         if self._sibling_locked:
             return
@@ -248,16 +232,7 @@ class SpectrumQChartView(QtCharts.QChartView):
         """
         Handle mouse move events.
 
-        Parameters
-        ----------
-        **kwargs
-        event : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        None.
-
+        :param event: The input event.
         """
         if self._sibling_locked:
             return
@@ -280,15 +255,7 @@ class SpectrumQChartView(QtCharts.QChartView):
         """
         Handle mouse button press events.
 
-        Parameters
-        ----------
-        event : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        None.
-
+        :param event: The input event.
         """
         if self._sibling_locked:
             return
@@ -307,15 +274,7 @@ class SpectrumQChartView(QtCharts.QChartView):
         """
         Handle mouse button release events.
 
-        Parameters
-        ----------
-        event : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        None.
-
+        :param event: The input event.
         """
         if self._sibling_locked:
             return
@@ -342,15 +301,7 @@ class SpectrumQChartView(QtCharts.QChartView):
         """
         Remove a sibling to this widget.
 
-        Parameters
-        ----------
-        sibling : SpectrumQChartView
-            The sibling to remove.
-
-        Returns
-        -------
-        None
-
+        :param sibling: The sibling to remove.
         """
         if sibling in self.siblings:
             self.siblings.pop(self.siblings.index(sibling))
@@ -467,16 +418,7 @@ class SpectrumQChartView(QtCharts.QChartView):
         """
         Convert mouse position from event location to data values.
 
-        Parameters
-        ----------
-        event : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        valueGivenSeries : TYPE
-            DESCRIPTION.
-
+        :param event: The input event.
         """
         widget_pos = event.position()
         scene_pos = self.mapToScene(int(widget_pos.x()), int(widget_pos.y()))
@@ -498,15 +440,7 @@ class SpectrumQChartView(QtCharts.QChartView):
         """
         Handle mouse wheel events.
 
-        Parameters
-        ----------
-        event : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        None.
-
+        :param event: The input event.
         """
 
         super().wheelEvent(event)
@@ -543,19 +477,9 @@ class SpectrumQChartView(QtCharts.QChartView):
         """
         Zoom.
 
-        Parameters
-        ----------
-        value : float
-            Zoom value.
-        x_center : float, optional
-            x of the zoom center
-        y_center : float, optional
-            y of the zoom center
-
-        Returns
-        -------
-        None.
-
+        :param value: Zoom value.
+        :param x_center: x of the zoom center
+        :param y_center: y of the zoom center
         """
         if self._sibling_locked:
             return
@@ -597,19 +521,9 @@ class SpectrumQChartView(QtCharts.QChartView):
         """
         Zoom in.
 
-        Parameters
-        ----------
-        value : float
-            Zoom value. The default value is 2.0.
-        x_center : float
-            x of the zoom center
-        y_center : float
-            y of the zoom center
-
-        Returns
-        -------
-        None.
-
+        :param value: Zoom value. The default value is 2.0.
+        :param x_center: x of the zoom center
+        :param y_center: y of the zoom center
         """
         self.zoom(value, x_center, y_center)
 
@@ -620,33 +534,16 @@ class SpectrumQChartView(QtCharts.QChartView):
         y_center: Optional[float] = None
     ) -> None:
         """
-        Zoom out.
+        Zoom in.
 
-        Parameters
-        ----------
-        value : float
-            Zoom value. The default value is 0.5.
-        x_center : float, optional
-            x of the zoom center
-        y_center : float, optional
-            y of the zoom center
-
-        Returns
-        -------
-        None.
-
+        :param value: Zoom value. The default value is 0.5.
+        :param x_center: x of the zoom center
+        :param y_center: y of the zoom center
         """
         self.zoom(value, x_center, y_center)
 
     def zoomReset(self) -> None:
-        """
-        Reset the zoom to fit the chart content.
-
-        Returns
-        -------
-        None
-
-        """
+        """Reset the zoom to fit the chart content."""
         if self._sibling_locked:
             return
 
@@ -916,7 +813,7 @@ class ImportZcatDialog(QtWidgets.QDialog):
 
 
 class MainWindow(QtWidgets.QMainWindow):
-    """Class definition for the QMainWindow created with the deisnger."""
+    """Class definition for the QMainWindow created with the designer."""
 
     # actions
     action_about: QtGui.QAction
@@ -1383,14 +1280,7 @@ class GuiApp:
         self.newProject()
 
     def _backup_current_object_state(self) -> None:
-        """
-        Backup the program state for the current object
-
-        Returns
-        -------
-        None
-
-        """
+        """Backup the program state for the current object."""
         if self.current_uuid is None:
             return
 
@@ -1453,15 +1343,7 @@ class GuiApp:
         """
         Restore the programs state for a given object.
 
-        Parameters
-        ----------
-        obj_uuid : uuid.UUID
-            The UUID of the object
-
-        Returns
-        -------
-        None
-
+        :param obj_uuid: The UUID of the object
         """
         self.global_state = GlobalState.LOAD_OBJECT_STATE
 
@@ -1562,14 +1444,7 @@ class GuiApp:
         """
         Add a new line by selecting its position with the mouse.
 
-        Parameters
-        ----------
-        wavelength
-
-        Returns
-        -------
-        None
-
+        :param wavelength: The wavelength of the line.
         """
         lam_item = QtWidgets.QTableWidgetItem(f"{wavelength:.2f} A")
         lam_item.setFlags(
@@ -1680,23 +1555,16 @@ class GuiApp:
         self._update_spec_item_qf(self.current_uuid, df_index)
         self._backup_current_object_state()
 
-    def currentSpecItemChanged(self, new_item, *args, **kwargs) -> None:
+    def currentSpecItemChanged(
+        self,
+        new_item: Optional[QtWidgets.QListWidgetItem],
+        *args: Any,
+        **kwargs: Any
+    ) -> None:
         """
         Update widgets when the current object changes.
 
-        Parameters
-        ----------
-        new_item : TYPE
-            DESCRIPTION.
-        *args : TYPE
-            DESCRIPTION.
-        **kwargs : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        None.
-
+        :param new_item: The new list item.
         """
         if new_item is None:
             self.main_wnd.redrock_current_radio.setEnabled(False)
@@ -1934,20 +1802,8 @@ class GuiApp:
         sky_chart.setBackgroundRoundness(0)
         sky_chart.legend().hide()
 
-    def doAddNewLine(self, *args, **kwargs) -> None:
-        """
-        Tell the main app to identify a new line
-
-        Parameters
-        ----------
-        args
-        kwargs
-
-        Returns
-        -------
-        None
-
-        """
+    def doAddNewLine(self, *args: Any, **kwargs: Any) -> None:
+        """Tell the main app to identify a new line."""
         # Do nothing if no spectrum is currently selected
         if self.current_uuid is None:
             return
@@ -1956,35 +1812,12 @@ class GuiApp:
         self.global_state = GlobalState.SELECT_LINE_MANUAL
         self.qapp.setOverrideCursor(QtCore.Qt.CursorShape.CrossCursor)
 
-    def doDeleteAllLines(self, *args, **kwargs) -> None:
-        """
-        Delete all identified lines.
-
-        Parameters
-        ----------
-        args
-        kwargs
-
-        Returns
-        -------
-        None
-        """
+    def doDeleteAllLines(self, *args: Any, **kwargs: Any) -> None:
+        """Delete all identified lines."""
         self.main_wnd.lines_table_widget.setRowCount(0)
 
-    def doDeleteCurrentLine(self, *args, **kwargs) -> None:
-        """
-        Delete the current selected line from the table.
-
-        Parameters
-        ----------
-        args
-        kwargs
-
-        Returns
-        -------
-        None
-
-        """
+    def doDeleteCurrentLine(self, *args: Any, **kwargs: Any) -> None:
+        """Delete the current selected line from the table."""
         # Do nothing if no spectrum is currently selected
         if self.current_uuid is None:
             return
@@ -2029,20 +1862,8 @@ class GuiApp:
                 self.qapp.tr("Redshift catalogue saved")
             )
 
-    def doIdentifyLines(self, *args, **kwargs) -> None:
-        """
-        Automagically identify lines in the current spectrum.
-
-        Parameters
-        ----------
-        args
-        kwargs
-
-        Returns
-        -------
-        None
-
-        """
+    def doIdentifyLines(self,  *args: Any, **kwargs: Any) -> None:
+        """Automagically identify lines in the current spectrum."""
         if self.current_uuid is None:
             return
 
@@ -2119,22 +1940,8 @@ class GuiApp:
         self.zcat_mapping_dialog.setup(zcat_tbl)
         self.zcat_mapping_dialog.open()
 
-    def doImportSpectra(self, *args, **kwargs) -> None:
-        """
-        Use QFileDialog to get spectra files.
-
-        Parameters
-        ----------
-        *args : TYPE
-            DESCRIPTION.
-        **kwargs : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        None.
-
-        """
+    def doImportSpectra(self,  *args: Any, **kwargs: Any) -> None:
+        """Use QFileDialog to get spectra files."""
         file_list, files_type = QtWidgets.QFileDialog.getOpenFileNames(
             self.main_wnd,
             self.qapp.tr("Import Spectra"),
@@ -2146,7 +1953,7 @@ class GuiApp:
             )
         )
 
-        excetpion_tracker: Dict[uuid.UUID, Tuple[str, str]] = {}
+        exception_tracker: Dict[uuid.UUID, Tuple[str, str]] = {}
 
         self._lock()
         self.global_state = GlobalState.WAITING
@@ -2175,7 +1982,7 @@ class GuiApp:
             try:
                 sp: Spectrum1D = loaders.read(file)
             except Exception as exc:
-                excetpion_tracker[item_uuid] = (file, str(exc))
+                exception_tracker[item_uuid] = (file, str(exc))
                 continue
 
             new_item = QtWidgets.QListWidgetItem(os.path.basename(file))
@@ -2205,7 +2012,7 @@ class GuiApp:
             self._unlock()
         self.global_state = GlobalState.READY
 
-        if excetpion_tracker:
+        if exception_tracker:
             self.msgBox.setWindowTitle(self.qapp.tr("Error"))
             self.msgBox.setText(
                 self.qapp.tr(
@@ -2219,7 +2026,7 @@ class GuiApp:
                         f"uuid: {exc_uuid}\n"
                         f"file: {exc_data[0]}\n"
                         f"reason: {exc_data[1]}"
-                        for exc_uuid, exc_data in excetpion_tracker.items()
+                        for exc_uuid, exc_data in exception_tracker.items()
                     ]
                 )
             )
@@ -2271,19 +2078,8 @@ class GuiApp:
         self.current_project_file_path = proj_file_path
         return True
 
-    def doRedshiftFromLines(self, *args, **kwargs) -> None:
-        """
-        Compute the redshift by matching identified lines.
-
-        Parameters
-        ----------
-        args
-        kwargs
-
-        Returns
-        -------
-        None
-        """
+    def doRedshiftFromLines(self, *args: Any, **kwargs: Any) -> None:
+        """Compute the redshift by matching identified lines."""
         line_table: QtWidgets.QTableWidget = self.main_wnd.lines_table_widget
         z_list: QtWidgets.QListWidget = self.main_wnd.lines_match_list_widget
         tol: float = self.main_wnd.lines_tol_dspinbox.value()
@@ -2367,19 +2163,8 @@ class GuiApp:
         if self.main_wnd.spec_list_widget.count() == 0:
             self.newProject()
 
-    def doSaveProject(self, *args, **kwargs) -> bool:
-        """
-        Save the current project.
-
-        Parameters
-        ----------
-        args
-        kwargs
-
-        Returns
-        -------
-
-        """
+    def doSaveProject(self, *args: Any, **kwargs: Any) -> bool:
+        """Save the current project."""
         return self.doSaveProjectAs(dest=self.current_project_file_path)
 
     def doSaveProjectAs(
@@ -2388,17 +2173,9 @@ class GuiApp:
             *args, **kwargs
     ) -> bool:
         """
-        Save the current project to a file
-        Parameters
-        ----------
-        dest
-        args
-        kwargs
+        Save the current project to a file.
 
-        Returns
-        -------
-            True if the project is saved correctly, False otherwise.
-
+        :return: True if the project is saved correctly, False otherwise.
         """
         if (dest is None) or (not os.path.exists(str(dest))):
             dest_file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
@@ -2519,54 +2296,15 @@ class GuiApp:
             other_item.setCheckState(ref_check_state)
 
     def doZoomIn(self, *args, **kwargs) -> None:
-        """
-        Zoom In flux and var plots.
-
-        Parameters
-        ----------
-        *args : TYPE
-            DESCRIPTION.
-        **kwargs : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Zoom In flux and var plots."""
         self.flux_chart_view.zoomIn()
 
     def doZoomOut(self, *args, **kwargs) -> None:
-        """
-        Zoom Out flux and var plots.
-
-        Parameters
-        ----------
-        *args : TYPE
-            DESCRIPTION.
-        **kwargs : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Zoom Out flux and var plots."""
         self.flux_chart_view.zoomOut()
 
     def doZoomReset(self, *arg, **kwargs) -> None:
-        """
-        Reset the zoom for the flux chart and all its siblings.
-        Parameters
-        ----------
-        arg
-        kwargs
-
-        Returns
-        -------
-        None
-
-        """
+        """Reset the zoom for the flux chart and all its siblings."""
         self.flux_chart_view.zoomReset()
 
     def exportZcat(self, dest_file, file_type) -> None:
@@ -2691,18 +2429,7 @@ class GuiApp:
                 set_func(value)
 
     def mousePressedFlux(self, args) -> None:
-        """
-        Handle mouse button pressed events.
-
-        Parameters
-        ----------
-        args
-
-        Returns
-        -------
-        None
-
-        """
+        """Handle mouse button pressed events."""
         data_pos: QtCore.QPointF = args[0]
         event: QtGui.QMouseEvent = args[1]
         if self.global_state == GlobalState.SELECT_LINE_MANUAL:
@@ -2737,19 +2464,7 @@ class GuiApp:
         self.statusbar.showMessage(self.qapp.tr("New project created"))
 
     def openProject(self, file_name: str) -> None:
-        """
-        Load the project from a file
-
-        Parameters
-        ----------
-        file_name : str
-            The project file path.
-
-        Returns
-        -------
-        None
-
-        """
+        """Load the project from a file."""
         with open(file_name, 'r') as f:
             serialized_dict: Dict[str, Any] = json.load(f)
 
@@ -2759,7 +2474,7 @@ class GuiApp:
         self.pbar.show()
 
         n_files = len(serialized_dict['open_files'])
-        excetpion_tracker: Dict[uuid.UUID, Tuple[str, str]] = {}
+        exception_tracker: Dict[uuid.UUID, Tuple[str, str]] = {}
 
         self.pbar.setMaximum(n_files)
 
@@ -2782,7 +2497,7 @@ class GuiApp:
             try:
                 sp: Spectrum1D = loaders.read(file_info['path'])
             except Exception as exc:
-                excetpion_tracker[item_uuid] = (file_info['path'], str(exc))
+                exception_tracker[item_uuid] = (file_info['path'], str(exc))
                 continue
 
             new_item = QtWidgets.QListWidgetItem(file_info['text'])
@@ -2854,7 +2569,7 @@ class GuiApp:
 
         self.statusbar.showMessage(self.qapp.tr("Project loaded"))
 
-        if excetpion_tracker:
+        if exception_tracker:
             self.msgBox.setWindowTitle(self.qapp.tr("Error"))
             self.msgBox.setText(
                 self.qapp.tr(
@@ -2868,7 +2583,7 @@ class GuiApp:
                         f"uuid: {exc_uuid}\n"
                         f"file: {exc_data[0]}\n"
                         f"reason: {exc_data[1]}"
-                        for exc_uuid, exc_data in excetpion_tracker.items()
+                        for exc_uuid, exc_data in exception_tracker.items()
                     ]
                 )
             )
@@ -2879,48 +2594,17 @@ class GuiApp:
             self.msgBox.exec()
 
     def redrawCurrentSpec(self, *args, **kwargs) -> None:
-        """
-        Redraw the charts.
-
-        Parameters
-        ----------
-        args
-        kwargs
-
-        Returns
-        -------
-        None
-
-        """
+        """Redraw the charts."""
         self.currentSpecItemChanged(
             self.main_wnd.spec_list_widget.currentItem()
         )
 
     def requestCancelCurrentOperation(self) -> None:
-        """
-        Set the global state of the program to REUQUEST_CANCEL.
-
-        Returns
-        -------
-        None
-
-        """
+        """Set the global state of the program to REUQUEST_CANCEL."""
         self.global_state = GlobalState.REUQUEST_CANCEL
 
     def saveProject(self, file_name: str) -> None:
-        """
-        Save the project to a file
-
-        Parameters
-        ----------
-        file_name : str
-            The destination file path.
-
-        Returns
-        -------
-        None
-
-        """
+        """Save the project to a file."""
         # Store any pending information for the current object
         self._backup_current_object_state()
 
@@ -3150,14 +2834,7 @@ class GuiApp:
         self.redrawCurrentSpec()
 
     def run(self) -> None:
-        """
-        Run the main Qt Application.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Run the main Qt Application."""
         self.main_wnd.show()
         sys.exit(self.qapp.exec())
 
@@ -3170,20 +2847,10 @@ def values2series(
     """
     Convert point values to a QLineSeries object.
 
-    Parameters
-    ----------
-    x_values : TYPE
-        DESCRIPTION.
-    y_values : TYPE
-        DESCRIPTION.
-    name : TYPE
-        DESCRIPTION.
-
-    Returns
-    -------
-    series : TYPE
-        DESCRIPTION.
-
+    :param x_values: x values of the points.
+    :param y_values: y values of the points.
+    :param name: The name of the series.
+    :return series: The series object.
     """
     series: QtCharts.QLineSeries = QtCharts.QLineSeries()
     series.setName(name)
@@ -3195,33 +2862,24 @@ def values2series(
 
 
 def loadUiWidget(
-    uifilename: str,
+    ui_filename: str,
     parent: Optional[QtWidgets.QWidget] = None,
-    qt_backend: Optional[str] = 'PySide6'
+    qt_backend: Optional[str] = 'PyQt6'
 ) -> QtWidgets.QMainWindow:
     """
     Load a UI file.
 
-    Parameters
-    ----------
-    uifilename : str
-        Path of the UI file to load.
-    parent : Qwidget, optional
-        Parent widget. The default is None.
-    qt_backend : str, optional.
-        The UI backed to use. The default value is 'PySide6'
-
-    Returns
-    -------
-    ui : QtWidgets.QMainWindow
-        The widget loaded from the UI file.
+    :param ui_filename: Path of the UI file to load.
+    :param parent: Parent widget. The default is None.
+    :param qt_backend: The UI backend to use. The default value is 'PyQt6'.
+    :return ui: The widget loaded from the UI file.
 
     """
 
     logging.debug(f"Loading UI using Qt backend '{qt_backend}'")
     ui_file_path: str = os.path.join(
         os.path.abspath(os.path.dirname(__file__)), 'ui',
-        uifilename
+        ui_filename
     )
 
     if qt_backend == 'PyQt6':
@@ -3242,14 +2900,7 @@ def loadUiWidget(
 
 
 def main() -> None:
-    """
-    Run the main GUI application using PySide.
-
-    Returns
-    -------
-    None.
-
-    """
+    """Run the main GUI application using PySide."""
     myapp: GuiApp = GuiApp(QT_BACKEND)
     myapp.run()
 

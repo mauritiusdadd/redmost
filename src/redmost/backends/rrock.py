@@ -42,39 +42,36 @@ else:
     from redrock.zfind import zfind
 
     def get_templates(
-        template_types: List[str] = [],
+        template_types: Optional[List[str]] = None,
         filepath: bool = False,
         templates: Optional[str] = None
     ) -> List[Template]:
         """
         Get avilable templates.
 
-        Parameters
-        ----------
-        template_types : list of str, optional
+        :param template_types:
             List of template types to retrieve. If it's empty all available
             templates will be returned.
             The default is [].
-        filepath : boot, optional
+        :param filepath:
             If it's true then return the file paths instead of actual templates.
-        templates : str, optional
+        :param templates:
             The path of a template file or of a directory containing templates
             files. If None, templates are searched in the default redrock path.
             The default value is None.
 
-        Returns
-        -------
-        available_templates
+        :return available_templates:
             The available templates or the corresponding file paths.
 
         """
+
         if templates is not None and os.path.isfile(templates):
             return [Template(templates), ]
 
         available_templates = []
         for t in find_templates(templates):
             templ = Template(t)
-            if not template_types or templ.template_type in template_types:
+            if (not template_types) or (templ.template_type in template_types):
                 if filepath:
                     available_templates.append(t)
                 else:
@@ -87,11 +84,7 @@ else:
         """
         Get the available types of templates.
 
-        Returns
-        -------
-        types : list of str
-            List of types of available templates.
-
+        :return types: List of types of available templates.
         """
         templates = [
             t.template_type
