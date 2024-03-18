@@ -71,8 +71,14 @@ html_static_path = ['_static']
 # These paths are either relative to html_static_path
 # or fully qualified paths (eg. https://...)
 html_css_files = [
-    'css/custom.css',
+    os.path.join('css', 'custom.css'),
 ]
+
+html_logo = os.path.join('pics', 'redmost.svg')
+html_theme_options = {
+    'logo_only': True,
+    'display_version': True
+}
 
 html_context = {
     "display_github": True, # Integrate GitHub

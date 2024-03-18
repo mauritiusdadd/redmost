@@ -33,7 +33,7 @@ Welcome to Redmost's documentation!
 .. toctree::
    docs
    :maxdepth: 1
-   :caption: Modules and Functions
+   :caption: API
 
 Acknowledgements
 ****************
