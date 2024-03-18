@@ -1017,9 +1017,15 @@ class GuiApp:
                 "main_window.ui", qt_backend=qt_backend
             )
         )
-
         setattr(self.main_wnd, "closeEvent", self.closeEvent)
+
         self.main_wnd.setWindowTitle("redmost")
+        self.main_wnd.setWindowIcon(
+            QtGui.QIcon(utils.get_data_file("redmost.png"))
+        )
+        self.qapp.setWindowIcon(
+            QtGui.QIcon(utils.get_data_file("redmost.png"))
+        )
 
         self.msgBox: QtWidgets.QMessageBox = QtWidgets.QMessageBox(
             parent=self.main_wnd

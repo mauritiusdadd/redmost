@@ -5,11 +5,19 @@ Created on Fri Nov 24 20:38:29 2023.
 
 @author: Maurizio D'Addona
 """
+import os
 from typing import Optional, Tuple
 
 import numpy as np
 
 from scipy.signal.windows import general_gaussian   # type: ignore
+
+
+def get_data_file(filename: str) -> str:
+    return os.path.join(
+        os.path.abspath(os.path.dirname(__file__)), 'ui',
+        filename
+    )
 
 
 def smooth_fft(

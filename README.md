@@ -4,7 +4,7 @@
 
 <b>RED</b>shift <b>M</b>easurement <b>O</b>f <b>S</b>pec<b>T</b>ra is a Qt6 Graphical User Interface (GUI) to do redshift measurements on 1D spectra.
 
-If [redrock][1] is correcly installed, it cat be used as a backend to measure the redshift.
+If [redrock][1] is correctly installed, it cat be used as a backend to measure the redshift.
 
 # Installation
 
@@ -56,11 +56,11 @@ Redmost can use modular backends to measure the redshift, although only redrock 
 
 To run the program just run the command ```redmost``` in a terminal
 
-# Aknowledgemnts
+# Acknowledgements
 
 If you use this software for your work, please consider to include a citation to [10.5281/zenodo.10817884][4].
 
-Also remember to aknowledge:
+Also remember to acknowledge:
 
 - astropy: [https://www.astropy.org/acknowledging.html][3]
 - specutils: [https://github.com/astropy/specutils/blob/main/specutils/CITATION][2]
