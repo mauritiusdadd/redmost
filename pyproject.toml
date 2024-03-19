@@ -50,6 +50,7 @@ dependencies = [
 redrock = ["redrock"]
 pyqt6 = ["PyQt6", "PyQt6-Charts"]
 pyside6 = ["PySide6"]
+pyqt5 = ["PyQt5", "PyQtChart"]
 test = ["pytest", "pytest-qt", "coverage"]
 
 [project.urls]

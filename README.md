@@ -8,7 +8,7 @@ If [redrock][1] is correctly installed, it cat be used as a backend to measure t
 
 # Installation
 
-This is a python program based on Qt6 and supports both PyQt6 and PySide6 backends.
+This is a python program based on Qt6 and supports both PyQt6 and PySide6 backends. It also support PyQt5 backend but it is not fully tested and may not work as expected.
 Since it is a good practice to not mess up the system-wide python environment, you should install this program in a virtual environment. If you don't have a virtual environment yet, you can create one with the command
 
 ```python -m venv env_name```
@@ -34,6 +34,7 @@ and then run pip specifying which Qt backend you want to use:
 
 - for PyQt6: ```pip install .[pyqt6]```
 - for PySide6: ```pip install .[pyside6]```
+- for PySide5: ```pip install .[pyqt5]``` (only for compatibility, may not work as expected)
 
 ## From PyPi
 
@@ -41,6 +42,7 @@ just use pip, like for any other packages. Keep in mind that packaged releases m
 
 - for PyQt6: ```pip install redmost[pyqt6]```
 - for PySide6: ```pip install redmost[pyside6]```
+- for PyQt5: ```pip install redmost[pyqt5]```
 
 After the installation, to update redmost to the most recent release, use
 
@@ -54,7 +56,9 @@ Redmost can use modular backends to measure the redshift, although only redrock 
 
 # Run
 
-To run the program just run the command ```redmost``` in a terminal
+To run the program just run the command ```redmost``` in a terminal. If you have both PyQt and Pyside installed, you can force the program to use a specific backend using the environment variable ``QT_API``, for example:
+
+```QT_API="pyside6" redmost```
 
 # Docs and tutorials
 

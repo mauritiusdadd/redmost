@@ -214,11 +214,15 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
             if self._last_mouse_pos is None:
                 return
 
-            delta = event.position() - self._last_mouse_pos
+            try:
+                delta = event.position() - self._last_mouse_pos
+                self._last_mouse_pos = event.position()
+            except AttributeError:
+                delta = event.pos() - self._last_mouse_pos
+                self._last_mouse_pos = event.pos()
 
             self.scroll(-delta.x(), delta.y())
 
-            self._last_mouse_pos = event.position()
             event.accept()
 
         super().mouseMoveEvent(event)
@@ -237,7 +241,12 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
             get_qapp().setOverrideCursor(
                 qt_api.QtCore.Qt.CursorShape.SizeAllCursor
             )
-            self._last_mouse_pos = event.position()
+
+            try:
+                self._last_mouse_pos = event.position()
+            except AttributeError:
+                self._last_mouse_pos = event.pos()
+
             event.accept()
 
         super().mousePressEvent(event)
@@ -393,7 +402,11 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
 
         :param event: The input event.
         """
-        widget_pos = event.position()
+        try:
+            widget_pos = event.position()
+        except AttributeError:
+            widget_pos = event.pos()
+
         scene_pos = self.mapToScene(int(widget_pos.x()), int(widget_pos.y()))
         chart_item_pos = self.chart().mapFromScene(scene_pos)
         value_in_series = self.chart().mapToValue(chart_item_pos)
@@ -1228,7 +1241,7 @@ class GuiApp:
             "smoothing_state": (
                 self.main_wnd.smoothing_check_box.checkState,
                 self.main_wnd.smoothing_check_box.setCheckState,
-                None
+                qt_api.QtCore.Qt.CheckState
             ),
             "smoothing_value": (
                 self.main_wnd.smoothing_dspinbox.value,
@@ -1238,7 +1251,7 @@ class GuiApp:
             "show_lines": (
                 self.main_wnd.show_lines_check_box.checkState,
                 self.main_wnd.show_lines_check_box.setCheckState,
-                None
+                qt_api.QtCore.Qt.CheckState
             ),
             "lines_type": (
                 self.main_wnd.show_lines_combo_box.currentIndex,
@@ -2407,9 +2420,14 @@ class GuiApp:
         for key, (_, set_func, cast_func) in self._globsal_setting.items():
             if self.settings.contains(key):
                 value = self.settings.value(key)
-                if cast_func is not None:
+                if value is None:
+                    continue
+                elif cast_func is not None:
                     value = cast_func(value)
-                set_func(value)
+                try:
+                    set_func(value)
+                except (TypeError, ValueError):
+                    continue
 
     def mousePressedFlux(self, args) -> None:
         """Handle mouse button pressed events."""

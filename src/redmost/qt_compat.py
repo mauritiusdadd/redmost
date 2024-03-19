@@ -1,7 +1,7 @@
 """
 Abstract apy to load different Qt backends
 
-.. note:: Based on https://github.com/pytest-dev/pytest-qt
+Note: Based on https://github.com/pytest-dev/pytest-qt
 """
 import os
 import sys
@@ -118,7 +118,11 @@ class QtBackend:
         self.QtGui = self._import_module("QtGui")
         self.QtTest = self._import_module("QtTest")
         self.QtWidgets = self._import_module("QtWidgets")
-        self.QtCharts = self._import_module("QtCharts")
+
+        if self.qt_api_name == "pyqt5":
+            self.QtCharts = self._import_module("QtChart")
+        else:
+            self.QtCharts = self._import_module("QtCharts")
 
         self._check_qt_api_version()
 

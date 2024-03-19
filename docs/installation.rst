@@ -23,7 +23,7 @@ and you can activate it with
 
     source astro/bin/activate
 
-Redmost supports supports both PyQt6 and PySide6 backends, with precedence to PyQt6 if both are installed. You can tell pip to install the appropriate dependencies using the commands:
+Redmost supports supports both PyQt6 and PySide6 backends, with precedence to PyQt6 if both are installed. PyQt5 backend is also supported for compatibility but it is not fully tested and may not work as expected. You can tell pip to install the appropriate dependencies using the commands:
 
 .. code-block:: bash
 
@@ -35,7 +35,11 @@ for PyQt6 backend or
 
     pip install .[pyside6]
 
-for PySide6 backend.
+for PySide6 backend, or
+
+.. code-block:: bash
+
+    pip install .[pyqt5]
 
 Installing from GitHub
 ======================
@@ -59,6 +63,12 @@ or
 
     pip install .[pyside6]
 
+or
+
+.. code-block:: bash
+
+    pip install .[pyqt5]
+
 Updating
 ========
 
@@ -78,7 +88,11 @@ Redmost uses modular backends to measure the redshift, although only redrock is 
 Running Redmost
 ===============
 
-To run the program just run the command ``redmost`` in a terminal
+To run the program just run the command ``redmost`` in a terminal. If you have both PyQt and PySide you can force the program to use a particular backend using the environment variable ``QT_API``
+
+.. code-block:: bash
+
+    QT_API="pyside6" redmost
 
 .. _references_installation:
 
