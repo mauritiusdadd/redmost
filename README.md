@@ -1,5 +1,5 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10817885.svg)](https://doi.org/10.5281/zenodo.10817885)
-[![DOCS](https://readthedocs.org/projects/redmost/badge/?version=latest)](https://redmost.readthedocs.io/en/latest/)
+[![DOCS](https://readthedocs.org/projects/redmost/badge/?version=latest)](https://redmost.readthedocs.io/en/latest/) [![Coverage Status](https://coveralls.io/repos/github/mauritiusdadd/redmost/badge.svg?branch=main)](https://coveralls.io/github/mauritiusdadd/redmost?branch=main)
 # REDMOST 
 
 <b>RED</b>shift <b>M</b>easurement <b>O</b>f <b>S</b>pec<b>T</b>ra is a Qt6 Graphical User Interface (GUI) to do redshift measurements on 1D spectra.
