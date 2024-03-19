@@ -12,6 +12,7 @@ import pickle
 import sys
 import json
 import uuid
+import webbrowser
 from enum import Enum
 from typing import Optional, Union, Tuple, List, Dict, Callable, Any, cast
 
@@ -854,6 +855,7 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     action_zoom_fit: qt_api.QtGui.QAction
     action_save_project_as: qt_api.QtGui.QAction
     action_save_project: qt_api.QtGui.QAction
+    action_online_user_manual: qt_api.QtGui.QAction
     action_open_project: qt_api.QtGui.QAction
     action_new_project: qt_api.QtGui.QAction
 
@@ -1259,6 +1261,10 @@ class GuiApp:
             self.setShowLinesType
         )
 
+        self.main_wnd.action_online_user_manual.triggered.connect(
+            self._open_online_doc
+        )
+
         self.main_wnd.action_about.triggered.connect(
             self.about_wnd.exec
         )
@@ -1357,10 +1363,6 @@ class GuiApp:
         self.object_state_dict[self.current_uuid] = obj_state
         self.global_state = GlobalState.READY
 
-    def _update_spec_item_qf(self, item_uuid: uuid.UUID, qf: int) -> None:
-        item: qt_api.QtWidgets.QListWidgetItem = self.open_spectra_items[item_uuid]
-        item.setBackground(qt_api.QtGui.QColor(self.qf_color[qf]))
-
     def _lock(self, *args, **kwargs) -> None:
         self.main_wnd.spec_group_box.setEnabled(False)
         self.main_wnd.red_group_box.setEnabled(False)
@@ -1368,6 +1370,9 @@ class GuiApp:
         self.flux_chart_view.setRubberBand(
             qt_api.QtCharts.QChartView.RubberBand.NoRubberBand
         )
+
+    def _open_online_doc(self, *args: Any, **kwargs: Any) -> None:
+        webbrowser.open(redmost.ONLINE_DOC_URL)
 
     def _restore_object_state(self, obj_uuid: uuid.UUID) -> None:
         """
@@ -1463,6 +1468,10 @@ class GuiApp:
         self.flux_chart_view.setRubberBand(
             qt_api.QtCharts.QChartView.RubberBand.RectangleRubberBand
         )
+
+    def _update_spec_item_qf(self, item_uuid: uuid.UUID, qf: int) -> None:
+        item: qt_api.QtWidgets.QListWidgetItem = self.open_spectra_items[item_uuid]
+        item.setBackground(qt_api.QtGui.QColor(self.qf_color[qf]))
 
     def _updateMouseLabelFromEvent(self, *args) -> None:
         self._updateMouseLabel(args[0][0])

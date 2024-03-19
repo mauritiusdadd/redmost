@@ -6,11 +6,38 @@ Created on Fri Nov 24 20:38:29 2023.
 @author: Maurizio D'Addona
 """
 import os
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
+import requests
+import json
 
 import numpy as np
 
 from scipy.signal.windows import general_gaussian   # type: ignore
+
+# See https://stackoverflow.com/questions/28774852/pypi-api-how-to-get-stable-package-version
+try:
+    from packaging import version
+except ImportError:
+    from pip._vendor.packaging import version
+
+import redmost
+
+
+def check_updates() -> Tuple[bool, str]:
+    """Check for new a version on pypi.python.org."""
+    req = requests.get(redmost.PYPI_REPO_API_URL)
+    pypi_version = version.parse('0')
+    if req.status_code == requests.codes.ok:
+        j = json.loads(req.text.encode(req.encoding))
+        releases = j.get('releases', [])
+        for release in releases:
+            ver = version.parse(release)
+            if not ver.is_prerelease:
+                pypi_version = max(pypi_version, ver)
+
+    current_version = version.parse(redmost.__version__)
+    is_outdate = current_version < pypi_version
+    return is_outdate, str(pypi_version)
 
 
 def get_data_file(filename: str) -> str:
