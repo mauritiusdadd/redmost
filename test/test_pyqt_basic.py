@@ -87,7 +87,7 @@ def test_load_project(qtbot: QtBot, main_app: gui.GuiApp):
     save_screen(qtbot, main_app.main_wnd)
 
 
-def test_load_project_import_zcar(qtbot: QtBot, main_app: gui.GuiApp):
+def test_load_project_import_zcat(qtbot: QtBot, main_app: gui.GuiApp):
     print("Loading a project")
     main_app.openProject(PROJECT_1_FILE)
     main_app._doImportZcat(ZCAT_FILE)

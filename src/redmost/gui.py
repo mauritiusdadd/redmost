@@ -61,7 +61,7 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
             "width": 1.5
         }
 
-        self.horizontall_lock: bool = False
+        self.horizontal_lock: bool = False
         self.master: bool = False
         self.show_lines: bool = False
         self.sync_height: bool = False
@@ -159,7 +159,7 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
             pen.setWidthF(1.5)
             pen.setDashPattern((2,2,2,2))
             painter.setPen(pen)
-            print(">>>>", self._mouse_lambda)
+
             mouse_line_x = self.chart().mapToPosition(
                 qt_api.QtCore.QPointF(self._mouse_lambda, 0.0)
             ).x()
@@ -343,9 +343,9 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
 
         chart = self.chart()
 
-        if self.vertical_lock and self.horizontall_lock:
+        if self.vertical_lock and self.horizontal_lock:
             return
-        elif not (self.vertical_lock or self.horizontall_lock):
+        elif not (self.vertical_lock or self.horizontal_lock):
             chart.scroll(dx, dy)
         elif self.vertical_lock:
             chart.scroll(dx, 0)
@@ -367,7 +367,7 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
             return
         x_axis, y_axis = axes[0:2]
 
-        if not self.horizontall_lock:
+        if not self.horizontal_lock:
             if x_min is not None:
                 x_axis.setMin(x_min)
             if x_max is not None:
@@ -528,7 +528,7 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         if y_center is None:
             y_center = rect.height()/2
 
-        if not self.horizontall_lock:
+        if not self.horizontal_lock:
             width_original = rect.width()
             rect.setWidth(width_original / value)
             center_scale_x = x_center / width_original
@@ -2062,7 +2062,7 @@ class GuiApp:
             new_item.setData(qt_api.QtCore.Qt.ItemDataRole.UserRole, item_uuid)
 
             info_dict: Dict[str, Any] = {
-                'redshift': None,
+                'redshift': 0,
                 'quality_flag': 0,
                 'lines': {
                     'list': [],
@@ -2588,15 +2588,32 @@ class GuiApp:
             item_uuid = uuid.UUID(file_info['uuid'])
             item_row = int(file_info['index'])
 
+            file_path = os.path.realpath(
+                os.path.join(
+                    os.path.dirname(file_name),
+                    file_info['path']
+                )
+            )
+
+            if not os.path.exists(file_path):
+                if os.path.exists(file_info['path']):
+                    file_path = file_info['path']
+                else:
+                    exception_tracker[item_uuid] = (
+                        file_path,
+                        f"File {file_path} does not exist!"
+                    )
+                    continue
+
             try:
-                sp: Spectrum1D = loaders.read(file_info['path'])
+                sp: Spectrum1D = loaders.read(file_path)
             except Exception as exc:
-                exception_tracker[item_uuid] = (file_info['path'], str(exc))
+                exception_tracker[item_uuid] = (file_path, str(exc))
                 continue
 
             new_item = qt_api.QtWidgets.QListWidgetItem(file_info['text'])
             new_item.setCheckState(qt_api.QtCore.Qt.CheckState(file_info['checked']))
-            new_item.setToolTip(file_info['path'])
+            new_item.setToolTip(file_path)
             new_item.setData(qt_api.QtCore.Qt.ItemDataRole.UserRole, item_uuid)
 
             if item_uuid == current_uuid:
@@ -2604,7 +2621,7 @@ class GuiApp:
 
             self.main_wnd.spec_list_widget.addItem(new_item)
             self.open_spectra[item_uuid] = sp
-            self.open_spectra_files[item_uuid] = file_info['path']
+            self.open_spectra_files[item_uuid] = file_path
             self.open_spectra_items[item_uuid] = new_item
             self.main_wnd.spec_list_widget.insertItem(item_row, new_item)
             self.qapp.processEvents()
@@ -2705,6 +2722,7 @@ class GuiApp:
         # Serialize program state for json dumping
         serialized_open_file_list = []
         item: Union[qt_api.QtWidgets.QListWidgetItem, None]
+        proj_path = os.path.dirname(file_name)
         for k in range(self.main_wnd.spec_list_widget.count()):
             item = self.main_wnd.spec_list_widget.item(k)
             if item is None:
@@ -2717,7 +2735,10 @@ class GuiApp:
                 'index': k,
                 'uuid': item_uuid.hex,
                 'text': item.text(),
-                'path': self.open_spectra_files[item_uuid],
+                'path': os.path.relpath(
+                    self.open_spectra_files[item_uuid],
+                    proj_path
+                ),
                 'checked': int(item.checkState().value)  # type: ignore
             }
 
@@ -2730,19 +2751,25 @@ class GuiApp:
             serialized_z_list: List[Dict[str, Any]] = []
 
             for line_info in obj_info['lines']['list']:
-                serialized_lines_list.append({
-                    'row': int(line_info['row']),
-                    'data': float(line_info['data']),
-                    'text': str(line_info['text']),
-                    'checked': int(line_info['checked'].value)
-                })
+                try:
+                    serialized_lines_list.append({
+                        'row': int(line_info['row']),
+                        'data': float(line_info['data']),
+                        'text': str(line_info['text']),
+                        'checked': int(line_info['checked'].value)
+                    })
+                except (TypeError, ValueError):
+                    continue
 
             for z_info in obj_info['lines']['redshifts']:
-                serialized_z_list.append({
-                    'row': int(z_info['row']),
-                    'text': str(z_info['text']),
-                    'data': z_info['data']
-                })
+                try:
+                    serialized_z_list.append({
+                        'row': int(z_info['row']),
+                        'text': str(z_info['text']),
+                        'data': z_info['data']
+                    })
+                except (TypeError, ValueError):
+                    continue
 
             serialized_info_dict: Dict[str, Any] = {
                 'redshift': float(obj_info['redshift']),

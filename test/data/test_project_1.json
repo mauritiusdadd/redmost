@@ -1,134 +1,76 @@
 {
-  "current_uuid": "d88e4949012247e596f080f55d3fd922",
+  "current_uuid": "b950d9990c5341579957dbe9d7236e27",
   "open_files": [
     {
       "index": 0,
-      "uuid": "7b4dff55c0bd4aa3bbba255f0e363b19",
-      "text": "spec_M0416_10.fits",
-      "path": "/home/daddona/Downloads/refilelistesempiopandora_ez/spec_M0416_10.fits",
+      "uuid": "ee897121174640888b862e441ee6f0f6",
+      "text": "spec_95.fits",
+      "path": "./test/data/spec_95.fits",
       "checked": 2
     },
     {
       "index": 1,
-      "uuid": "2c877880a5fb44fcac896536c14ff63e",
-      "text": "spec_M0416_11701.fits",
-      "path": "/home/daddona/Downloads/refilelistesempiopandora_ez/spec_M0416_11701.fits",
+      "uuid": "637b29cd33ea48a1ad2023e91a60b47f",
+      "text": "spec_955.fits",
+      "path": "./test/data/spec_955.fits",
       "checked": 2
     },
     {
       "index": 2,
-      "uuid": "9300a75b0b684d8193eef071ede0250a",
-      "text": "spec_M0416_118.fits",
-      "path": "/home/daddona/Downloads/refilelistesempiopandora_ez/spec_M0416_118.fits",
+      "uuid": "f22874a92a0645a992fd9a7ca36a9c55",
+      "text": "spec_963.fits",
+      "path": "./test/data/spec_963.fits",
       "checked": 2
     },
     {
       "index": 3,
-      "uuid": "07175839ef01496aa99fec553d43f2fc",
-      "text": "spec_M0416_12300.fits",
-      "path": "/home/daddona/Downloads/refilelistesempiopandora_ez/spec_M0416_12300.fits",
+      "uuid": "74dee251bbf444cf9d947e00f951fcfc",
+      "text": "spec_965.fits",
+      "path": "./test/data/spec_965.fits",
       "checked": 2
     },
     {
       "index": 4,
-      "uuid": "9d49ea396bdb467d943f2908c5668874",
-      "text": "spec_M0416_1233.fits",
-      "path": "/home/daddona/Downloads/refilelistesempiopandora_ez/spec_M0416_1233.fits",
+      "uuid": "6614b0a71ccc4fa4b653509b7feb7272",
+      "text": "spec_966.fits",
+      "path": "./test/data/spec_966.fits",
       "checked": 2
     },
     {
       "index": 5,
-      "uuid": "d88e4949012247e596f080f55d3fd922",
-      "text": "spec_M0416_1303.fits",
-      "path": "/home/daddona/Downloads/refilelistesempiopandora_ez/spec_M0416_1303.fits",
+      "uuid": "855d157d44f34610a0b35266fe310651",
+      "text": "spec_971.fits",
+      "path": "./test/data/spec_971.fits",
       "checked": 2
     },
     {
       "index": 6,
-      "uuid": "f55e0a9a45d7440fb99fa4767a202303",
-      "text": "spec_M0416_13645.fits",
-      "path": "/home/daddona/Downloads/refilelistesempiopandora_ez/spec_M0416_13645.fits",
+      "uuid": "d9b9d10d8e2442f8bccf227b5edc3f24",
+      "text": "spec_988.fits",
+      "path": "./test/data/spec_988.fits",
       "checked": 2
     },
     {
       "index": 7,
-      "uuid": "10cc9306b28941738ea138ff099d5eaa",
-      "text": "spec_M0416_13919.fits",
-      "path": "/home/daddona/Downloads/refilelistesempiopandora_ez/spec_M0416_13919.fits",
+      "uuid": "55cd42374531496294a56ce2bc124b80",
+      "text": "spec_991.fits",
+      "path": "./test/data/spec_991.fits",
+      "checked": 2
+    },
+    {
+      "index": 8,
+      "uuid": "04bdfd679d2f41cc8dce28b8ba3d87a4",
+      "text": "spec_994.fits",
+      "path": "./test/data/spec_994.fits",
+      "checked": 2
+    },
+    {
+      "index": 9,
+      "uuid": "b950d9990c5341579957dbe9d7236e27",
+      "text": "spec_997.fits",
+      "path": "./test/data/spec_997.fits",
       "checked": 2
     }
   ],
-  "objects_properties": {
-    "7b4dff55c0bd4aa3bbba255f0e363b19": {
-      "redshift": 2.7609999999999997,
-      "quality_flag": 3,
-      "lines": {
-        "list": [],
-        "redshifts": []
-      }
-    },
-    "2c877880a5fb44fcac896536c14ff63e": {
-      "redshift": 0.0,
-      "quality_flag": 3,
-      "lines": {
-        "list": [],
-        "redshifts": []
-      }
-    },
-    "9300a75b0b684d8193eef071ede0250a": {
-      "redshift": 0.6716,
-      "quality_flag": 2,
-      "lines": {
-        "list": [],
-        "redshifts": []
-      }
-    },
-    "07175839ef01496aa99fec553d43f2fc": {
-      "redshift": 4.3231,
-      "quality_flag": 2,
-      "lines": {
-        "list": [],
-        "redshifts": []
-      }
-    },
-    "9d49ea396bdb467d943f2908c5668874": {
-      "redshift": 0.1983,
-      "quality_flag": 3,
-      "lines": {
-        "list": [],
-        "redshifts": []
-      }
-    },
-    "d88e4949012247e596f080f55d3fd922": {
-      "redshift": 0.8189,
-      "quality_flag": 4,
-      "lines": {
-        "list": [
-          {
-            "row": 0,
-            "data": 6779.873319885274,
-            "text": "6779.87 A",
-            "checked": 2
-          }
-        ],
-        "redshifts": []
-      }
-    },
-    "f55e0a9a45d7440fb99fa4767a202303": {
-      "redshift": 0.0,
-      "quality_flag": 3,
-      "lines": {
-        "list": [],
-        "redshifts": []
-      }
-    },
-    "10cc9306b28941738ea138ff099d5eaa": {
-      "redshift": 1.3431,
-      "quality_flag": 1,
-      "lines": {
-        "list": [],
-        "redshifts": []
-      }
-    }
-  }
+  "objects_properties": {}
 }
