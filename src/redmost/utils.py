@@ -7,7 +7,7 @@ Created on Fri Nov 24 20:38:29 2023.
 """
 import os
 from typing import Optional, Tuple, Union
-import requests
+from urllib import request
 import json
 
 import numpy as np
@@ -25,15 +25,21 @@ import redmost
 
 def check_updates() -> Tuple[bool, str]:
     """Check for new a version on pypi.python.org."""
-    req = requests.get(redmost.PYPI_REPO_API_URL)
+
+    req = request.Request(redmost.PYPI_REPO_API_URL, method='GET')
+    try:
+        with request.urlopen(req) as response:
+            response_data = response.read()
+    except Exception as exc:
+        return False, str(exc)
+
     pypi_version = version.parse('0')
-    if req.status_code == requests.codes.ok:
-        j = json.loads(req.text.encode(req.encoding))
-        releases = j.get('releases', [])
-        for release in releases:
-            ver = version.parse(release)
-            if not ver.is_prerelease:
-                pypi_version = max(pypi_version, ver)
+    j = json.loads(response_data)
+    releases = j.get('releases', [])
+    for release in releases:
+        ver = version.parse(release)
+        if not ver.is_prerelease:
+            pypi_version = max(pypi_version, ver)
 
     cur_ver_str = '.'.join([str(x) for x in redmost.version_tuple[:3]])
     current_version = version.parse(cur_ver_str)
