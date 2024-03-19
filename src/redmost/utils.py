@@ -35,7 +35,8 @@ def check_updates() -> Tuple[bool, str]:
             if not ver.is_prerelease:
                 pypi_version = max(pypi_version, ver)
 
-    current_version = version.parse(redmost.__version__)
+    cur_ver_str = '.'.join([str(x) for x in redmost.version_tuple[:3]])
+    current_version = version.parse(cur_ver_str)
     is_outdate = current_version < pypi_version
     return is_outdate, str(pypi_version)
 

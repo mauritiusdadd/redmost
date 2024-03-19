@@ -1315,6 +1315,12 @@ class GuiApp:
         self.loadSettings()
         self.newProject()
 
+        self.main_wnd.show()
+
+        is_outdated, new_ver = utils.check_updates()
+        if is_outdated:
+            self._show_update_message(new_ver)
+
     def _backup_current_object_state(self) -> None:
         """Backup the program state for the current object."""
         if self.current_uuid is None:
@@ -1459,6 +1465,26 @@ class GuiApp:
         self.main_wnd.qflag_combo_box.setCurrentIndex(quality_flag)
 
         self._update_spec_item_qf(obj_uuid, quality_flag)
+
+    def _show_update_message(self, new_version: Optional[str]) -> None:
+        self.msgBox.setText(
+            self.qapp.tr(
+                "A new version of Redmost is available"
+            )
+            + f": {new_version}." if new_version else "."
+        )
+        self.msgBox.setWindowTitle(self.qapp.tr("New version available"))
+        self.msgBox.setInformativeText(
+            self.qapp.tr("Please update the program using pip or visit") +
+            f" <a href='{redmost.PYPI_REPO_PAGE}'>{redmost.PYPI_REPO_PAGE}</a>"
+        )
+        self.msgBox.setDetailedText("")
+        self.msgBox.setTextFormat(qt_api.QtCore.Qt.TextFormat.RichText)
+        self.msgBox.setIcon(qt_api.QtWidgets.QMessageBox.Icon.Information)
+        self.msgBox.setStandardButtons(
+            qt_api.QtWidgets.QMessageBox.StandardButton.Ok
+        )
+        self.msgBox.exec()
 
     def _unlock(self, *args, **kwargs) -> None:
         self.main_wnd.spec_group_box.setEnabled(True)

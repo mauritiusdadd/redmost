@@ -8,12 +8,13 @@ try:
     from redmost._version import version as __version__  # type: ignore
     from redmost._version import version_tuple  # type: ignore
 except ImportError:
-    __version__ = "unknown version"
-    version_tuple = (0, 0, "unknown version")
+    __version__ = "unknown"
+    version_tuple = (0, 0, 0, "unknown")
 
 GITHUB_REPO_URL = "https://github.com/mauritiusdadd/redmost"
 ONLINE_DOC_URL = "https://redmost.readthedocs.io/en/latest"
-PYPI_REPO_API_URL = "https://pypi.python.org/pypi/redmost/json"
+PYPI_REPO_PAGE = "https://pypi.org/project/redmost"
+PYPI_REPO_API_URL = f"{PYPI_REPO_PAGE}/json"
 
 LICENSE = """
 BSD 3-Clause License
