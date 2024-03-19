@@ -31,53 +31,21 @@ from redmost import utils
 from redmost import lines
 from redmost import backends
 
-try:
-    from PyQt6 import QtCore, QtGui, QtWidgets, uic
-    from PyQt6 import QtCharts  # type: ignore
-    from PyQt6.QtCore import pyqtSignal as Signal
-except (ImportError, ModuleNotFoundError):
-    try:
-        from PySide6 import QtCore, QtGui, QtWidgets  # type: ignore
-        from PySide6 import QtUiTools
-        from PySide6 import QtCharts  # type: ignore
-        from PySide6.QtCore import Signal  # type: ignore
-    except (ImportError, ModuleNotFoundError):
-        try:
-            from tkinter import messagebox
-
-            messagebox.showerror(
-                title="ERROR",
-                message="Please install either PyQt6 or PySide6"
-            )
-        except Exception:
-            print("Please install either PyQt6 or PySide6!")
-        sys.exit(1)
-    QT_BACKEND = 'pyside6'
-else:
-    QT_BACKEND = 'pyqt6'
+from redmost.qt_compat import qt_api, get_qapp
 
 
-def getQApp() -> QtWidgets.QApplication:
-    qapp: Union[QtWidgets.QApplication, None]
-    qapp = cast(QtWidgets.QApplication, QtWidgets.QApplication.instance())
-    if qapp is None:
-        # if it does not exist then a QApplication is created
-        qapp = QtWidgets.QApplication(sys.argv)
-    return qapp
-
-
-class SpectrumQChartView(QtCharts.QChartView):
-    """Subclass of QtCharts.QChartView with advanced features."""
-    onMouseMoveSeries = Signal(object)
-    onMousePressSeries = Signal(object)
-    onMouseReleaseSeries = Signal(object)
-    onMouseDoubleClickSeries = Signal(object)
-    onMouseWheelEvent = Signal(object)
+class SpectrumQChartView(qt_api.QtCharts.QChartView):
+    """Subclass of qt_api.QtCharts.QChartView with advanced features."""
+    onMouseMoveSeries = qt_api.Signal(object)
+    onMousePressSeries = qt_api.Signal(object)
+    onMouseReleaseSeries = qt_api.Signal(object)
+    onMouseDoubleClickSeries = qt_api.Signal(object)
+    onMouseWheelEvent = qt_api.Signal(object)
 
     def __init__(self, *args: Any) -> None:
         super().__init__(*args)
 
-        self._last_mouse_pos: QtCore.QPointF | None = None
+        self._last_mouse_pos: qt_api.QtCore.QPointF | None = None
         self._static_lines_list: List[Tuple[float, str, str]] = []
         self._lines_buffer_list: List[Tuple[float, str, str]] = []
         self._lines_type: Union[str, None] = None
@@ -101,12 +69,17 @@ class SpectrumQChartView(QtCharts.QChartView):
         self.redshift: float = 0
         self.vertical_lock: bool = False
 
-        self.setDragMode(QtCharts.QChartView.DragMode.NoDrag)
+        self.setDragMode(qt_api.QtCharts.QChartView.DragMode.NoDrag)
         self.setMouseTracking(True)
-        self.setRubberBand(QtCharts.QChartView.RubberBand.RectangleRubberBand)
+        self.setRubberBand(
+            qt_api.QtCharts.QChartView.RubberBand.RectangleRubberBand
+        )
 
         self.setViewportUpdateMode(
-            QtWidgets.QGraphicsView.ViewportUpdateMode.FullViewportUpdate
+            qt_api.QtWidgets.
+            QGraphicsView.
+            ViewportUpdateMode.
+            FullViewportUpdate
         )
 
         self.updateLines()
@@ -116,15 +89,15 @@ class SpectrumQChartView(QtCharts.QChartView):
         self.siblings: List[SpectrumQChartView] = []
 
         self.setSizePolicy(
-            QtWidgets.QSizePolicy(
-                QtWidgets.QSizePolicy.Policy.Expanding,
-                QtWidgets.QSizePolicy.Policy.Expanding
+            qt_api.QtWidgets.QSizePolicy(
+                qt_api.QtWidgets.QSizePolicy.Policy.Expanding,
+                qt_api.QtWidgets.QSizePolicy.Policy.Expanding
             )
         )
         self.chart().setSizePolicy(
-            QtWidgets.QSizePolicy(
-                QtWidgets.QSizePolicy.Policy.Expanding,
-                QtWidgets.QSizePolicy.Policy.Expanding
+            qt_api.QtWidgets.QSizePolicy(
+                qt_api.QtWidgets.QSizePolicy.Policy.Expanding,
+                qt_api.QtWidgets.QSizePolicy.Policy.Expanding
             )
         )
 
@@ -167,8 +140,8 @@ class SpectrumQChartView(QtCharts.QChartView):
 
     def drawForeground(
         self,
-        painter: QtGui.QPainter,
-        rect: QtCore.QRectF
+        painter: qt_api.QtGui.QPainter,
+        rect: qt_api.QtCore.QRectF
     ) -> None:
         super().drawForeground(painter, rect)
 
@@ -176,18 +149,18 @@ class SpectrumQChartView(QtCharts.QChartView):
             return
 
         painter.save()
-        plot_area: QtCore.QRectF = self.chart().plotArea()
+        plot_area: qt_api.QtCore.QRectF = self.chart().plotArea()
 
         for line_lambda, line_name, line_type in self._lines_buffer_list:
-            pen: QtGui.QPen = QtGui.QPen()
+            pen: qt_api.QtGui.QPen = qt_api.QtGui.QPen()
 
-            pen_color: QtGui.QColor = QtGui.QColor(self.line_colors["unknown"])
+            pen_color: qt_api.QtGui.QColor = qt_api.QtGui.QColor(self.line_colors["unknown"])
             if ('AE' in line_type) or ('EA' in line_type):
-                pen_color = QtGui.QColor(self.line_colors["both"])
+                pen_color = qt_api.QtGui.QColor(self.line_colors["both"])
             elif 'A' in line_type:
-                pen_color = QtGui.QColor(self.line_colors["absorption"])
+                pen_color = qt_api.QtGui.QColor(self.line_colors["absorption"])
             elif 'E' in line_type:
-                pen_color = QtGui.QColor(self.line_colors["emission"])
+                pen_color = qt_api.QtGui.QColor(self.line_colors["emission"])
 
             pen_color.setAlphaF(self.line_plot_options["alpha"])
             pen.setColor(pen_color)
@@ -196,13 +169,13 @@ class SpectrumQChartView(QtCharts.QChartView):
             painter.setPen(pen)
 
             line_x = self.chart().mapToPosition(
-                QtCore.QPointF(line_lambda, 0)
+                qt_api.QtCore.QPointF(line_lambda, 0)
             ).x()
 
             if (line_x >= plot_area.left()) and (line_x <= plot_area.right()):
-                p_line_top = QtCore.QPointF(line_x, plot_area.top())
-                p_line_bottom = QtCore.QPointF(line_x, plot_area.bottom())
-                p_text_top = QtCore.QPointF(line_x, plot_area.top() - 5)
+                p_line_top = qt_api.QtCore.QPointF(line_x, plot_area.top())
+                p_line_bottom = qt_api.QtCore.QPointF(line_x, plot_area.bottom())
+                p_text_top = qt_api.QtCore.QPointF(line_x, plot_area.top() - 5)
                 painter.drawLine(p_line_bottom, p_line_top)
                 painter.drawText(p_text_top, line_name)
 
@@ -211,7 +184,7 @@ class SpectrumQChartView(QtCharts.QChartView):
     def hideLines(self) -> None:
         self.setLinesVisible(False)
 
-    def mouseDoubleClickEvent(self, event: QtGui.QMouseEvent) -> None:
+    def mouseDoubleClickEvent(self, event: qt_api.QtGui.QMouseEvent) -> None:
         """
         Handle mouse double click events.
 
@@ -228,7 +201,7 @@ class SpectrumQChartView(QtCharts.QChartView):
         super().mouseDoubleClickEvent(event)
         self.onMouseDoubleClickSeries.emit((self.toSeriesPos(event), event))
 
-    def mouseMoveEvent(self, event: QtGui.QMouseEvent, **kwargs) -> None:
+    def mouseMoveEvent(self, event: qt_api.QtGui.QMouseEvent, **kwargs) -> None:
         """
         Handle mouse move events.
 
@@ -237,7 +210,7 @@ class SpectrumQChartView(QtCharts.QChartView):
         if self._sibling_locked:
             return
 
-        if event.buttons() & QtCore.Qt.MouseButton.MiddleButton:
+        if event.buttons() & qt_api.QtCore.Qt.MouseButton.MiddleButton:
             if self._last_mouse_pos is None:
                 return
 
@@ -251,7 +224,7 @@ class SpectrumQChartView(QtCharts.QChartView):
         super().mouseMoveEvent(event)
         self.onMouseMoveSeries.emit((self.toSeriesPos(event), event))
 
-    def mousePressEvent(self, event: QtGui.QMouseEvent, **kwargs) -> None:
+    def mousePressEvent(self, event: qt_api.QtGui.QMouseEvent, **kwargs) -> None:
         """
         Handle mouse button press events.
 
@@ -260,9 +233,9 @@ class SpectrumQChartView(QtCharts.QChartView):
         if self._sibling_locked:
             return
 
-        if event.button() == QtCore.Qt.MouseButton.MiddleButton:
-            getQApp().setOverrideCursor(
-                QtCore.Qt.CursorShape.SizeAllCursor
+        if event.button() == qt_api.QtCore.Qt.MouseButton.MiddleButton:
+            get_qapp().setOverrideCursor(
+                qt_api.QtCore.Qt.CursorShape.SizeAllCursor
             )
             self._last_mouse_pos = event.position()
             event.accept()
@@ -270,7 +243,7 @@ class SpectrumQChartView(QtCharts.QChartView):
         super().mousePressEvent(event)
         self.onMousePressSeries.emit((self.toSeriesPos(event), event))
 
-    def mouseReleaseEvent(self, event: QtGui.QMouseEvent, **kwargs) -> None:
+    def mouseReleaseEvent(self, event: qt_api.QtGui.QMouseEvent, **kwargs) -> None:
         """
         Handle mouse button release events.
 
@@ -284,17 +257,17 @@ class SpectrumQChartView(QtCharts.QChartView):
             sibling.mouseReleaseEvent(event)
         self._sibling_locked = False
 
-        if event.button() == QtCore.Qt.MouseButton.MiddleButton:
-            getQApp().restoreOverrideCursor()
+        if event.button() == qt_api.QtCore.Qt.MouseButton.MiddleButton:
+            get_qapp().restoreOverrideCursor()
             event.accept()
-        elif event.button() == QtCore.Qt.MouseButton.RightButton:
-            QtWidgets.QGraphicsView.mouseReleaseEvent(self, event)
+        elif event.button() == qt_api.QtCore.Qt.MouseButton.RightButton:
+            qt_api.QtWidgets.QGraphicsView.mouseReleaseEvent(self, event)
         else:
             # Passtrough for rubber band handling
             super().mouseReleaseEvent(event)
 
         self.onMouseReleaseSeries.emit((self.toSeriesPos(event), event))
-        if self.rubberBand() != QtCharts.QChartView.RubberBand.NoRubberBand:
+        if self.rubberBand() != qt_api.QtCharts.QChartView.RubberBand.NoRubberBand:
             self.syncSiblingAxes()
 
     def removeSibling(self, sibling: SpectrumQChartView) -> None:
@@ -385,16 +358,16 @@ class SpectrumQChartView(QtCharts.QChartView):
         x_max = x_axis.max()
         y_max = y_axis.max()
 
-        plot_area: QtCore.QRectF = self.chart().plotArea()
+        plot_area: qt_api.QtCore.QRectF = self.chart().plotArea()
 
         for sibling in self.siblings:
 
             sibling.setAxesRange(x_min, y_min, x_max, y_max)
 
             if sibling.sync_width or sibling.sync_height:
-                sibling_chart: QtCharts.QChart = sibling.chart()
-                sibling_chart.setPlotArea(QtCore.QRectF())
-                sibling_plot_area: QtCore.QRectF = sibling_chart.plotArea()
+                sibling_chart: qt_api.QtCharts.QChart = sibling.chart()
+                sibling_chart.setPlotArea(qt_api.QtCore.QRectF())
+                sibling_plot_area: qt_api.QtCore.QRectF = sibling_chart.plotArea()
                 if sibling.sync_width:
                     sibling_plot_area.setX(plot_area.x())
                     sibling_plot_area.setWidth(plot_area.width())
@@ -414,7 +387,7 @@ class SpectrumQChartView(QtCharts.QChartView):
         if self.master:
             self.syncSiblingAxes()
 
-    def toSeriesPos(self, event: QtGui.QMouseEvent):
+    def toSeriesPos(self, event: qt_api.QtGui.QMouseEvent):
         """
         Convert mouse position from event location to data values.
 
@@ -436,7 +409,7 @@ class SpectrumQChartView(QtCharts.QChartView):
         self.chart().update()
         self.update()
 
-    def wheelEvent(self, event: QtGui.QWheelEvent, **kwargs) -> None:
+    def wheelEvent(self, event: qt_api.QtGui.QWheelEvent, **kwargs) -> None:
         """
         Handle mouse wheel events.
 
@@ -451,12 +424,12 @@ class SpectrumQChartView(QtCharts.QChartView):
             delta_y = event.pixelDelta().y()
             delta_x = event.pixelDelta().x()
 
-        modifiers = QtWidgets.QApplication.keyboardModifiers()
+        modifiers = qt_api.QtWidgets.QApplication.keyboardModifiers()
 
-        if modifiers == QtCore.Qt.KeyboardModifier.ShiftModifier:
+        if modifiers == qt_api.QtCore.Qt.KeyboardModifier.ShiftModifier:
             # Vertical scroll
             self.scroll(delta_y, delta_x)
-        elif modifiers == QtCore.Qt.KeyboardModifier.ControlModifier:
+        elif modifiers == qt_api.QtCore.Qt.KeyboardModifier.ControlModifier:
             # Horizontal scroll
             if delta_y > 0:
                 self.zoomIn()
@@ -555,25 +528,25 @@ class SpectrumQChartView(QtCharts.QChartView):
         self.setAxesRange(*self._getDataBounds())
 
 
-class QRedrockHandler(QtCore.QObject):
+class QRedrockHandler(qt_api.QtCore.QObject):
     """Class to handle redrock subprocess."""
 
-    progress: Signal = Signal(int)
-    maximum: Signal = Signal(int)
-    reset: Signal = Signal()
-    message: Signal = Signal(str)
-    finished: Signal = Signal()
+    progress: qt_api.Signal = qt_api.Signal(int)
+    maximum: qt_api.Signal = qt_api.Signal(int)
+    reset: qt_api.Signal = qt_api.Signal()
+    message: qt_api.Signal = qt_api.Signal(str)
+    finished: qt_api.Signal = qt_api.Signal()
 
     def __init__(self) -> None:
         super().__init__()
-        self.qapp = getQApp()
+        self.qapp = get_qapp()
         self.targets: List[Any] = []
         self.results = None
         self._t_dict: Union[None, Dict[str, uuid.UUID]] = None
 
         self._target_dump_file = 'rr.targets'
         self._result_dump_file = 'rr.result'
-        self.process: QtCore.QProcess = QtCore.QProcess(self)
+        self.process: qt_api.QtCore.QProcess = qt_api.QtCore.QProcess(self)
         self.process.readyReadStandardOutput.connect(  # type: ignore
             self._process_output
         )
@@ -585,7 +558,7 @@ class QRedrockHandler(QtCore.QObject):
         self._total_maximum = 0
 
     def _process_output(self) -> None:
-        data_bytes: QtCore.QByteArray = self.process.readAllStandardOutput()
+        data_bytes: qt_api.QtCore.QByteArray = self.process.readAllStandardOutput()
         text = bytes(data_bytes).decode()  # type: ignore
         for line in text.splitlines():
             simplified = ' '.join(line.lower().strip().split())
@@ -641,42 +614,42 @@ class GlobalState(Enum):
     REUQUEST_CANCEL = 5
 
 
-class AboutDialog(QtWidgets.QDialog):
+class AboutDialog(qt_api.QtWidgets.QDialog):
 
     def __init__(
         self,
-        parent: Optional[QtWidgets.QWidget] = None,
-        flags: QtCore.Qt.WindowType = QtCore.Qt.WindowType.Dialog
+        parent: Optional[qt_api.QtWidgets.QWidget] = None,
+        flags: qt_api.QtCore.Qt.WindowType = qt_api.QtCore.Qt.WindowType.Dialog
     ):
         super().__init__(parent, flags)
 
-        qapp = getQApp()
+        qapp = get_qapp()
 
         properties: Dict[str, str] = {
             qapp.tr("PROGRAM VERSION"): redmost.__version__,
-            qapp.tr("QT BACKEND"): QT_BACKEND,
+            qapp.tr("QT BACKEND"): qt_api.qt_api_name,
             qapp.tr("HAS REDROCK"): (
                 qapp.tr("YES") if backends.HAS_REDROCK else qapp.tr("NO")
             )
         }
 
-        button_box = QtWidgets.QDialogButtonBox(self)
+        button_box = qt_api.QtWidgets.QDialogButtonBox(self)
         button_box.setStandardButtons(
-            QtWidgets.QDialogButtonBox.StandardButton.Ok
+            qt_api.QtWidgets.QDialogButtonBox.StandardButton.Ok
         )
 
-        text_edit: QtWidgets.QTextEdit = QtWidgets.QTextEdit()
+        text_edit: qt_api.QtWidgets.QTextEdit = qt_api.QtWidgets.QTextEdit()
         text_edit.setText(redmost.LICENSE)
         text_edit.setReadOnly(True)
-        text_edit.setWordWrapMode(QtGui.QTextOption.WrapMode.NoWrap)
+        text_edit.setWordWrapMode(qt_api.QtGui.QTextOption.WrapMode.NoWrap)
 
-        status_tbl = QtWidgets.QTableWidget()
+        status_tbl = qt_api.QtWidgets.QTableWidget()
         status_tbl.setColumnCount(2)
         status_tbl.setRowCount(len(properties))
         status_tbl.setSizePolicy(
-            QtWidgets.QSizePolicy(
-                QtWidgets.QSizePolicy.Policy.Expanding,
-                QtWidgets.QSizePolicy.Policy.Expanding
+            qt_api.QtWidgets.QSizePolicy(
+                qt_api.QtWidgets.QSizePolicy.Policy.Expanding,
+                qt_api.QtWidgets.QSizePolicy.Policy.Expanding
             )
         )
 
@@ -685,24 +658,24 @@ class AboutDialog(QtWidgets.QDialog):
         )
 
         for j, (key, val) in enumerate(properties.items()):
-            item_key = QtWidgets.QTableWidgetItem(key)
-            item_key.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
+            item_key = qt_api.QtWidgets.QTableWidgetItem(key)
+            item_key.setFlags(qt_api.QtCore.Qt.ItemFlag.ItemIsEnabled)
 
-            item_val = QtWidgets.QTableWidgetItem(val)
-            item_val.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
+            item_val = qt_api.QtWidgets.QTableWidgetItem(val)
+            item_val.setFlags(qt_api.QtCore.Qt.ItemFlag.ItemIsEnabled)
 
             status_tbl.setItem(j, 0, item_key)
             status_tbl.setItem(j, 1, item_val)
 
-        header: Union[QtWidgets.QHeaderView, None]
+        header: Union[qt_api.QtWidgets.QHeaderView, None]
         header = status_tbl.horizontalHeader()
         if header is None:
-            header = QtWidgets.QHeaderView(QtCore.Qt.Orientation.Horizontal)
+            header = qt_api.QtWidgets.QHeaderView(qt_api.QtCore.Qt.Orientation.Horizontal)
             status_tbl.setHorizontalHeader(header)
 
-        header.setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(qt_api.QtWidgets.QHeaderView.ResizeMode.Stretch)
 
-        main_layout = QtWidgets.QVBoxLayout()
+        main_layout = qt_api.QtWidgets.QVBoxLayout()
         main_layout.addWidget(text_edit)
         main_layout.addWidget(status_tbl)
         main_layout.addStretch()
@@ -718,48 +691,48 @@ class AboutDialog(QtWidgets.QDialog):
         self.setMinimumWidth(640)
 
 
-class ImportZcatDialog(QtWidgets.QDialog):
+class ImportZcatDialog(qt_api.QtWidgets.QDialog):
 
     def __init__(self) -> None:
         super().__init__()
-        qapp: QtWidgets.QApplication = getQApp()
+        qapp: qt_api.QtWidgets.QApplication = get_qapp()
 
         self.zcat_tbl: Union[Table, None] = None
 
-        button_box: QtWidgets.QDialogButtonBox
-        button_box = QtWidgets.QDialogButtonBox(self)
+        button_box: qt_api.QtWidgets.QDialogButtonBox
+        button_box = qt_api.QtWidgets.QDialogButtonBox(self)
         button_box.setStandardButtons(
-            QtWidgets.QDialogButtonBox.StandardButton.Ok |
-            QtWidgets.QDialogButtonBox.StandardButton.Cancel
+            qt_api.QtWidgets.QDialogButtonBox.StandardButton.Ok |
+            qt_api.QtWidgets.QDialogButtonBox.StandardButton.Cancel
         )
 
-        main_layout: QtWidgets.QVBoxLayout = QtWidgets.QVBoxLayout()
+        main_layout: qt_api.QtWidgets.QVBoxLayout = qt_api.QtWidgets.QVBoxLayout()
 
-        mapping_widgets_layout = QtWidgets.QGridLayout()
+        mapping_widgets_layout = qt_api.QtWidgets.QGridLayout()
 
-        id_select_label: QtWidgets.QLabel
-        id_select_label = QtWidgets.QLabel(
+        id_select_label: qt_api.QtWidgets.QLabel
+        id_select_label = qt_api.QtWidgets.QLabel(
             qapp.tr("Match with catalogue:")
         )
 
-        self.id_combo_box: QtWidgets.QComboBox
-        self.id_combo_box = QtWidgets.QComboBox()
+        self.id_combo_box: qt_api.QtWidgets.QComboBox
+        self.id_combo_box = qt_api.QtWidgets.QComboBox()
 
-        z_select_label: QtWidgets.QLabel
-        z_select_label = QtWidgets.QLabel(
+        z_select_label: qt_api.QtWidgets.QLabel
+        z_select_label = qt_api.QtWidgets.QLabel(
             qapp.tr("Get redshift from column:")
         )
 
-        self.z_combo_box: QtWidgets.QComboBox
-        self.z_combo_box = QtWidgets.QComboBox()
+        self.z_combo_box: qt_api.QtWidgets.QComboBox
+        self.z_combo_box = qt_api.QtWidgets.QComboBox()
 
-        qf_select_label: QtWidgets.QLabel
-        qf_select_label = QtWidgets.QLabel(
+        qf_select_label: qt_api.QtWidgets.QLabel
+        qf_select_label = qt_api.QtWidgets.QLabel(
             qapp.tr("Quality flag (optional):")
         )
 
-        self.qf_combo_box: QtWidgets.QComboBox
-        self.qf_combo_box = QtWidgets.QComboBox()
+        self.qf_combo_box: qt_api.QtWidgets.QComboBox
+        self.qf_combo_box = qt_api.QtWidgets.QComboBox()
 
         mapping_widgets_layout.addWidget(id_select_label)
         mapping_widgets_layout.addWidget(self.id_combo_box)
@@ -799,100 +772,100 @@ class ImportZcatDialog(QtWidgets.QDialog):
 
     def get_mapping(self) -> Tuple[str, str, Union[str, None]]:
         id_col = str(
-            self.id_combo_box.currentData(QtCore.Qt.ItemDataRole.UserRole)
+            self.id_combo_box.currentData(qt_api.QtCore.Qt.ItemDataRole.UserRole)
         )
         z_col = str(
-            self.z_combo_box.currentData(QtCore.Qt.ItemDataRole.UserRole)
+            self.z_combo_box.currentData(qt_api.QtCore.Qt.ItemDataRole.UserRole)
         )
 
-        qf_col = self.qf_combo_box.currentData(QtCore.Qt.ItemDataRole.UserRole)
+        qf_col = self.qf_combo_box.currentData(qt_api.QtCore.Qt.ItemDataRole.UserRole)
         if qf_col is not None:
             qf_col = str(qf_col)
 
         return id_col, z_col, qf_col
 
 
-class MainWindow(QtWidgets.QMainWindow):
+class MainWindow(qt_api.QtWidgets.QMainWindow):
     """Class definition for the QMainWindow created with the designer."""
 
     # actions
-    action_about: QtGui.QAction
-    action_import_spectra: QtGui.QAction
-    action_zoom_in: QtGui.QAction
-    action_zoom_out: QtGui.QAction
-    action_zoom_fit: QtGui.QAction
-    action_save_project_as: QtGui.QAction
-    action_save_project: QtGui.QAction
-    action_open_project: QtGui.QAction
-    action_new_project: QtGui.QAction
+    action_about: qt_api.QtGui.QAction
+    action_import_spectra: qt_api.QtGui.QAction
+    action_zoom_in: qt_api.QtGui.QAction
+    action_zoom_out: qt_api.QtGui.QAction
+    action_zoom_fit: qt_api.QtGui.QAction
+    action_save_project_as: qt_api.QtGui.QAction
+    action_save_project: qt_api.QtGui.QAction
+    action_open_project: qt_api.QtGui.QAction
+    action_new_project: qt_api.QtGui.QAction
 
     # Widgets
-    add_line_button: QtWidgets.QPushButton
-    container_tab_var: QtWidgets.QWidget
-    container_tab_wd: QtWidgets.QWidget
-    container_tab_sky: QtWidgets.QWidget
-    delete_line_button: QtWidgets.QPushButton
-    delete_lines_button: QtWidgets.QPushButton
-    export_zcat_button: QtWidgets.QPushButton
-    flux_group_box: QtWidgets.QGroupBox
-    flux_widget_layout: QtWidgets.QHBoxLayout
-    import_zcat_button: QtWidgets.QPushButton
-    info_group_box: QtWidgets.QGroupBox
-    lines_auto_button: QtWidgets.QPushButton
-    lines_tol_dspinbox: QtWidgets.QDoubleSpinBox
-    lines_match_list_widget: QtWidgets.QListWidget
-    lines_table_widget: QtWidgets.QTableWidget
-    match_lines_button: QtWidgets.QPushButton
-    obj_prop_table_widget: QtWidgets.QTableWidget
-    other_charts_tab_widget: QtWidgets.QTabWidget
-    plot_group_box: QtWidgets.QGroupBox
-    qflag_combo_box: QtWidgets.QComboBox
-    red_group_box: QtWidgets.QGroupBox
-    redrock_all_radio: QtWidgets.QRadioButton
-    redrock_selected_radio: QtWidgets.QRadioButton
-    redrock_run_button: QtWidgets.QPushButton
-    redrock_text_edit: QtWidgets.QTextEdit
-    redrock_progress_bar: QtWidgets.QProgressBar
-    redrock_current_radio: QtWidgets.QRadioButton
-    remove_selected_button: QtWidgets.QPushButton
-    remove_spec_button: QtWidgets.QPushButton
-    show_lines_check_box: QtWidgets.QCheckBox
-    show_lines_combo_box: QtWidgets.QComboBox
-    single_line_combo_box: QtWidgets.QComboBox
-    sky_widget_layout: QtWidgets.QHBoxLayout
-    smoothing_dspinbox: QtWidgets.QDoubleSpinBox
-    smoothing_check_box: QtWidgets.QCheckBox
-    spec_group_box: QtWidgets.QGroupBox
-    spec_list_widget: QtWidgets.QListWidget
-    splitter_main: QtWidgets.QSplitter
-    splitter_plots: QtWidgets.QSplitter
-    toggle_all_button: QtWidgets.QPushButton
-    toggle_done_button: QtWidgets.QPushButton
-    toggle_similar_button: QtWidgets.QPushButton
-    var_widget_layout: QtWidgets.QHBoxLayout
-    wdisp_widget_layout: QtWidgets.QHBoxLayout
-    z_dspinbox: QtWidgets.QDoubleSpinBox
-    z_min_dspinbox: QtWidgets.QDoubleSpinBox
-    z_max_dspinbox: QtWidgets.QDoubleSpinBox
+    add_line_button: qt_api.QtWidgets.QPushButton
+    container_tab_var: qt_api.QtWidgets.QWidget
+    container_tab_wd: qt_api.QtWidgets.QWidget
+    container_tab_sky: qt_api.QtWidgets.QWidget
+    delete_line_button: qt_api.QtWidgets.QPushButton
+    delete_lines_button: qt_api.QtWidgets.QPushButton
+    export_zcat_button: qt_api.QtWidgets.QPushButton
+    flux_group_box: qt_api.QtWidgets.QGroupBox
+    flux_widget_layout: qt_api.QtWidgets.QHBoxLayout
+    import_zcat_button: qt_api.QtWidgets.QPushButton
+    info_group_box: qt_api.QtWidgets.QGroupBox
+    lines_auto_button: qt_api.QtWidgets.QPushButton
+    lines_tol_dspinbox: qt_api.QtWidgets.QDoubleSpinBox
+    lines_match_list_widget: qt_api.QtWidgets.QListWidget
+    lines_table_widget: qt_api.QtWidgets.QTableWidget
+    match_lines_button: qt_api.QtWidgets.QPushButton
+    obj_prop_table_widget: qt_api.QtWidgets.QTableWidget
+    other_charts_tab_widget: qt_api.QtWidgets.QTabWidget
+    plot_group_box: qt_api.QtWidgets.QGroupBox
+    qflag_combo_box: qt_api.QtWidgets.QComboBox
+    red_group_box: qt_api.QtWidgets.QGroupBox
+    redrock_all_radio: qt_api.QtWidgets.QRadioButton
+    redrock_selected_radio: qt_api.QtWidgets.QRadioButton
+    redrock_run_button: qt_api.QtWidgets.QPushButton
+    redrock_text_edit: qt_api.QtWidgets.QTextEdit
+    redrock_progress_bar: qt_api.QtWidgets.QProgressBar
+    redrock_current_radio: qt_api.QtWidgets.QRadioButton
+    remove_selected_button: qt_api.QtWidgets.QPushButton
+    remove_spec_button: qt_api.QtWidgets.QPushButton
+    show_lines_check_box: qt_api.QtWidgets.QCheckBox
+    show_lines_combo_box: qt_api.QtWidgets.QComboBox
+    single_line_combo_box: qt_api.QtWidgets.QComboBox
+    sky_widget_layout: qt_api.QtWidgets.QHBoxLayout
+    smoothing_dspinbox: qt_api.QtWidgets.QDoubleSpinBox
+    smoothing_check_box: qt_api.QtWidgets.QCheckBox
+    spec_group_box: qt_api.QtWidgets.QGroupBox
+    spec_list_widget: qt_api.QtWidgets.QListWidget
+    splitter_main: qt_api.QtWidgets.QSplitter
+    splitter_plots: qt_api.QtWidgets.QSplitter
+    toggle_all_button: qt_api.QtWidgets.QPushButton
+    toggle_done_button: qt_api.QtWidgets.QPushButton
+    toggle_similar_button: qt_api.QtWidgets.QPushButton
+    var_widget_layout: qt_api.QtWidgets.QHBoxLayout
+    wdisp_widget_layout: qt_api.QtWidgets.QHBoxLayout
+    z_dspinbox: qt_api.QtWidgets.QDoubleSpinBox
+    z_min_dspinbox: qt_api.QtWidgets.QDoubleSpinBox
+    z_max_dspinbox: qt_api.QtWidgets.QDoubleSpinBox
 
 
 class GuiApp:
     """General class for the main GUI."""
 
-    def __init__(self, qt_backend: str) -> None:
-        self.qapp: QtWidgets.QApplication = getQApp()
+    def __init__(self) -> None:
+        self.qapp: qt_api.QtWidgets.QApplication = get_qapp()
         self.qapp.setApplicationName("Redmost")
         self.qapp.setOrganizationName("DAddona")
         self.qapp.setOrganizationDomain(
             "github.com/mauritiusdadd/redmost"
         )
 
-        self.settings: QtCore.QSettings = QtCore.QSettings()
+        self.settings: qt_api.QtCore.QSettings = qt_api.QtCore.QSettings()
 
         self.open_spectra: Dict[uuid.UUID, Spectrum1D] = {}
         self.open_spectra_files: Dict[uuid.UUID, str] = {}
         self.open_spectra_items: Dict[
-            uuid.UUID, QtWidgets.QListWidgetItem
+            uuid.UUID, qt_api.QtWidgets.QListWidgetItem
         ] = {}
         self.current_uuid: Optional[uuid.UUID] = None
         self.object_state_dict: Dict[uuid.UUID, Any] = {}
@@ -910,21 +883,19 @@ class GuiApp:
 
         self.main_wnd: MainWindow = cast(
             MainWindow,
-            loadUiWidget(
-                "main_window.ui", qt_backend=qt_backend
-            )
+            qt_api.loadUiWidget("main_window.ui")
         )
         setattr(self.main_wnd, "closeEvent", self.closeEvent)
 
         self.main_wnd.setWindowTitle("redmost")
         self.main_wnd.setWindowIcon(
-            QtGui.QIcon(utils.get_data_file("redmost.png"))
+            qt_api.QtGui.QIcon(utils.get_data_file("redmost.png"))
         )
         self.qapp.setWindowIcon(
-            QtGui.QIcon(utils.get_data_file("redmost.png"))
+            qt_api.QtGui.QIcon(utils.get_data_file("redmost.png"))
         )
 
-        self.msgBox: QtWidgets.QMessageBox = QtWidgets.QMessageBox(
+        self.msgBox: qt_api.QtWidgets.QMessageBox = qt_api.QtWidgets.QMessageBox(
             parent=self.main_wnd
         )
 
@@ -933,10 +904,10 @@ class GuiApp:
         self.about_wnd: AboutDialog = AboutDialog()
 
         # Status Bar
-        self.mousePosLabel: QtWidgets.QLabel = QtWidgets.QLabel("")
+        self.mousePosLabel: qt_api.QtWidgets.QLabel = qt_api.QtWidgets.QLabel("")
 
         # Global cancel button
-        self.cancel_button: QtWidgets.QPushButton = QtWidgets.QPushButton()
+        self.cancel_button: qt_api.QtWidgets.QPushButton = qt_api.QtWidgets.QPushButton()
         self.cancel_button.setText("Cancel")
         self.cancel_button.hide()
         self.cancel_button.clicked.connect(
@@ -944,10 +915,10 @@ class GuiApp:
         )
 
         # Global progress bar
-        self.pbar: QtWidgets.QProgressBar = QtWidgets.QProgressBar()
+        self.pbar: qt_api.QtWidgets.QProgressBar = qt_api.QtWidgets.QProgressBar()
         self.pbar.hide()
 
-        self.statusbar: QtWidgets.QStatusBar = QtWidgets.QStatusBar()
+        self.statusbar: qt_api.QtWidgets.QStatusBar = qt_api.QtWidgets.QStatusBar()
         self.main_wnd.setStatusBar(self.statusbar)
 
         self.statusbar.addPermanentWidget(self.pbar)
@@ -1010,19 +981,19 @@ class GuiApp:
         self.flux_chart_view.master = True
         self.flux_chart_view.setObjectName("flux_chart_view")
         self.flux_chart_view.setRenderHint(
-            QtGui.QPainter.RenderHint.Antialiasing
+            qt_api.QtGui.QPainter.RenderHint.Antialiasing
         )
         self.flux_chart_view.setHorizontalScrollBarPolicy(
-            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            qt_api.QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
         self.flux_chart_view.setVerticalScrollBarPolicy(
-            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            qt_api.QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
         self.flux_chart_view.setContentsMargins(0, 0, 0, 0)
         self.flux_chart_view.chart().setContentsMargins(0, 0, 0, 0)
         self.flux_chart_view.chart().layout().setContentsMargins(0, 0, 0, 0)
         self.flux_chart_view.setRubberBand(
-            QtCharts.QChartView.RubberBand.RectangleRubberBand
+            qt_api.QtCharts.QChartView.RubberBand.RectangleRubberBand
         )
 
         self.main_wnd.flux_widget_layout.addWidget(self.flux_chart_view)
@@ -1035,19 +1006,19 @@ class GuiApp:
         self.var_chart_view.vertical_lock = True
         self.var_chart_view.setObjectName("var_chart_view")
         self.var_chart_view.setRenderHint(
-            QtGui.QPainter.RenderHint.Antialiasing
+            qt_api.QtGui.QPainter.RenderHint.Antialiasing
         )
         self.var_chart_view.setHorizontalScrollBarPolicy(
-            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            qt_api.QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
         self.var_chart_view.setVerticalScrollBarPolicy(
-            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            qt_api.QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
         self.var_chart_view.setContentsMargins(0, 0, 0, 0)
         self.var_chart_view.chart().setContentsMargins(0, 0, 0, 0)
         self.var_chart_view.chart().layout().setContentsMargins(0, 0, 0, 0)
         self.var_chart_view.setRubberBand(
-            QtCharts.QChartView.RubberBand.NoRubberBand
+            qt_api.QtCharts.QChartView.RubberBand.NoRubberBand
         )
         self.main_wnd.var_widget_layout.addWidget(self.var_chart_view)
 
@@ -1059,19 +1030,19 @@ class GuiApp:
         self.wdisp_chart_view.vertical_lock = True
         self.wdisp_chart_view.setObjectName("var_chart_view")
         self.wdisp_chart_view.setRenderHint(
-            QtGui.QPainter.RenderHint.Antialiasing
+            qt_api.QtGui.QPainter.RenderHint.Antialiasing
         )
         self.wdisp_chart_view.setHorizontalScrollBarPolicy(
-            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            qt_api.QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
         self.wdisp_chart_view.setVerticalScrollBarPolicy(
-            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            qt_api.QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
         self.wdisp_chart_view.setContentsMargins(0, 0, 0, 0)
         self.wdisp_chart_view.chart().setContentsMargins(0, 0, 0, 0)
         self.wdisp_chart_view.chart().layout().setContentsMargins(0, 0, 0, 0)
         self.wdisp_chart_view.setRubberBand(
-            QtCharts.QChartView.RubberBand.NoRubberBand
+            qt_api.QtCharts.QChartView.RubberBand.NoRubberBand
         )
         self.main_wnd.wdisp_widget_layout.addWidget(self.wdisp_chart_view)
 
@@ -1083,19 +1054,19 @@ class GuiApp:
         self.sky_chart_view.vertical_lock = True
         self.sky_chart_view.setObjectName("var_chart_view")
         self.sky_chart_view.setRenderHint(
-            QtGui.QPainter.RenderHint.Antialiasing
+            qt_api.QtGui.QPainter.RenderHint.Antialiasing
         )
         self.sky_chart_view.setHorizontalScrollBarPolicy(
-            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            qt_api.QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
         self.sky_chart_view.setVerticalScrollBarPolicy(
-            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            qt_api.QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
         self.sky_chart_view.setContentsMargins(0, 0, 0, 0)
         self.sky_chart_view.chart().setContentsMargins(0, 0, 0, 0)
         self.sky_chart_view.chart().layout().setContentsMargins(0, 0, 0, 0)
         self.sky_chart_view.setRubberBand(
-            QtCharts.QChartView.RubberBand.NoRubberBand
+            qt_api.QtCharts.QChartView.RubberBand.NoRubberBand
         )
         self.main_wnd.sky_widget_layout.addWidget(self.sky_chart_view)
 
@@ -1288,14 +1259,14 @@ class GuiApp:
 
         lines_list = []
         for row_index in range(self.main_wnd.lines_table_widget.rowCount()):
-            w_item: Union[None, QtWidgets.QTableWidgetItem]
+            w_item: Union[None, qt_api.QtWidgets.QTableWidgetItem]
             w_item = self.main_wnd.lines_table_widget.item(row_index, 0)
             if w_item is None:
                 continue
 
             line_info = {
                 'row': row_index,
-                'data': float(w_item.data(QtCore.Qt.ItemDataRole.UserRole)),
+                'data': float(w_item.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)),
                 'text': w_item.text(),
                 'checked': w_item.checkState()
             }
@@ -1303,7 +1274,7 @@ class GuiApp:
 
         redshifts_form_lines = []
         for row_index in range(self.main_wnd.lines_match_list_widget.count()):
-            z_item: Union[None, QtWidgets.QListWidgetItem]
+            z_item: Union[None, qt_api.QtWidgets.QListWidgetItem]
             z_item = self.main_wnd.lines_match_list_widget.item(row_index)
             if z_item is None:
                 continue
@@ -1311,7 +1282,7 @@ class GuiApp:
             z_info = {
                 'row': row_index,
                 'text': z_item.text(),
-                'data': z_item.data(QtCore.Qt.ItemDataRole.UserRole)
+                'data': z_item.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
             }
             redshifts_form_lines.append(z_info)
 
@@ -1328,15 +1299,15 @@ class GuiApp:
         self.global_state = GlobalState.READY
 
     def _update_spec_item_qf(self, item_uuid: uuid.UUID, qf: int) -> None:
-        item: QtWidgets.QListWidgetItem = self.open_spectra_items[item_uuid]
-        item.setBackground(QtGui.QColor(self.qf_color[qf]))
+        item: qt_api.QtWidgets.QListWidgetItem = self.open_spectra_items[item_uuid]
+        item.setBackground(qt_api.QtGui.QColor(self.qf_color[qf]))
 
     def _lock(self, *args, **kwargs) -> None:
         self.main_wnd.spec_group_box.setEnabled(False)
         self.main_wnd.red_group_box.setEnabled(False)
         self.main_wnd.info_group_box.setEnabled(False)
         self.flux_chart_view.setRubberBand(
-            QtCharts.QChartView.RubberBand.NoRubberBand
+            qt_api.QtCharts.QChartView.RubberBand.NoRubberBand
         )
 
     def _restore_object_state(self, obj_uuid: uuid.UUID) -> None:
@@ -1362,26 +1333,26 @@ class GuiApp:
         lines = old_state['lines']['list']
         self.main_wnd.lines_table_widget.setRowCount(len(lines))
         for line_info in lines:
-            w_item = QtWidgets.QTableWidgetItem(line_info['text'])
-            w_item.setData(QtCore.Qt.ItemDataRole.UserRole, line_info['data'])
+            w_item = qt_api.QtWidgets.QTableWidgetItem(line_info['text'])
+            w_item.setData(qt_api.QtCore.Qt.ItemDataRole.UserRole, line_info['data'])
             w_item.setCheckState(line_info['checked'])
             w_item.setFlags(
-                QtCore.Qt.ItemFlag.ItemIsSelectable |
-                QtCore.Qt.ItemFlag.ItemIsEnabled |
-                QtCore.Qt.ItemFlag.ItemIsUserCheckable
+                qt_api.QtCore.Qt.ItemFlag.ItemIsSelectable |
+                qt_api.QtCore.Qt.ItemFlag.ItemIsEnabled |
+                qt_api.QtCore.Qt.ItemFlag.ItemIsUserCheckable
             )
 
-            r_item = QtWidgets.QTableWidgetItem("")
+            r_item = qt_api.QtWidgets.QTableWidgetItem("")
             r_item.setFlags(
-                QtCore.Qt.ItemFlag.ItemIsSelectable |
-                QtCore.Qt.ItemFlag.ItemIsEnabled
+                qt_api.QtCore.Qt.ItemFlag.ItemIsSelectable |
+                qt_api.QtCore.Qt.ItemFlag.ItemIsEnabled
             )
-            r_item.setData(QtCore.Qt.ItemDataRole.UserRole, 0.0)
+            r_item.setData(qt_api.QtCore.Qt.ItemDataRole.UserRole, 0.0)
 
-            m_item = QtWidgets.QTableWidgetItem("")
+            m_item = qt_api.QtWidgets.QTableWidgetItem("")
             m_item.setFlags(
-                QtCore.Qt.ItemFlag.ItemIsSelectable |
-                QtCore.Qt.ItemFlag.ItemIsEnabled
+                qt_api.QtCore.Qt.ItemFlag.ItemIsSelectable |
+                qt_api.QtCore.Qt.ItemFlag.ItemIsEnabled
             )
 
             self.main_wnd.lines_table_widget.setItem(
@@ -1398,8 +1369,8 @@ class GuiApp:
 
         redshifts_form_lines = old_state['lines']['redshifts']
         for z_info in redshifts_form_lines:
-            z_item = QtWidgets.QListWidgetItem(z_info['text'])
-            z_item.setData(QtCore.Qt.ItemDataRole.UserRole, z_info['data'])
+            z_item = qt_api.QtWidgets.QListWidgetItem(z_info['text'])
+            z_item.setData(qt_api.QtCore.Qt.ItemDataRole.UserRole, z_info['data'])
             self.main_wnd.lines_match_list_widget.insertItem(
                 z_info['row'], z_item
             )
@@ -1431,13 +1402,13 @@ class GuiApp:
         self.main_wnd.info_group_box.setEnabled(True)
         self.main_wnd.plot_group_box.setEnabled(True)
         self.flux_chart_view.setRubberBand(
-            QtCharts.QChartView.RubberBand.RectangleRubberBand
+            qt_api.QtCharts.QChartView.RubberBand.RectangleRubberBand
         )
 
     def _updateMouseLabelFromEvent(self, *args) -> None:
         self._updateMouseLabel(args[0][0])
 
-    def _updateMouseLabel(self, mouse_pos: QtCore.QPointF) -> None:
+    def _updateMouseLabel(self, mouse_pos: qt_api.QtCore.QPointF) -> None:
         self.mousePosLabel.setText(f"\u03BB = {mouse_pos.x():.2f}")
 
     def addLine(self, wavelength: float) -> None:
@@ -1446,32 +1417,32 @@ class GuiApp:
 
         :param wavelength: The wavelength of the line.
         """
-        lam_item = QtWidgets.QTableWidgetItem(f"{wavelength:.2f} A")
+        lam_item = qt_api.QtWidgets.QTableWidgetItem(f"{wavelength:.2f} A")
         lam_item.setFlags(
-            QtCore.Qt.ItemFlag.ItemIsSelectable |
-            QtCore.Qt.ItemFlag.ItemIsEnabled |
-            QtCore.Qt.ItemFlag.ItemIsUserCheckable
+            qt_api.QtCore.Qt.ItemFlag.ItemIsSelectable |
+            qt_api.QtCore.Qt.ItemFlag.ItemIsEnabled |
+            qt_api.QtCore.Qt.ItemFlag.ItemIsUserCheckable
         )
-        lam_item.setCheckState(QtCore.Qt.CheckState.Checked)
-        lam_item.setData(QtCore.Qt.ItemDataRole.UserRole, wavelength)
+        lam_item.setCheckState(qt_api.QtCore.Qt.CheckState.Checked)
+        lam_item.setData(qt_api.QtCore.Qt.ItemDataRole.UserRole, wavelength)
 
         rest_lam = wavelength / (1 + self.main_wnd.z_dspinbox.value())
-        rest_item = QtWidgets.QTableWidgetItem(f"{rest_lam:.2f} A")
+        rest_item = qt_api.QtWidgets.QTableWidgetItem(f"{rest_lam:.2f} A")
         rest_item.setFlags(
-            QtCore.Qt.ItemFlag.ItemIsSelectable |
-            QtCore.Qt.ItemFlag.ItemIsEnabled
+            qt_api.QtCore.Qt.ItemFlag.ItemIsSelectable |
+            qt_api.QtCore.Qt.ItemFlag.ItemIsEnabled
         )
-        rest_item.setData(QtCore.Qt.ItemDataRole.UserRole, 0.0)
+        rest_item.setData(qt_api.QtCore.Qt.ItemDataRole.UserRole, 0.0)
 
         best_matches = [
             x[1]
             for x in lines.get_lines(wrange=[rest_lam - 5, rest_lam + 5])
         ]
 
-        match_item = QtWidgets.QTableWidgetItem('; '.join(best_matches))
+        match_item = qt_api.QtWidgets.QTableWidgetItem('; '.join(best_matches))
         match_item.setFlags(
-            QtCore.Qt.ItemFlag.ItemIsSelectable |
-            QtCore.Qt.ItemFlag.ItemIsEnabled
+            qt_api.QtCore.Qt.ItemFlag.ItemIsSelectable |
+            qt_api.QtCore.Qt.ItemFlag.ItemIsEnabled
         )
 
         new_item_row: int = self.main_wnd.lines_table_widget.rowCount()
@@ -1481,7 +1452,7 @@ class GuiApp:
         self.main_wnd.lines_table_widget.setItem(new_item_row, 1, rest_item)
         self.main_wnd.lines_table_widget.setItem(new_item_row, 2, match_item)
 
-    def closeEvent(self, event: QtGui.QCloseEvent) -> None:
+    def closeEvent(self, event: qt_api.QtGui.QCloseEvent) -> None:
         self.msgBox.setText(
             self.qapp.tr(
                 "Do you want to save the current project before closing?"
@@ -1490,19 +1461,19 @@ class GuiApp:
         self.msgBox.setWindowTitle(self.qapp.tr("Closing..."))
         self.msgBox.setInformativeText("")
         self.msgBox.setDetailedText("")
-        self.msgBox.setIcon(QtWidgets.QMessageBox.Icon.Question)
+        self.msgBox.setIcon(qt_api.QtWidgets.QMessageBox.Icon.Question)
         self.msgBox.setStandardButtons(
-            QtWidgets.QMessageBox.StandardButton.Yes |
-            QtWidgets.QMessageBox.StandardButton.No |
-            QtWidgets.QMessageBox.StandardButton.Cancel
+            qt_api.QtWidgets.QMessageBox.StandardButton.Yes |
+            qt_api.QtWidgets.QMessageBox.StandardButton.No |
+            qt_api.QtWidgets.QMessageBox.StandardButton.Cancel
         )
         res = self.msgBox.exec()
 
-        if res == QtWidgets.QMessageBox.StandardButton.Yes:
+        if res == qt_api.QtWidgets.QMessageBox.StandardButton.Yes:
             # If Yes button is pressed, then accept the event only if the
             # project is correctly saved
             event.setAccepted(self.doSaveProject())
-        elif res == QtWidgets.QMessageBox.StandardButton.No:
+        elif res == qt_api.QtWidgets.QMessageBox.StandardButton.No:
             event.accept()
         else:
             # Ignore the close event if Cancel button is pressed
@@ -1557,7 +1528,7 @@ class GuiApp:
 
     def currentSpecItemChanged(
         self,
-        new_item: Optional[QtWidgets.QListWidgetItem],
+        new_item: Optional[qt_api.QtWidgets.QListWidgetItem],
         *args: Any,
         **kwargs: Any
     ) -> None:
@@ -1578,7 +1549,7 @@ class GuiApp:
         self._unlock()
 
         spec_uuid: uuid.UUID = new_item.data(
-            QtCore.Qt.ItemDataRole.UserRole
+            qt_api.QtCore.Qt.ItemDataRole.UserRole
         )
 
         self.showObjectInfo(spec_uuid)
@@ -1659,38 +1630,38 @@ class GuiApp:
         flux_chart.addSeries(flux_series)
 
         if not flux_chart.axes():
-            flux_axis_x = QtCharts.QValueAxis()
-            flux_axis_y = QtCharts.QValueAxis()
-            var_axis_x = QtCharts.QValueAxis()
-            var_axis_y = QtCharts.QValueAxis()
-            wd_axis_x = QtCharts.QValueAxis()
-            wd_axis_y = QtCharts.QValueAxis()
-            sky_axis_x = QtCharts.QValueAxis()
-            sky_axis_y = QtCharts.QValueAxis()
+            flux_axis_x = qt_api.QtCharts.QValueAxis()
+            flux_axis_y = qt_api.QtCharts.QValueAxis()
+            var_axis_x = qt_api.QtCharts.QValueAxis()
+            var_axis_y = qt_api.QtCharts.QValueAxis()
+            wd_axis_x = qt_api.QtCharts.QValueAxis()
+            wd_axis_y = qt_api.QtCharts.QValueAxis()
+            sky_axis_x = qt_api.QtCharts.QValueAxis()
+            sky_axis_y = qt_api.QtCharts.QValueAxis()
 
             flux_chart.addAxis(
-                flux_axis_x, QtCore.Qt.AlignmentFlag.AlignBottom
+                flux_axis_x, qt_api.QtCore.Qt.AlignmentFlag.AlignBottom
             )
             flux_chart.addAxis(
-                flux_axis_y, QtCore.Qt.AlignmentFlag.AlignLeft
+                flux_axis_y, qt_api.QtCore.Qt.AlignmentFlag.AlignLeft
             )
             var_chart.addAxis(
-                var_axis_x, QtCore.Qt.AlignmentFlag.AlignBottom
+                var_axis_x, qt_api.QtCore.Qt.AlignmentFlag.AlignBottom
             )
             var_chart.addAxis(
-                var_axis_y, QtCore.Qt.AlignmentFlag.AlignLeft
+                var_axis_y, qt_api.QtCore.Qt.AlignmentFlag.AlignLeft
             )
             wd_chart.addAxis(
-                wd_axis_x, QtCore.Qt.AlignmentFlag.AlignBottom
+                wd_axis_x, qt_api.QtCore.Qt.AlignmentFlag.AlignBottom
             )
             wd_chart.addAxis(
-                wd_axis_y, QtCore.Qt.AlignmentFlag.AlignLeft
+                wd_axis_y, qt_api.QtCore.Qt.AlignmentFlag.AlignLeft
             )
             sky_chart.addAxis(
-                sky_axis_x, QtCore.Qt.AlignmentFlag.AlignBottom
+                sky_axis_x, qt_api.QtCore.Qt.AlignmentFlag.AlignBottom
             )
             sky_chart.addAxis(
-                sky_axis_y, QtCore.Qt.AlignmentFlag.AlignLeft
+                sky_axis_y, qt_api.QtCore.Qt.AlignmentFlag.AlignLeft
             )
         else:
             flux_axis_x = flux_chart.axes()[0]
@@ -1713,7 +1684,7 @@ class GuiApp:
         flux_series.attachAxis(flux_axis_y)
 
         smoothing_check_state = self.main_wnd.smoothing_check_box.checkState()
-        if smoothing_check_state == QtCore.Qt.CheckState.Checked:
+        if smoothing_check_state == qt_api.QtCore.Qt.CheckState.Checked:
             smoothing_factor = self.main_wnd.smoothing_dspinbox.value()
 
             flux_series.setOpacity(0.2)
@@ -1723,8 +1694,8 @@ class GuiApp:
                 wav, smoothed_flux, self.qapp.tr("Smoothed flux")
             )
 
-            pen: QtGui.QPen = smoothed_flux_series.pen()
-            pen.setColor(QtGui.QColor("orange"))
+            pen: qt_api.QtGui.QPen = smoothed_flux_series.pen()
+            pen.setColor(qt_api.QtGui.QColor("orange"))
             pen.setWidth(2)
             smoothed_flux_series.setPen(pen)
 
@@ -1810,7 +1781,7 @@ class GuiApp:
         self._lock()
         self.main_wnd.spec_group_box.setEnabled(False)
         self.global_state = GlobalState.SELECT_LINE_MANUAL
-        self.qapp.setOverrideCursor(QtCore.Qt.CursorShape.CrossCursor)
+        self.qapp.setOverrideCursor(qt_api.QtCore.Qt.CursorShape.CrossCursor)
 
     def doDeleteAllLines(self, *args: Any, **kwargs: Any) -> None:
         """Delete all identified lines."""
@@ -1827,7 +1798,7 @@ class GuiApp:
         )
 
     def doExportZcat(self, *args, **kwargs) -> None:
-        open_list = QtWidgets.QFileDialog.getSaveFileName(
+        open_list = qt_api.QtWidgets.QFileDialog.getSaveFileName(
             self.main_wnd,
             self.qapp.tr("Export redshift catalogue to file"),
             './zcat.fits',
@@ -1852,10 +1823,10 @@ class GuiApp:
             self.msgBox.setInformativeText('')
             self.msgBox.setDetailedText(str(exc))
             self.msgBox.setIcon(
-                QtWidgets.QMessageBox.Icon.Critical
+                qt_api.QtWidgets.QMessageBox.Icon.Critical
             )
             self.msgBox.setStandardButtons(
-                QtWidgets.QMessageBox.StandardButton.Ok
+                qt_api.QtWidgets.QMessageBox.StandardButton.Ok
             )
             self.msgBox.exec()
         else:
@@ -1892,14 +1863,14 @@ class GuiApp:
         self.main_wnd.lines_table_widget.setRowCount(0)
         self.main_wnd.lines_table_widget.setRowCount(len(my_lines))
         for j, (k, w, l, h) in enumerate(my_lines):
-            new_item = QtWidgets.QTableWidgetItem(f"{w:.2f} A")
+            new_item = qt_api.QtWidgets.QTableWidgetItem(f"{w:.2f} A")
             new_item.setFlags(
-                QtCore.Qt.ItemFlag.ItemIsSelectable |
-                QtCore.Qt.ItemFlag.ItemIsEnabled |
-                QtCore.Qt.ItemFlag.ItemIsUserCheckable
+                qt_api.QtCore.Qt.ItemFlag.ItemIsSelectable |
+                qt_api.QtCore.Qt.ItemFlag.ItemIsEnabled |
+                qt_api.QtCore.Qt.ItemFlag.ItemIsUserCheckable
             )
-            new_item.setData(QtCore.Qt.ItemDataRole.UserRole, w)
-            new_item.setCheckState(QtCore.Qt.CheckState.Checked)
+            new_item.setData(qt_api.QtCore.Qt.ItemDataRole.UserRole, w)
+            new_item.setCheckState(qt_api.QtCore.Qt.CheckState.Checked)
             self.main_wnd.lines_table_widget.setItem(j, 0, new_item)
 
     def doImportZcat(self, *args, **kwargs) -> str:
@@ -1910,7 +1881,7 @@ class GuiApp:
         :param kwargs: A placeholder
         :return: THe path of the catalogue file.
         """
-        catalogue_file, _ = QtWidgets.QFileDialog.getOpenFileName(
+        catalogue_file, _ = qt_api.QtWidgets.QFileDialog.getOpenFileName(
             self.main_wnd,
             self.qapp.tr("Import a zcat"),
             '.',
@@ -1941,10 +1912,10 @@ class GuiApp:
             self.msgBox.setInformativeText('')
             self.msgBox.setDetailedText(str(exc))
             self.msgBox.setIcon(
-                QtWidgets.QMessageBox.Icon.Critical
+                qt_api.QtWidgets.QMessageBox.Icon.Critical
             )
             self.msgBox.setStandardButtons(
-                QtWidgets.QMessageBox.StandardButton.Ok
+                qt_api.QtWidgets.QMessageBox.StandardButton.Ok
             )
             self.msgBox.exec()
             return
@@ -1954,7 +1925,7 @@ class GuiApp:
 
     def doImportSpectra(self,  *args: Any, **kwargs: Any) -> None:
         """Use QFileDialog to get spectra files."""
-        file_list, files_type = QtWidgets.QFileDialog.getOpenFileNames(
+        file_list, files_type = qt_api.QtWidgets.QFileDialog.getOpenFileNames(
             self.main_wnd,
             self.qapp.tr("Import Spectra"),
             '.',
@@ -1997,10 +1968,10 @@ class GuiApp:
                 exception_tracker[item_uuid] = (file, str(exc))
                 continue
 
-            new_item = QtWidgets.QListWidgetItem(os.path.basename(file))
-            new_item.setCheckState(QtCore.Qt.CheckState.Checked)
+            new_item = qt_api.QtWidgets.QListWidgetItem(os.path.basename(file))
+            new_item.setCheckState(qt_api.QtCore.Qt.CheckState.Checked)
             new_item.setToolTip(file)
-            new_item.setData(QtCore.Qt.ItemDataRole.UserRole, item_uuid)
+            new_item.setData(qt_api.QtCore.Qt.ItemDataRole.UserRole, item_uuid)
 
             info_dict: Dict[str, Any] = {
                 'redshift': None,
@@ -2042,9 +2013,9 @@ class GuiApp:
                     ]
                 )
             )
-            self.msgBox.setIcon(QtWidgets.QMessageBox.Icon.Critical)
+            self.msgBox.setIcon(qt_api.QtWidgets.QMessageBox.Icon.Critical)
             self.msgBox.setStandardButtons(
-                QtWidgets.QMessageBox.StandardButton.Ok
+                qt_api.QtWidgets.QMessageBox.StandardButton.Ok
             )
             self.msgBox.exec()
 
@@ -2052,7 +2023,7 @@ class GuiApp:
         self.newProject()
 
     def doOpenProject(self, *args, **kwargs) -> bool:
-        proj_file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+        proj_file_path, _ = qt_api.QtWidgets.QFileDialog.getOpenFileName(
             self.main_wnd,
             self.qapp.tr("Load a project from file"),
             '.',
@@ -2079,10 +2050,10 @@ class GuiApp:
             self.msgBox.setInformativeText('')
             self.msgBox.setDetailedText(str(exc))
             self.msgBox.setIcon(
-                QtWidgets.QMessageBox.Icon.Critical
+                qt_api.QtWidgets.QMessageBox.Icon.Critical
             )
             self.msgBox.setStandardButtons(
-                QtWidgets.QMessageBox.StandardButton.Ok
+                qt_api.QtWidgets.QMessageBox.StandardButton.Ok
             )
             self.msgBox.exec()
             return False
@@ -2092,8 +2063,8 @@ class GuiApp:
 
     def doRedshiftFromLines(self, *args: Any, **kwargs: Any) -> None:
         """Compute the redshift by matching identified lines."""
-        line_table: QtWidgets.QTableWidget = self.main_wnd.lines_table_widget
-        z_list: QtWidgets.QListWidget = self.main_wnd.lines_match_list_widget
+        line_table: qt_api.QtWidgets.QTableWidget = self.main_wnd.lines_table_widget
+        z_list: qt_api.QtWidgets.QListWidget = self.main_wnd.lines_match_list_widget
         tol: float = self.main_wnd.lines_tol_dspinbox.value()
         z_min: float = self.main_wnd.z_min_dspinbox.value()
         z_max: float = self.main_wnd.z_max_dspinbox.value()
@@ -2105,11 +2076,11 @@ class GuiApp:
             item = line_table.item(row_index, 0)
             if item is None:
                 continue
-            elif item.checkState() != QtCore.Qt.CheckState.Checked:
+            elif item.checkState() != qt_api.QtCore.Qt.CheckState.Checked:
                 # Ignore lines that are not selected
                 continue
 
-            lines_lam.append(float(item.data(QtCore.Qt.ItemDataRole.UserRole)))
+            lines_lam.append(float(item.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)))
 
         res = lines.get_redshift_from_lines(
             lines_lam, z_min=z_min, z_max=z_max, tol=tol
@@ -2120,8 +2091,8 @@ class GuiApp:
 
         z_list.clear()
         for z, prob in zip(res[0], res[1]):
-            new_z_item = QtWidgets.QListWidgetItem(f"z={z:.4f} (p={prob:.4f})")
-            new_z_item.setData(QtCore.Qt.ItemDataRole.UserRole, (z, prob))
+            new_z_item = qt_api.QtWidgets.QListWidgetItem(f"z={z:.4f} (p={prob:.4f})")
+            new_z_item.setData(qt_api.QtCore.Qt.ItemDataRole.UserRole, (z, prob))
             z_list.addItem(new_z_item)
 
     def doRemoveCurrentSpecItems(self) -> None:
@@ -2133,7 +2104,7 @@ class GuiApp:
         if item is None:
             return
 
-        item_uuid = item.data(QtCore.Qt.ItemDataRole.UserRole)
+        item_uuid = item.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
         self.main_wnd.spec_list_widget.takeItem(current_row)
         self.open_spectra_items.pop(item_uuid)
         self.open_spectra_files.pop(item_uuid)
@@ -2157,10 +2128,10 @@ class GuiApp:
 
             if item is None:
                 continue
-            elif item.checkState() != QtCore.Qt.CheckState.Checked:
+            elif item.checkState() != qt_api.QtCore.Qt.CheckState.Checked:
                 continue
 
-            item_uuid = item.data(QtCore.Qt.ItemDataRole.UserRole)
+            item_uuid = item.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
             self.main_wnd.spec_list_widget.takeItem(row - 1)
             self.open_spectra_items.pop(item_uuid)
             self.open_spectra_files.pop(item_uuid)
@@ -2190,7 +2161,7 @@ class GuiApp:
         :return: True if the project is saved correctly, False otherwise.
         """
         if (dest is None) or (not os.path.exists(str(dest))):
-            dest_file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            dest_file_path, _ = qt_api.QtWidgets.QFileDialog.getSaveFileName(
                 self.main_wnd,
                 self.qapp.tr("Save project to file"),
                 '.',
@@ -2217,10 +2188,10 @@ class GuiApp:
             self.msgBox.setInformativeText('')
             self.msgBox.setDetailedText(str(exc))
             self.msgBox.setIcon(
-                QtWidgets.QMessageBox.Icon.Critical
+                qt_api.QtWidgets.QMessageBox.Icon.Critical
             )
             self.msgBox.setStandardButtons(
-                QtWidgets.QMessageBox.StandardButton.Ok
+                qt_api.QtWidgets.QMessageBox.StandardButton.Ok
             )
             self.msgBox.exec()
             return False
@@ -2243,7 +2214,7 @@ class GuiApp:
             for_rr = self.open_spectra
         elif self.main_wnd.redrock_selected_radio.isChecked():
 
-            item: Union[None, QtWidgets.QListWidgetItem]
+            item: Union[None, qt_api.QtWidgets.QListWidgetItem]
             for row in range(self.main_wnd.spec_list_widget.count()):
                 item = self.main_wnd.spec_list_widget.item(row)
 
@@ -2251,8 +2222,8 @@ class GuiApp:
                     # should never happen!
                     continue
 
-                if item.checkState() == QtCore.Qt.CheckState.Checked:
-                    item_uuid = item.data(QtCore.Qt.ItemDataRole.UserRole)
+                if item.checkState() == qt_api.QtCore.Qt.CheckState.Checked:
+                    item_uuid = item.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
                     for_rr[item_uuid] = self.open_spectra[item_uuid]
         else:
             if self.current_uuid is None:
@@ -2263,13 +2234,13 @@ class GuiApp:
 
     def doToggleDone(self) -> None:
         check_state = None
-        item: Union[QtWidgets.QListWidgetItem, None]
+        item: Union[qt_api.QtWidgets.QListWidgetItem, None]
         for row in range(self.main_wnd.spec_list_widget.count()):
             item = self.main_wnd.spec_list_widget.item(row)
             if item is None:
                 continue
 
-            item_uuid = item.data(QtCore.Qt.ItemDataRole.UserRole)
+            item_uuid = item.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
 
             if item_uuid not in self.object_state_dict:
                 continue
@@ -2278,10 +2249,10 @@ class GuiApp:
                 continue
 
             if check_state is None:
-                if item.checkState() == QtCore.Qt.CheckState.Checked:
-                    check_state = QtCore.Qt.CheckState.Unchecked
+                if item.checkState() == qt_api.QtCore.Qt.CheckState.Checked:
+                    check_state = qt_api.QtCore.Qt.CheckState.Unchecked
                 else:
-                    check_state = QtCore.Qt.CheckState.Checked
+                    check_state = qt_api.QtCore.Qt.CheckState.Checked
 
             item.setCheckState(check_state)
 
@@ -2295,12 +2266,12 @@ class GuiApp:
         if item is None:
             return
 
-        if item.checkState() == QtCore.Qt.CheckState.Checked:
-            ref_check_state = QtCore.Qt.CheckState.Unchecked
+        if item.checkState() == qt_api.QtCore.Qt.CheckState.Checked:
+            ref_check_state = qt_api.QtCore.Qt.CheckState.Unchecked
         else:
-            ref_check_state = QtCore.Qt.CheckState.Checked
+            ref_check_state = qt_api.QtCore.Qt.CheckState.Checked
 
-        other_item: Union[None, QtWidgets.QListWidgetItem]
+        other_item: Union[None, qt_api.QtWidgets.QListWidgetItem]
         for row in range(self.main_wnd.spec_list_widget.count()):
             other_item = self.main_wnd.spec_list_widget.item(row)
             if other_item is None:
@@ -2370,10 +2341,10 @@ class GuiApp:
             self.msgBox.setInformativeText('')
             self.msgBox.setDetailedText(str(exc))
             self.msgBox.setIcon(
-                QtWidgets.QMessageBox.Icon.Critical
+                qt_api.QtWidgets.QMessageBox.Icon.Critical
             )
             self.msgBox.setStandardButtons(
-                QtWidgets.QMessageBox.StandardButton.Ok
+                qt_api.QtWidgets.QMessageBox.StandardButton.Ok
             )
             self.msgBox.exec()
 
@@ -2442,8 +2413,8 @@ class GuiApp:
 
     def mousePressedFlux(self, args) -> None:
         """Handle mouse button pressed events."""
-        data_pos: QtCore.QPointF = args[0]
-        event: QtGui.QMouseEvent = args[1]
+        data_pos: qt_api.QtCore.QPointF = args[0]
+        event: qt_api.QtGui.QMouseEvent = args[1]
         if self.global_state == GlobalState.SELECT_LINE_MANUAL:
             self.addLine(data_pos.x())
             self.global_state = GlobalState.READY
@@ -2495,7 +2466,7 @@ class GuiApp:
         except Exception:
             current_uuid = None
 
-        current_spec_list_item: Optional[QtWidgets.QListWidgetItem] = None
+        current_spec_list_item: Optional[qt_api.QtWidgets.QListWidgetItem] = None
         for j, file_info in enumerate(serialized_dict['open_files']):
             self.pbar.setValue(j + 1)
             self.statusbar.showMessage(
@@ -2512,10 +2483,10 @@ class GuiApp:
                 exception_tracker[item_uuid] = (file_info['path'], str(exc))
                 continue
 
-            new_item = QtWidgets.QListWidgetItem(file_info['text'])
-            new_item.setCheckState(QtCore.Qt.CheckState(file_info['checked']))
+            new_item = qt_api.QtWidgets.QListWidgetItem(file_info['text'])
+            new_item.setCheckState(qt_api.QtCore.Qt.CheckState(file_info['checked']))
             new_item.setToolTip(file_info['path'])
-            new_item.setData(QtCore.Qt.ItemDataRole.UserRole, item_uuid)
+            new_item.setData(qt_api.QtCore.Qt.ItemDataRole.UserRole, item_uuid)
 
             if item_uuid == current_uuid:
                 current_spec_list_item = new_item
@@ -2537,7 +2508,7 @@ class GuiApp:
                     'row': int(line_info['row']),
                     'data': float(line_info['data']),
                     'text': str(line_info['text']),
-                    'checked': QtCore.Qt.CheckState(line_info['checked'])
+                    'checked': qt_api.QtCore.Qt.CheckState(line_info['checked'])
                 })
 
             z_list = []
@@ -2599,9 +2570,9 @@ class GuiApp:
                     ]
                 )
             )
-            self.msgBox.setIcon(QtWidgets.QMessageBox.Icon.Critical)
+            self.msgBox.setIcon(qt_api.QtWidgets.QMessageBox.Icon.Critical)
             self.msgBox.setStandardButtons(
-                QtWidgets.QMessageBox.StandardButton.Ok
+                qt_api.QtWidgets.QMessageBox.StandardButton.Ok
             )
             self.msgBox.exec()
 
@@ -2622,13 +2593,13 @@ class GuiApp:
 
         # Serialize program state for json dumping
         serialized_open_file_list = []
-        item: Union[QtWidgets.QListWidgetItem, None]
+        item: Union[qt_api.QtWidgets.QListWidgetItem, None]
         for k in range(self.main_wnd.spec_list_widget.count()):
             item = self.main_wnd.spec_list_widget.item(k)
             if item is None:
                 continue
             item_uuid: uuid.UUID = item.data(
-                QtCore.Qt.ItemDataRole.UserRole
+                qt_api.QtCore.Qt.ItemDataRole.UserRole
             )
 
             file_info = {
@@ -2698,9 +2669,9 @@ class GuiApp:
 
         self.flux_chart_view.setRedshift(redshift=redshift)
 
-        item_col_0: Union[QtWidgets.QTableWidgetItem, None]
-        item_col_1: Union[QtWidgets.QTableWidgetItem, None]
-        item_col_2: Union[QtWidgets.QTableWidgetItem, None]
+        item_col_0: Union[qt_api.QtWidgets.QTableWidgetItem, None]
+        item_col_1: Union[qt_api.QtWidgets.QTableWidgetItem, None]
+        item_col_2: Union[qt_api.QtWidgets.QTableWidgetItem, None]
         for j in range(self.main_wnd.lines_table_widget.rowCount()):
             item_col_0 = self.main_wnd.lines_table_widget.item(j, 0)
             item_col_1 = self.main_wnd.lines_table_widget.item(j, 1)
@@ -2709,7 +2680,7 @@ class GuiApp:
             if item_col_0 is None or item_col_1 is None or item_col_2 is None:
                 continue
 
-            line_lam: float = item_col_0.data(QtCore.Qt.ItemDataRole.UserRole)
+            line_lam: float = item_col_0.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
             rest_lam = line_lam / (1 + redshift)
             item_col_1.setText(f"{rest_lam:.2f} A")
 
@@ -2724,14 +2695,14 @@ class GuiApp:
         if row < 0:
             return
 
-        item: Union[QtWidgets.QListWidgetItem, None]
+        item: Union[qt_api.QtWidgets.QListWidgetItem, None]
         item = self.main_wnd.lines_match_list_widget.item(row)
         if item is None:
             return
 
         try:
             self.main_wnd.z_dspinbox.setValue(
-                item.data(QtCore.Qt.ItemDataRole.UserRole)[0]
+                item.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)[0]
             )
         except (IndexError, TypeError):
             return
@@ -2744,15 +2715,15 @@ class GuiApp:
         if lines_tbl_row < 0:
             return
 
-        w_item: Union[None, QtWidgets.QTableWidgetItem]
+        w_item: Union[None, qt_api.QtWidgets.QTableWidgetItem]
         w_item = self.main_wnd.lines_table_widget.item(lines_tbl_row, 0)
         if w_item is None:
             return
 
-        obs_lam = w_item.data(QtCore.Qt.ItemDataRole.UserRole)
+        obs_lam = w_item.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
 
         rest_lam = self.main_wnd.single_line_combo_box.itemData(
-            row, QtCore.Qt.ItemDataRole.UserRole
+            row, qt_api.QtCore.Qt.ItemDataRole.UserRole
         )
 
         redshift = (obs_lam/rest_lam) - 1
@@ -2789,20 +2760,20 @@ class GuiApp:
         )
         for j, (key, val, comment) in enumerate(header.cards):
 
-            val_item: QtWidgets.QTableWidgetItem = QtWidgets.QTableWidgetItem(
+            val_item: qt_api.QtWidgets.QTableWidgetItem = qt_api.QtWidgets.QTableWidgetItem(
                 str(val)
             )
             val_item.setFlags(
-                QtCore.Qt.ItemFlag.ItemIsSelectable |
-                QtCore.Qt.ItemFlag.ItemIsEnabled
+                qt_api.QtCore.Qt.ItemFlag.ItemIsSelectable |
+                qt_api.QtCore.Qt.ItemFlag.ItemIsEnabled
             )
 
-            com_item: QtWidgets.QTableWidgetItem = QtWidgets.QTableWidgetItem(
+            com_item: qt_api.QtWidgets.QTableWidgetItem = qt_api.QtWidgets.QTableWidgetItem(
                 str(comment)
             )
             com_item.setFlags(
-                QtCore.Qt.ItemFlag.ItemIsSelectable |
-                QtCore.Qt.ItemFlag.ItemIsEnabled
+                qt_api.QtCore.Qt.ItemFlag.ItemIsSelectable |
+                qt_api.QtCore.Qt.ItemFlag.ItemIsEnabled
             )
 
             self.main_wnd.obj_prop_table_widget.setItem(j, 0, val_item)
@@ -2810,30 +2781,30 @@ class GuiApp:
 
     def toggleSimilarSpecItems(
         self,
-        item: Optional[QtWidgets.QListWidgetItem]
+        item: Optional[qt_api.QtWidgets.QListWidgetItem]
     ) -> None:
         if item is None:
             return
 
-        ref_uuid = item.data(QtCore.Qt.ItemDataRole.UserRole)
+        ref_uuid = item.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
         if ref_uuid in self.object_state_dict:
             ref_qf = self.object_state_dict[ref_uuid]['quality_flag']
         else:
             ref_qf = 0
 
-        if item.checkState() == QtCore.Qt.CheckState.Checked:
-            ref_check_state = QtCore.Qt.CheckState.Unchecked
+        if item.checkState() == qt_api.QtCore.Qt.CheckState.Checked:
+            ref_check_state = qt_api.QtCore.Qt.CheckState.Unchecked
         else:
-            ref_check_state = QtCore.Qt.CheckState.Checked
+            ref_check_state = qt_api.QtCore.Qt.CheckState.Checked
 
-        other_item: Union[None, QtWidgets.QListWidgetItem]
+        other_item: Union[None, qt_api.QtWidgets.QListWidgetItem]
         for row in range(self.main_wnd.spec_list_widget.count()):
             other_item = self.main_wnd.spec_list_widget.item(row)
 
             if other_item is None:
                 continue
 
-            other_uuid = other_item.data(QtCore.Qt.ItemDataRole.UserRole)
+            other_uuid = other_item.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
             if other_uuid in self.object_state_dict:
                 other_qf = self.object_state_dict[other_uuid]['quality_flag']
             else:
@@ -2855,7 +2826,7 @@ def values2series(
     x_values: Union[List[float], np.ndarray],
     y_values: Union[List[float], np.ndarray],
     name: str
-) -> QtCharts.QLineSeries:
+) -> qt_api.QtCharts.QLineSeries:
     """
     Convert point values to a QLineSeries object.
 
@@ -2864,7 +2835,7 @@ def values2series(
     :param name: The name of the series.
     :return series: The series object.
     """
-    series: QtCharts.QLineSeries = QtCharts.QLineSeries()
+    series: qt_api.QtCharts.QLineSeries = qt_api.QtCharts.QLineSeries()
     series.setName(name)
 
     for x, y in zip(x_values, y_values):
@@ -2873,47 +2844,9 @@ def values2series(
     return series
 
 
-def loadUiWidget(
-    ui_filename: str,
-    parent: Optional[QtWidgets.QWidget] = None,
-    qt_backend: Optional[str] = 'PyQt6'
-) -> QtWidgets.QMainWindow:
-    """
-    Load a UI file.
-
-    :param ui_filename: Path of the UI file to load.
-    :param parent: Parent widget. The default is None.
-    :param qt_backend: The UI backend to use. The default value is 'PyQt6'.
-    :return ui: The widget loaded from the UI file.
-
-    """
-
-    logging.debug(f"Loading UI using Qt backend '{qt_backend}'")
-    ui_file_path: str = os.path.join(
-        os.path.abspath(os.path.dirname(__file__)), 'ui',
-        ui_filename
-    )
-
-    if qt_backend == 'pyqt6':
-        ui: QtWidgets.QMainWindow = uic.loadUi(ui_file_path)
-    elif qt_backend == 'pyside6':
-        loader = QtUiTools.QUiLoader()
-        uifile = QtCore.QFile(ui_file_path)
-        uifile.open(QtCore.QIODeviceBase.OpenModeFlag.ReadOnly)
-        ui = cast(
-            QtWidgets.QMainWindow,
-            loader.load(uifile, parent)
-        )
-        uifile.close()
-    else:
-        raise NotImplementedError("No GUI backend found!")
-
-    return ui
-
-
 def main() -> None:
     """Run the main GUI application using PySide."""
-    myapp: GuiApp = GuiApp(QT_BACKEND)
+    myapp: GuiApp = GuiApp()
     myapp.run()
 
 
