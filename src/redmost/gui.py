@@ -14,7 +14,6 @@ import json
 import uuid
 from enum import Enum
 from typing import Optional, Union, Tuple, List, Dict, Callable, Any, cast
-import logging
 
 import numpy as np
 from astropy.nddata import VarianceUncertainty  # type: ignore
@@ -48,6 +47,7 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         self._last_mouse_pos: qt_api.QtCore.QPointF | None = None
         self._static_lines_list: List[Tuple[float, str, str]] = []
         self._lines_buffer_list: List[Tuple[float, str, str]] = []
+        self._mouse_lambda = Union[None, qt_api.QtCore.QPointF]
         self._lines_type: Union[str, None] = None
         self.line_colors: Dict[str, str] = {
             "absorption": "#b02000",
@@ -145,16 +145,44 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
     ) -> None:
         super().drawForeground(painter, rect)
 
-        if (not self.show_lines) or (len(self.chart().series()) == 0):
+        if len(self.chart().series()) == 0:
             return
 
         painter.save()
         plot_area: qt_api.QtCore.QRectF = self.chart().plotArea()
+        pen: qt_api.QtGui.QPen = qt_api.QtGui.QPen()
+        pen_color: qt_api.QtGui.QColor
+
+        if self._mouse_lambda is not None:
+            pen_color = qt_api.QtGui.QColor("#55555555")
+            pen.setColor(pen_color)
+            pen.setWidthF(1.5)
+            pen.setDashPattern((2,2,2,2))
+            painter.setPen(pen)
+
+            mouse_line_x = self.chart().mapToPosition(
+                qt_api.QtCore.QPointF(self._mouse_lambda, 0)
+            ).x()
+
+            if (
+                    (mouse_line_x >= plot_area.left()) and
+                    (mouse_line_x <= plot_area.right())
+            ):
+                p_line_top = qt_api.QtCore.QPointF(
+                    mouse_line_x, plot_area.top()
+                )
+                p_line_bottom = qt_api.QtCore.QPointF(
+                    mouse_line_x, plot_area.bottom()
+                )
+                painter.drawLine(p_line_bottom, p_line_top)
+
+        if not self.show_lines:
+            painter.restore()
+            return
 
         for line_lambda, line_name, line_type in self._lines_buffer_list:
-            pen: qt_api.QtGui.QPen = qt_api.QtGui.QPen()
+            pen_color = qt_api.QtGui.QColor(self.line_colors["unknown"])
 
-            pen_color: qt_api.QtGui.QColor = qt_api.QtGui.QColor(self.line_colors["unknown"])
             if ('AE' in line_type) or ('EA' in line_type):
                 pen_color = qt_api.QtGui.QColor(self.line_colors["both"])
             elif 'A' in line_type:
@@ -210,23 +238,38 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         if self._sibling_locked:
             return
 
+        try:
+            mouse_pos = event.position()
+        except AttributeError:
+            mouse_pos = event.pos()
+
         if event.buttons() & qt_api.QtCore.Qt.MouseButton.MiddleButton:
             if self._last_mouse_pos is None:
                 return
 
-            try:
-                delta = event.position() - self._last_mouse_pos
-                self._last_mouse_pos = event.position()
-            except AttributeError:
-                delta = event.pos() - self._last_mouse_pos
-                self._last_mouse_pos = event.pos()
+            delta = mouse_pos - self._last_mouse_pos
+            self._last_mouse_pos = mouse_pos
 
             self.scroll(-delta.x(), delta.y())
 
             event.accept()
 
+        data_pos = self.toSeriesPos(event)
+
+        self._mouse_lambda = data_pos.x()
+
+        self._sibling_locked = True
+        for sibling in self.siblings:
+            sibling._mouse_lambda = self._mouse_lambda
+            sibling.chart().update()
+            sibling.update()
+        self._sibling_locked = False
+
+        self.chart().update()
+        self.update()
         super().mouseMoveEvent(event)
-        self.onMouseMoveSeries.emit((self.toSeriesPos(event), event))
+
+        self.onMouseMoveSeries.emit((data_pos, event))
 
     def mousePressEvent(self, event: qt_api.QtGui.QMouseEvent, **kwargs) -> None:
         """
@@ -436,6 +479,9 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         elif not event.pixelDelta().isNull():
             delta_y = event.pixelDelta().y()
             delta_x = event.pixelDelta().x()
+        else:
+            delta_y = 0
+            delta_x = 0
 
         modifiers = qt_api.QtWidgets.QApplication.keyboardModifiers()
 
@@ -450,7 +496,6 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
                 self.zoomOut()
         else:
             self.scroll(delta_x, delta_y)
-
 
         self.onMouseWheelEvent.emit(event)
 
@@ -883,6 +928,7 @@ class GuiApp:
         self.current_uuid: Optional[uuid.UUID] = None
         self.object_state_dict: Dict[uuid.UUID, Any] = {}
         self.current_project_file_path: Optional[str] = None
+        self.current_open_dir: Optional[str] = None
 
         self.global_state: Enum = GlobalState.READY
 
@@ -1811,10 +1857,17 @@ class GuiApp:
         )
 
     def doExportZcat(self, *args, **kwargs) -> None:
+        if self.current_open_dir is not None:
+            cur_dir = self.current_open_dir
+        elif self.current_project_file_path is not None:
+            cur_dir = os.path.dirname(self.current_project_file_path)
+        else:
+            cur_dir = '.'
+
         open_list = qt_api.QtWidgets.QFileDialog.getSaveFileName(
             self.main_wnd,
             self.qapp.tr("Export redshift catalogue to file"),
-            './zcat.fits',
+            os.path.join(cur_dir, 'zcat.fits'),
             (
                 f"{self.qapp.tr('FITS table')} (*.fits *.fit);;"
                 f"{self.qapp.tr('CSV table')} (*.csv);;"
@@ -1843,6 +1896,7 @@ class GuiApp:
             )
             self.msgBox.exec()
         else:
+            self.current_open_dir = os.path.dirname(dest_file_path)
             self.statusbar.showMessage(
                 self.qapp.tr("Redshift catalogue saved")
             )
@@ -1894,10 +1948,16 @@ class GuiApp:
         :param kwargs: A placeholder
         :return: THe path of the catalogue file.
         """
+        if self.current_open_dir is not None:
+            cur_dir = self.current_open_dir
+        elif self.current_project_file_path is not None:
+            cur_dir = os.path.dirname(self.current_project_file_path)
+        else:
+            cur_dir = '.'
         catalogue_file, _ = qt_api.QtWidgets.QFileDialog.getOpenFileName(
             self.main_wnd,
             self.qapp.tr("Import a zcat"),
-            '.',
+            cur_dir,
             (
                 f"{self.qapp.tr('FITS table')} (*.fits *.fit);;"
                 f"{self.qapp.tr('CSV table')} (*.csv);;"
@@ -1933,20 +1993,29 @@ class GuiApp:
             self.msgBox.exec()
             return
 
+        self.current_open_dir = os.path.dirname(catalogue_file)
         self.zcat_mapping_dialog.setup(zcat_tbl)
         self.zcat_mapping_dialog.open()
 
     def doImportSpectra(self,  *args: Any, **kwargs: Any) -> None:
         """Use QFileDialog to get spectra files."""
+        if self.current_open_dir is not None:
+            cur_dir = self.current_open_dir
+        elif self.current_project_file_path is not None:
+            cur_dir = os.path.dirname(self.current_project_file_path)
+        else:
+            cur_dir = '.'
+
         file_list, files_type = qt_api.QtWidgets.QFileDialog.getOpenFileNames(
             self.main_wnd,
             self.qapp.tr("Import Spectra"),
-            '.',
+            cur_dir,
             (
                 f"{self.qapp.tr('FITS')} (*.fit *.fits);;"
                 f"{self.qapp.tr('ASCII')} (*.txt *.dat *.cat);;"
                 f"{self.qapp.tr('All Files')} (*.*)"
-            )
+            ),
+            f"{self.qapp.tr('FITS')} (*.fit *.fits)"
         )
 
         exception_tracker: Dict[uuid.UUID, Tuple[str, str]] = {}
@@ -1959,6 +2028,8 @@ class GuiApp:
         self.pbar.setMaximum(n_files)
         self.pbar.show()
         self.cancel_button.show()
+
+        al_least_one: bool = False
         for j, file in enumerate(file_list):
             if self.global_state == GlobalState.REUQUEST_CANCEL:
                 break
@@ -1980,6 +2051,10 @@ class GuiApp:
             except Exception as exc:
                 exception_tracker[item_uuid] = (file, str(exc))
                 continue
+            else:
+                if not al_least_one:
+                    self.current_open_dir = os.path.dirname(file)
+                    al_least_one = True
 
             new_item = qt_api.QtWidgets.QListWidgetItem(os.path.basename(file))
             new_item.setCheckState(qt_api.QtCore.Qt.CheckState.Checked)
@@ -2036,14 +2111,22 @@ class GuiApp:
         self.newProject()
 
     def doOpenProject(self, *args, **kwargs) -> bool:
+        if self.current_project_file_path is not None:
+            cur_dir = os.path.basename(self.current_project_file_path)
+        elif self.current_open_dir is not None:
+            cur_dir = self.current_open_dir
+        else:
+            cur_dir = '.'
+
         proj_file_path, _ = qt_api.QtWidgets.QFileDialog.getOpenFileName(
             self.main_wnd,
             self.qapp.tr("Load a project from file"),
-            '.',
+            cur_dir,
             (
                 f"{self.qapp.tr('Project file')} (*.json);;"
-                f"{self.qapp.tr('All files')} (*.*);;"
-            )
+                f"{self.qapp.tr('All files')} (*.*)"
+            ),
+            f"{self.qapp.tr('Project file')} (*.json)"
         )
 
         if not proj_file_path:
@@ -2174,14 +2257,22 @@ class GuiApp:
         :return: True if the project is saved correctly, False otherwise.
         """
         if (dest is None) or (not os.path.exists(str(dest))):
+            if self.current_project_file_path is not None:
+                cur_dir = self.current_project_file_path
+            elif self.current_open_dir is not None:
+                cur_dir = self.current_open_dir
+            else:
+                cur_dir = '.'
+
             dest_file_path, _ = qt_api.QtWidgets.QFileDialog.getSaveFileName(
                 self.main_wnd,
                 self.qapp.tr("Save project to file"),
-                '.',
+                cur_dir,
                 (
                     f"{self.qapp.tr('Project file')} (*.json);;"
-                    f"{self.qapp.tr('All files')} (*.*);;"
-                )
+                    f"{self.qapp.tr('All files')} (*.*)"
+                ),
+                f"{self.qapp.tr('Project file')} (*.json)"
             )
 
             if not dest_file_path:
@@ -2444,6 +2535,8 @@ class GuiApp:
         self.open_spectra = {}
         self.object_state_dict = {}
         self.current_uuid = None
+        self.current_project_file_path = None
+        self.current_open_dir = None
 
         self.main_wnd.spec_list_widget.clear()
         self.main_wnd.lines_match_list_widget.clear()

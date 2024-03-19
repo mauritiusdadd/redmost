@@ -5,8 +5,31 @@ Note: Based on https://github.com/pytest-dev/pytest-qt
 """
 import os
 import sys
-from typing import Dict, Union, Any, cast
+from typing import Dict, Union, Any
+from types import ModuleType
 from collections import namedtuple
+
+try:
+    import PyQt6
+except (ModuleNotFoundError, ImportError):
+    HAS_PYQT6 = False
+else:
+    HAS_PYQT6 = True
+
+try:
+    import PySide6
+except (ModuleNotFoundError, ImportError):
+    HAS_PYSIDE6 = False
+else:
+    HAS_PYSIDE6 = True
+
+try:
+    import PyQt5
+except (ModuleNotFoundError, ImportError):
+    HAS_PYQT5 = False
+else:
+    HAS_PYQT5 = True
+
 
 VersionTuple = namedtuple(
     typename="VersionTuple",
@@ -65,11 +88,21 @@ class QtBackend:
         self.is_pyqt: Union[None, bool] = None
         self.qt_api_name: Union[None, str] = None
 
-        self.QtCore: Union[None, Any] = None
-        self.QtGui: Union[None, Any] = None
-        self.QtTest: Union[None, Any] = None
-        self.QtWidgets: Union[None, Any] = None
-        self.QtCharts: Union[None, Any] = None
+        self.QtCore = None
+        self.QtGui = None
+        self.QtTest = None
+        self.QtWidgets = None
+        self.QtCharts = None
+
+        self.qInfo: Union[None, Any] = None
+        self.qDebug: Union[None, Any] = None
+        self.qWarning: Union[None, Any] = None
+        self.qCritical: Union[None, Any] = None
+        self.qFatal: Union[None, Any] = None
+
+        self.Signal: Union[None, Any] = None
+        self.Slot: Union[None, Any] = None
+        self.Property: Union[None, Any] = None
 
         self.set_qt_api()
 
@@ -88,12 +121,13 @@ class QtBackend:
             if _can_import(f"{backend}.QtCore"):
                 return api
         return None
+
     def _import_module(self, module_name):
         _root_module = QT_APIS[self.qt_api_name]
         m = __import__(_root_module, globals(), locals(), [module_name], 0)
         return getattr(m, module_name)
 
-    def set_qt_api(self, api = None):
+    def set_qt_api(self, api=None):
         self.qt_api_name = (
             get_qt_api_from_env()
             or api
@@ -178,7 +212,10 @@ class QtBackend:
             version = PySide6.__version__
 
             return VersionTuple(
-                "PySide6", version, self.QtCore.qVersion(), self.QtCore.__version__
+                "PySide6",
+                version,
+                self.QtCore.qVersion(),
+                self.QtCore.__version__
             )
         elif self.qt_api_name == "pyside2":
             import PySide2
@@ -186,7 +223,10 @@ class QtBackend:
             version = PySide2.__version__
 
             return VersionTuple(
-                "PySide2", version, self.QtCore.qVersion(), self.QtCore.__version__
+                "PySide2",
+                version,
+                self.QtCore.qVersion(),
+                self.QtCore.__version__
             )
         elif self.qt_api_name == "pyqt6":
             return VersionTuple(
@@ -207,11 +247,10 @@ class QtBackend:
             f"Internal error, unknown qt_api_name: {self.qt_api_name}"
         )
 
-
     def loadUiWidget(
         self,
         ui_filename: str,
-        parent = None,
+        parent=None,
     ):
         """
         Load a UI file.
@@ -231,12 +270,12 @@ class QtBackend:
             uic = self._import_module("uic")
             ui = uic.loadUi(ui_file_path)
         elif self.is_pyside:
-            QtUiTools = self._import_module("QtUiTools")
-            loader = QtUiTools.QUiLoader()
-            uifile = self.QtCore.QFile(ui_file_path)
-            uifile.open(self.QtCore.QIODeviceBase.OpenModeFlag.ReadOnly)
-            ui = loader.load(uifile, parent)
-            uifile.close()
+            uic = self._import_module("QtUiTools")
+            loader = uic.QUiLoader()
+            ui_file = self.QtCore.QFile(ui_file_path)
+            ui_file.open(self.QtCore.QIODeviceBase.OpenModeFlag.ReadOnly)
+            ui = loader.load(ui_file, parent)
+            ui_file.close()
         else:
             raise ValueError("No valid GUI backend found!")
 
