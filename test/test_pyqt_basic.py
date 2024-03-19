@@ -67,7 +67,7 @@ def handle_message_box(button_type, qtbot: QtBot, main_app: gui.GuiApp):
 @pytest.fixture
 def main_app(qtbot: QtBot) -> gui.GuiApp:
     print("Creating main window")
-    main_app = gui.GuiApp("pyqt6")
+    main_app = gui.GuiApp()
     setattr(main_app.main_wnd, "closeEvent", lambda x: None)
     qtbot.addWidget(main_app.main_wnd)
     qtbot.addWidget(main_app.about_wnd)
