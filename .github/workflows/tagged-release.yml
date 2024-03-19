@@ -29,9 +29,7 @@ jobs:
       - uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: ${{ steps.params.outputs.tag }}
-          prerelease: ${{ steps.params.outputs.prerelease }}
-          title: "Stable Build"
+          prerelease: false
           files: |
             LICENSE
             README.md
