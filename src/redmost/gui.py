@@ -155,10 +155,10 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         pen_color: qt_api.QtGui.QColor
 
         if self._mouse_lambda is not None:
-            pen_color = qt_api.QtGui.QColor("#55555555")
+            pen_color = qt_api.QtGui.QColor("#aa333333")
             pen.setColor(pen_color)
-            pen.setWidthF(1.5)
-            pen.setDashPattern((2,2,2,2))
+            pen.setWidthF(1.0)
+            pen.setDashPattern((6,6,6,6))
             painter.setPen(pen)
 
             mouse_line_x = self.chart().mapToPosition(
