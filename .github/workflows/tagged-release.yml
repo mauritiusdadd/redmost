@@ -32,7 +32,6 @@ jobs:
           automatic_release_tag: ${{ steps.params.outputs.tag }}
           prerelease: ${{ steps.params.outputs.prerelease }}
           draft: ${{ steps.params.outputs.draft }}
-          prerelease: false
           title: "Stable Build"
           files: |
             LICENSE
