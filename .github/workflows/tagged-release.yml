@@ -31,7 +31,6 @@ jobs:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: ${{ steps.params.outputs.tag }}
           prerelease: ${{ steps.params.outputs.prerelease }}
-          draft: ${{ steps.params.outputs.draft }}
           title: "Stable Build"
           files: |
             LICENSE

@@ -26,6 +26,12 @@ import redmost
 def check_updates() -> Tuple[bool, str]:
     """Check for new a version on pypi.python.org."""
 
+    try:
+        cur_ver_str = '.'.join([str(x) for x in redmost.version_tuple[:3]])
+        current_version = version.parse(cur_ver_str)
+    except Exception:
+        return False, 'none'
+
     req = request.Request(redmost.PYPI_REPO_API_URL, method='GET')
     try:
         with request.urlopen(req) as response:
@@ -41,8 +47,6 @@ def check_updates() -> Tuple[bool, str]:
         if not ver.is_prerelease:
             pypi_version = max(pypi_version, ver)
 
-    cur_ver_str = '.'.join([str(x) for x in redmost.version_tuple[:3]])
-    current_version = version.parse(cur_ver_str)
     is_outdate = current_version < pypi_version
     return is_outdate, str(pypi_version)
 
