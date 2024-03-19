@@ -47,7 +47,7 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         self._last_mouse_pos: qt_api.QtCore.QPointF | None = None
         self._static_lines_list: List[Tuple[float, str, str]] = []
         self._lines_buffer_list: List[Tuple[float, str, str]] = []
-        self._mouse_lambda = Union[None, qt_api.QtCore.QPointF]
+        self._mouse_lambda: Union[None, qt_api.QtCore.QPointF] = None
         self._lines_type: Union[str, None] = None
         self.line_colors: Dict[str, str] = {
             "absorption": "#b02000",
@@ -159,9 +159,9 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
             pen.setWidthF(1.5)
             pen.setDashPattern((2,2,2,2))
             painter.setPen(pen)
-
+            print(">>>>", self._mouse_lambda)
             mouse_line_x = self.chart().mapToPosition(
-                qt_api.QtCore.QPointF(self._mouse_lambda, 0)
+                qt_api.QtCore.QPointF(self._mouse_lambda, 0.0)
             ).x()
 
             if (
