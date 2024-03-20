@@ -910,6 +910,8 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     action_controls_layout: QtGui.QAction
     action_exit: QtGui.QAction
     action_import_spectra: QtGui.QAction
+    action_import_zcat: QtGui.QAction
+    action_export_zcat: QtGui.QAction
     action_settings: QtGui.QAction
     action_zoom_in: QtGui.QAction
     action_zoom_out: QtGui.QAction
@@ -937,9 +939,11 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     lines_match_list_widget: QtWidgets.QListWidget
     lines_table_widget: QtWidgets.QTableWidget
     match_lines_button: QtWidgets.QPushButton
+    next_spec_button: QtWidgets.QPushButton
     obj_prop_table_widget: QtWidgets.QTableWidget
     other_charts_tab_widget: QtWidgets.QTabWidget
     plot_group_box: QtWidgets.QGroupBox
+    previous_spec_button: QtWidgets.QPushButton
     qflag_combo_box: QtWidgets.QComboBox
     red_group_box: QtWidgets.QGroupBox
     redrock_all_radio: QtWidgets.QRadioButton
@@ -1221,6 +1225,14 @@ class GuiApp:
 
         # Connect signals
 
+        self.main_wnd.next_spec_button.clicked.connect(
+            self._next_spec
+        )
+
+        self.main_wnd.previous_spec_button.clicked.connect(
+            self._previous_spec
+        )
+
         self.main_wnd.spec_list_widget.currentItemChanged.connect(
             self.currentSpecItemChanged
         )
@@ -1476,6 +1488,24 @@ class GuiApp:
             qt_api.QtCharts.QChartView.RubberBand.NoRubberBand
         )
 
+    def _safe_set_spec_index(self, row: int) -> None:
+        if (
+            (row <= 0) or
+            (row >= self.main_wnd.spec_list_widget.count())
+        ):
+            return
+        self.main_wnd.spec_list_widget.setCurrentRow(row)
+
+    def _next_spec(self) -> None:
+        self._safe_set_spec_index(
+            self.main_wnd.spec_list_widget.currentRow() + 1
+        )
+
+    def _previous_spec(self) -> None:
+        self._safe_set_spec_index(
+            self.main_wnd.spec_list_widget.currentRow() - 1
+        )
+
     def _load_icons(self, theme: Optional[str] = "feather") -> None:
 
         # Icons for actions
@@ -1489,8 +1519,14 @@ class GuiApp:
         self.main_wnd.action_exit.setIcon(
             qt_api.get_qicon("log-out", theme)
         )
+        self.main_wnd.action_export_zcat.setIcon(
+            qt_api.get_qicon("share", theme)
+        )
         self.main_wnd.action_import_spectra.setIcon(
             qt_api.get_qicon("file-plus", theme)
+        )
+        self.main_wnd.action_import_zcat.setIcon(
+            qt_api.get_qicon("table", theme)
         )
         self.main_wnd.action_new_project.setIcon(
             qt_api.get_qicon("file", theme)
@@ -1546,6 +1582,21 @@ class GuiApp:
         self.main_wnd.match_lines_button.setIcon(
             qt_api.get_qicon("", theme)
         )
+
+        next_icon = qt_api.get_qicon("chevrons-right", theme)
+        if next_icon.isNull():
+            self.main_wnd.next_spec_button.setText("Next")
+        else:
+            self.main_wnd.next_spec_button.setText("")
+            self.main_wnd.next_spec_button.setIcon(next_icon)
+
+        previous_icon = qt_api.get_qicon("chevrons-left", theme)
+        if next_icon.isNull():
+            self.main_wnd.previous_spec_button.setText("Previous")
+        else:
+            self.main_wnd.previous_spec_button.setText("")
+            self.main_wnd.previous_spec_button.setIcon(previous_icon)
+
         self.main_wnd.redrock_run_button.setIcon(
             qt_api.get_qicon("play", theme)
         )
@@ -2742,7 +2793,7 @@ class GuiApp:
 
                     try:
                         info_dict["quality_flag"] = row[qf_col]
-                    except KeyError:
+                    except Exception:
                         pass
                     else:
                         self._update_spec_item_qf(obj_uuid, row[qf_col])
@@ -2806,7 +2857,9 @@ class GuiApp:
 
         self._lock()
         self.global_state = GlobalState.READY
-        self.statusbar.showMessage(self.qapp.tr("New project created"))
+        self.statusbar.showMessage(
+            self.qapp.tr("Import some spectra to start!")
+        )
 
     def openProject(self, file_name: str) -> None:
         """Load the project from a file."""
