@@ -74,8 +74,12 @@ Also remember to acknowledge:
 - specutils: [https://github.com/astropy/specutils/blob/main/specutils/CITATION][2]
 - redrock: [https://github.com/desihub/redrock][1] (if you use the redrock backend)
 
+This program uses icons derived from the following themes:
+
+- feather: [https://github.com/feathericons/feather][5]
 
 [1]: https://github.com/desihub/redrock
 [2]: https://www.astropy.org/acknowledging.html
 [3]: https://github.com/astropy/specutils/blob/main/specutils/CITATION
 [4]: https://zenodo.org/records/10818017
+[5]: https://github.com/feathericons/feather

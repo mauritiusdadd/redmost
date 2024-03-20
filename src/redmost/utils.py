@@ -58,6 +58,25 @@ def get_data_file(filename: str) -> str:
     )
 
 
+def get_icon(
+    icon_name: str,
+    theme: Optional[str] = 'feather'
+) -> Union[str, None]:
+    """
+    Load icons from an existing theme.
+
+    :param icon_name: the name of the icon.
+    :param theme: the name of the theme. Default value is 'feather'
+    :return: the path of the icon file.
+    """
+    for ext in ["png", "svg"]:
+        icon_file = os.path.join(
+            os.path.abspath(os.path.dirname(__file__)), 'ui', 'icons',
+            theme, f"{icon_name}.{ext}"
+        )
+        if os.path.isfile(icon_file):
+            return icon_file
+
 def smooth_fft(
     data: np.ndarray,
     m: float = 1.0,

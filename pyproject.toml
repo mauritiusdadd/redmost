@@ -7,7 +7,7 @@ version_scheme = "post-release"
 write_to = "src/redmost/_version.py"
 
 [tool.setuptools.package-data]
-redmost = ["ui/*.ui", "py.typed"]
+redmost = ["ui/*.ui", "py.typed", "ui/icons/*/*.svg"]
 
 [project]
 name = "redmost"

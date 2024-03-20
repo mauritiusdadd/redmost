@@ -42,6 +42,15 @@ If you used this software for your research, please consider to cite the followi
 
 https://zenodo.org/records/10818017
 
+Also remember to acknowledge:
+
+- astropy: https://www.astropy.org/acknowledging.html
+- specutils: https://github.com/astropy/specutils/blob/main/specutils/CITATION
+- redrock: https://github.com/desihub/redrock (if you use the redrock backend)
+
+This program uses icons derived from the following themes:
+
+- feather: https://github.com/feathericons/feather
 
 License
 *******

@@ -3,11 +3,15 @@ Abstract apy to load different Qt backends
 
 Note: Based on https://github.com/pytest-dev/pytest-qt
 """
+from __future__ import annotations
+
 import os
 import sys
-from typing import Dict, Union, Any
+from typing import Dict, Union, Optional, Any
 from types import ModuleType
 from collections import namedtuple
+
+from utils import get_icon
 
 try:
     import PyQt6
@@ -82,6 +86,22 @@ class QtBackend:
     access the Qt classes.
     """
 
+    QtCore: Union[None, ModuleType]
+    QtGui: Union[None, ModuleType]
+    QtTest: Union[None, ModuleType]
+    QtWidgets: Union[None, ModuleType]
+    QtCharts: Union[None, ModuleType]
+
+    qInfo: Union[None, Any]
+    qDebug: Union[None, Any]
+    qWarning: Union[None, Any]
+    qCritical: Union[None, Any]
+    qFatal: Union[None, Any]
+
+    Signal: Union[None, Any]
+    Slot: Union[None, Any]
+    Property: Union[None, Any]
+
     def __init__(self) -> None:
         self._import_errors = {}
         self.is_pyside: Union[None, bool] = None
@@ -90,19 +110,19 @@ class QtBackend:
 
         self.QtCore = None
         self.QtGui = None
-        self.QtTest = None
+        self.QtTest= None
         self.QtWidgets = None
         self.QtCharts = None
 
-        self.qInfo: Union[None, Any] = None
-        self.qDebug: Union[None, Any] = None
-        self.qWarning: Union[None, Any] = None
-        self.qCritical: Union[None, Any] = None
-        self.qFatal: Union[None, Any] = None
+        self.qInfo = None
+        self.qDebug = None
+        self.qWarning = None
+        self.qCritical = None
+        self.qFatal = None
 
-        self.Signal: Union[None, Any] = None
-        self.Slot: Union[None, Any] = None
-        self.Property: Union[None, Any] = None
+        self.Signal = None
+        self.Slot = None
+        self.Property = None
 
         self.set_qt_api()
 
@@ -204,6 +224,17 @@ class QtBackend:
         if hasattr(obj, "exec"):
             return obj.exec(*args, **kwargs)
         return obj.exec_(*args, **kwargs)
+
+    def get_qicon(
+        self,
+        icon_name: str,
+        icon_theme: Optional[str] = "feather"
+    ) -> QtBackend.QtGui.QIcon:
+        icon_file = get_icon(icon_name, icon_theme)
+        if icon_file is None:
+            return self.QtGui.QIcon()
+        else:
+            return self.QtGui.QIcon(icon_file)
 
     def get_versions(self):
         if self.qt_api_name == "pyside6":

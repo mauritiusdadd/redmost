@@ -14,7 +14,8 @@ except ImportError:
 GITHUB_REPO_URL = "https://github.com/mauritiusdadd/redmost"
 ONLINE_DOC_URL = "https://redmost.readthedocs.io/en/latest"
 PYPI_REPO_PAGE = "https://pypi.org/project/redmost/"
-PYPI_REPO_API_URL = f"https://pypi.python.org/pypi/redmost/json"
+PYPI_REPO_API_URL = "https://pypi.python.org/pypi/redmost/json"
+ICON_PACKAGE_URL = "https://github.com/feathericons/feather"
 
 LICENSE = """
 BSD 3-Clause License

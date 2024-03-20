@@ -849,6 +849,8 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
 
     # actions
     action_about: qt_api.QtGui.QAction
+    action_controls_layout: qt_api.QtGui.QAction
+    action_exit: qt_api.QtGui.QAction
     action_import_spectra: qt_api.QtGui.QAction
     action_zoom_in: qt_api.QtGui.QAction
     action_zoom_out: qt_api.QtGui.QAction
@@ -1312,6 +1314,8 @@ class GuiApp:
             )
         }
 
+        self._load_icons()
+
         self.loadSettings()
         self.newProject()
 
@@ -1375,6 +1379,92 @@ class GuiApp:
         self.main_wnd.info_group_box.setEnabled(False)
         self.flux_chart_view.setRubberBand(
             qt_api.QtCharts.QChartView.RubberBand.NoRubberBand
+        )
+
+    def _load_icons(self, theme: Optional[str] = "feather") -> None:
+
+        # Icons for actions
+
+        self.main_wnd.action_about.setIcon(
+            qt_api.get_qicon("info", theme)
+        )
+        self.main_wnd.action_controls_layout.setIcon(
+            qt_api.get_qicon("sliders", theme)
+        )
+        self.main_wnd.action_exit.setIcon(
+            qt_api.get_qicon("log-out", theme)
+        )
+        self.main_wnd.action_import_spectra.setIcon(
+            qt_api.get_qicon("file-plus", theme)
+        )
+        self.main_wnd.action_new_project.setIcon(
+            qt_api.get_qicon("file", theme)
+        )
+        self.main_wnd.action_online_user_manual.setIcon(
+            qt_api.get_qicon("book", theme)
+        )
+        self.main_wnd.action_open_project.setIcon(
+            qt_api.get_qicon("folder", theme)
+        )
+        self.main_wnd.action_save_project.setIcon(
+            qt_api.get_qicon("save", theme)
+        )
+        self.main_wnd.action_save_project_as.setIcon(
+            qt_api.get_qicon("save_as", theme)
+        )
+        self.main_wnd.action_zoom_fit.setIcon(
+            qt_api.get_qicon("maximize", theme)
+        )
+        self.main_wnd.action_zoom_in.setIcon(
+            qt_api.get_qicon("zoom-in", theme)
+        )
+        self.main_wnd.action_zoom_out.setIcon(
+            qt_api.get_qicon("zoom-out", theme)
+        )
+
+        # icons for buttons
+
+        self.cancel_button.setIcon(
+            qt_api.get_qicon("x-octagon", theme)
+        )
+        self.main_wnd.add_line_button.setIcon(
+            qt_api.get_qicon("plus-square", theme)
+        )
+        self.main_wnd.delete_line_button.setIcon(
+            qt_api.get_qicon("minus-square", theme)
+        )
+        self.main_wnd.delete_lines_button.setIcon(
+            qt_api.get_qicon("delete", theme)
+        )
+        self.main_wnd.export_zcat_button.setIcon(
+            qt_api.get_qicon("share", theme)
+        )
+        self.main_wnd.import_zcat_button.setIcon(
+            qt_api.get_qicon("table", theme)
+        )
+        self.main_wnd.lines_auto_button.setIcon(
+            qt_api.get_qicon("", theme)
+        )
+        self.main_wnd.match_lines_button.setIcon(
+            qt_api.get_qicon("", theme)
+        )
+        self.main_wnd.redrock_run_button.setIcon(
+            qt_api.get_qicon("play", theme)
+        )
+        self.main_wnd.remove_selected_button.setIcon(
+            qt_api.get_qicon("file-minus", theme)
+        )
+        self.main_wnd.remove_spec_button.setIcon(
+            qt_api.get_qicon("file-minus", theme)
+        )
+        self.main_wnd.toggle_all_button.setIcon(
+            qt_api.get_qicon("check-square", theme)
+        )
+        self.main_wnd.toggle_done_button.setIcon(
+            qt_api.get_qicon("check-square", theme)
+        )
+        self.main_wnd.toggle_similar_button.setIcon(
+            qt_api.get_qicon("check-square", theme)
         )
 
     def _open_online_doc(self, *args: Any, **kwargs: Any) -> None:
