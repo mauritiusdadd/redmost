@@ -912,6 +912,7 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     action_import_spectra: QtGui.QAction
     action_import_zcat: QtGui.QAction
     action_export_zcat: QtGui.QAction
+    action_export_as_a_picture: QtGui.QAction
     action_settings: QtGui.QAction
     action_zoom_in: QtGui.QAction
     action_zoom_out: QtGui.QAction
@@ -938,6 +939,7 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     lines_tol_dspinbox: QtWidgets.QDoubleSpinBox
     lines_match_list_widget: QtWidgets.QListWidget
     lines_table_widget: QtWidgets.QTableWidget
+    log_y_check_box: QtWidgets.QCheckBox
     match_lines_button: QtWidgets.QPushButton
     next_spec_button: QtWidgets.QPushButton
     obj_prop_table_widget: QtWidgets.QTableWidget
@@ -1225,6 +1227,10 @@ class GuiApp:
 
         # Connect signals
 
+        self.main_wnd.log_y_check_box.toggled.connect(
+            self.redrawCurrentSpec
+        )
+
         self.main_wnd.next_spec_button.clicked.connect(
             self._next_spec
         )
@@ -1362,6 +1368,10 @@ class GuiApp:
             self.openSettingsDialog
         )
 
+        self.main_wnd.action_export_as_a_picture.triggered.connect(
+            self.doExportAsPicture
+        )
+
         # Final steps
 
         # This dictionary contains the global settings that should be saved
@@ -1402,6 +1412,11 @@ class GuiApp:
                 self.main_wnd.show_lines_combo_box.currentIndex,
                 self.main_wnd.show_lines_combo_box.setCurrentIndex,
                 int
+            ),
+            "log_y": (
+                self.main_wnd.log_y_check_box.checkState,
+                self.main_wnd.log_y_check_box.setCheckState,
+                qt_api.QtCore.Qt.CheckState
             ),
             "check_for_updates": (
                 self.settings_wnd.update_check_box.checkState,
@@ -1490,7 +1505,7 @@ class GuiApp:
 
     def _safe_set_spec_index(self, row: int) -> None:
         if (
-            (row <= 0) or
+            (row < 0) or
             (row >= self.main_wnd.spec_list_widget.count())
         ):
             return
@@ -1518,6 +1533,9 @@ class GuiApp:
         )
         self.main_wnd.action_exit.setIcon(
             qt_api.get_qicon("log-out", theme)
+        )
+        self.main_wnd.action_export_as_a_picture.setIcon(
+            qt_api.get_qicon("camera", theme)
         )
         self.main_wnd.action_export_zcat.setIcon(
             qt_api.get_qicon("share", theme)
@@ -1919,12 +1937,13 @@ class GuiApp:
 
             for ax in flux_chart.axes():
                 flux_chart.removeAxis(ax)
-            for ax in var_chart.axes():
-                var_chart.removeAxis(ax)
-            for ax in wd_chart.axes():
-                wd_chart.removeAxis(ax)
-            for ax in sky_chart.axes():
-                sky_chart.removeAxis(ax)
+
+        for ax in var_chart.axes():
+            var_chart.removeAxis(ax)
+        for ax in wd_chart.axes():
+            wd_chart.removeAxis(ax)
+        for ax in sky_chart.axes():
+            sky_chart.removeAxis(ax)
 
         sp: Spectrum1D = self.open_spectra[spec_uuid]
 
@@ -1977,12 +1996,6 @@ class GuiApp:
         if not flux_chart.axes():
             flux_axis_x = qt_api.QtCharts.QValueAxis()
             flux_axis_y = qt_api.QtCharts.QValueAxis()
-            var_axis_x = qt_api.QtCharts.QValueAxis()
-            var_axis_y = qt_api.QtCharts.QValueAxis()
-            wd_axis_x = qt_api.QtCharts.QValueAxis()
-            wd_axis_y = qt_api.QtCharts.QValueAxis()
-            sky_axis_x = qt_api.QtCharts.QValueAxis()
-            sky_axis_y = qt_api.QtCharts.QValueAxis()
 
             flux_chart.addAxis(
                 flux_axis_x, qt_api.QtCore.Qt.AlignmentFlag.AlignBottom
@@ -1990,18 +2003,54 @@ class GuiApp:
             flux_chart.addAxis(
                 flux_axis_y, qt_api.QtCore.Qt.AlignmentFlag.AlignLeft
             )
+        else:
+            flux_axis_x = flux_chart.axes()[0]
+            flux_axis_y = flux_chart.axes()[1]
+
+        if not var_chart.axes():
+            var_axis_x = qt_api.QtCharts.QValueAxis()
+
+            if self.main_wnd.log_y_check_box.isChecked():
+                var_axis_y = qt_api.QtCharts.QLogValueAxis()
+            else:
+                var_axis_y = qt_api.QtCharts.QValueAxis()
+
             var_chart.addAxis(
                 var_axis_x, qt_api.QtCore.Qt.AlignmentFlag.AlignBottom
             )
             var_chart.addAxis(
                 var_axis_y, qt_api.QtCore.Qt.AlignmentFlag.AlignLeft
             )
+        else:
+            var_axis_x = var_chart.axes()[0]
+            var_axis_y = var_chart.axes()[1]
+
+        if not wd_chart.axes():
+            wd_axis_x = qt_api.QtCharts.QValueAxis()
+
+            if self.main_wnd.log_y_check_box.isChecked():
+                wd_axis_y = qt_api.QtCharts.QLogValueAxis()
+            else:
+                wd_axis_y = qt_api.QtCharts.QValueAxis()
+
             wd_chart.addAxis(
                 wd_axis_x, qt_api.QtCore.Qt.AlignmentFlag.AlignBottom
             )
             wd_chart.addAxis(
                 wd_axis_y, qt_api.QtCore.Qt.AlignmentFlag.AlignLeft
             )
+        else:
+            wd_axis_x = wd_chart.axes()[0]
+            wd_axis_y = wd_chart.axes()[1]
+
+        if not sky_chart.axes():
+            sky_axis_x = qt_api.QtCharts.QValueAxis()
+
+            if self.main_wnd.log_y_check_box.isChecked():
+                sky_axis_y = qt_api.QtCharts.QLogValueAxis()
+            else:
+                sky_axis_y = qt_api.QtCharts.QValueAxis()
+
             sky_chart.addAxis(
                 sky_axis_x, qt_api.QtCore.Qt.AlignmentFlag.AlignBottom
             )
@@ -2009,12 +2058,6 @@ class GuiApp:
                 sky_axis_y, qt_api.QtCore.Qt.AlignmentFlag.AlignLeft
             )
         else:
-            flux_axis_x = flux_chart.axes()[0]
-            flux_axis_y = flux_chart.axes()[1]
-            var_axis_x = var_chart.axes()[0]
-            var_axis_y = var_chart.axes()[1]
-            wd_axis_x = wd_chart.axes()[0]
-            wd_axis_y = wd_chart.axes()[1]
             sky_axis_x = sky_chart.axes()[0]
             sky_axis_y = sky_chart.axes()[1]
 
@@ -2058,7 +2101,11 @@ class GuiApp:
             var_axis_x.setLabelFormat("%.2f")
             var_axis_x.setTitleText(str(wav_unit))
 
-            var_axis_y.setTickCount(10)
+            if isinstance(var_axis_y, qt_api.QtCharts.QLogValueAxis):
+                var_axis_y.setBase(10.0)
+            else:
+                var_axis_y.setTickCount(10)
+
             var_axis_y.setLabelFormat("%.2f")
             var_axis_y.setTitleText(str(var_unit))
 
@@ -2076,7 +2123,10 @@ class GuiApp:
             wd_axis_x.setLabelFormat("%.2f")
             wd_axis_x.setTitleText(str(wav_unit))
 
-            wd_axis_y.setTickCount(10)
+            if not isinstance(wd_axis_y, qt_api.QtCharts.QLogValueAxis):
+                wd_axis_y.setBase(10.0)
+            else:
+                wd_axis_y.setTickCount(10)
             wd_axis_y.setLabelFormat("%.2f")
             wd_axis_y.setTitleText(str(wdisp_unit))
 
@@ -2094,7 +2144,11 @@ class GuiApp:
             sky_axis_x.setLabelFormat("%.2f")
             sky_axis_x.setTitleText(str(wav_unit))
 
-            sky_axis_y.setTickCount(10)
+            if not isinstance(sky_axis_y, qt_api.QtCharts.QLogValueAxis):
+                sky_axis_y.setBase(10.0)
+            else:
+                sky_axis_y.setTickCount(10)
+
             sky_axis_y.setLabelFormat("%.2f")
             sky_axis_y.setTitleText(str(sky_unit))
 
@@ -2140,6 +2194,70 @@ class GuiApp:
         self.main_wnd.lines_table_widget.removeRow(
             self.main_wnd.lines_table_widget.currentRow()
         )
+
+    def doExportAsPicture(self) -> None:
+        """Use saveFileDialog to save current spectrum as a file."""
+        item: QtWidgets.QListWidgetItem
+        item = self.main_wnd.spec_list_widget.currentItem()
+
+        if item is None:
+            return
+        elif self.current_open_dir is not None:
+            cur_dir = self.current_open_dir
+        elif self.current_project_file_path is not None:
+            cur_dir = os.path.dirname(self.current_project_file_path)
+        else:
+            cur_dir = '.'
+
+        base_name = os.path.splitext(str(item.text()))[0]
+
+        open_list = qt_api.QtWidgets.QFileDialog.getSaveFileName(
+            self.main_wnd,
+            self.qapp.tr("Export spectrum as image"),
+            os.path.join(cur_dir, f'{base_name}.png'),
+            (
+                f"{self.qapp.tr('PNG image')} (*.png);;"
+                f"{self.qapp.tr('JPG image')} (*.jpg);;"
+                f"{self.qapp.tr('TIFF file')} (*.tiff)"
+            ),
+            f"{self.qapp.tr('PNG image')} (*.png)"
+        )
+
+        dest_file_path, _ = open_list
+
+        self.exportAsPicture(dest_file_path)
+
+    def exportAsPicture(self, dest_file_path: str) -> None:
+        """
+        Save current spectrum to a file.
+
+        :param dest_file_path: Path of the destination picture file.
+        """
+        try:
+            p = self.flux_chart_view.grab()
+            p.save(dest_file_path)
+        except Exception as exc:
+            self.msgBox.setWindowTitle(self.qapp.tr("Error"))
+            self.msgBox.setText(
+                self.qapp.tr(
+                    "An error has occurred while exporting the "
+                    "current spectrum as a picture."
+                )
+            )
+            self.msgBox.setInformativeText('')
+            self.msgBox.setDetailedText(str(exc))
+            self.msgBox.setIcon(
+                qt_api.QtWidgets.QMessageBox.Icon.Critical
+            )
+            self.msgBox.setStandardButtons(
+                qt_api.QtWidgets.QMessageBox.StandardButton.Ok
+            )
+            self.msgBox.exec()
+        else:
+            self.current_open_dir = os.path.dirname(dest_file_path)
+            self.statusbar.showMessage(
+                self.qapp.tr("Picture saved")
+            )
 
     def doExportZcat(self, *args, **kwargs) -> None:
         if self.current_open_dir is not None:
@@ -2290,7 +2408,7 @@ class GuiApp:
         else:
             cur_dir = '.'
 
-        file_list, files_type = qt_api.QtWidgets.QFileDialog.getOpenFileNames(
+        file_list, file_types = qt_api.QtWidgets.QFileDialog.getOpenFileNames(
             self.main_wnd,
             self.qapp.tr("Import Spectra"),
             cur_dir,
@@ -2302,6 +2420,19 @@ class GuiApp:
             f"{self.qapp.tr('FITS')} (*.fit *.fits)"
         )
 
+        self.importSpectra(file_list, file_types)
+
+    def importSpectra(
+        self,
+        file_list: List[str],
+        file_types: Optional[List[str]] = None
+    ) -> None:
+        """
+        Import spectra.
+
+        :param file_list: List of file paths.
+        :param file_types:  List of file types.
+        """
         exception_tracker: Dict[uuid.UUID, Tuple[str, str]] = {}
 
         self._lock()
@@ -3297,7 +3428,7 @@ def values2series(
     """
     series: QtCharts.QLineSeries = qt_api.QtCharts.QLineSeries()
     series.setName(name)
-
+    series.setUseOpenGL(False)  # issues with transparency when set to True!
     for x, y in zip(x_values, y_values):
         series.append(x, y)
 

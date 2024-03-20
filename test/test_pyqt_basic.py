@@ -22,6 +22,7 @@ from redmost import gui
 
 Z_FTOL = 0.01
 
+TEST_FILE_95 = os.path.join(TEST_DATA_PATH, 'spec_95.fits')
 PROJECT_1_FILE = os.path.join(TEST_DATA_PATH, 'test_project_1.json')
 PROJECT_2_FILE = os.path.join(TEST_DATA_PATH, 'test_project_2.json')
 ZCAT_FILE = os.path.join(TEST_DATA_PATH, 'test_zcat.fits')
@@ -86,7 +87,6 @@ def test_load_project(qtbot: QtBot, main_app: gui.GuiApp):
     main_app.openProject(PROJECT_2_FILE)
     save_screen(qtbot, main_app.main_wnd)
 
-
 def test_load_project_import_zcat(qtbot: QtBot, main_app: gui.GuiApp):
     print("Loading a project")
     main_app.openProject(PROJECT_1_FILE)
@@ -99,3 +99,25 @@ def test_load_project_import_zcat(qtbot: QtBot, main_app: gui.GuiApp):
     main_app.zcat_mapping_dialog.accept()
     save_screen(qtbot, main_app.main_wnd)
 
+def test_save_picture(qtbot: QtBot, main_app: gui.GuiApp):
+    print("Open file")
+    main_app.importSpectra([TEST_FILE_95, ])
+    main_app._safe_set_spec_index(0)
+
+    print("Set plot options")
+    main_app.main_wnd.smoothing_check_box.setCheckState(
+        qt_api.QtCore.Qt.CheckState.Checked
+    )
+    main_app.main_wnd.smoothing_dspinbox.setValue(8.5)
+    main_app.main_wnd.show_lines_check_box.setCheckState(
+        qt_api.QtCore.Qt.CheckState.Checked
+    )
+
+    print("Set redshift")
+    main_app.main_wnd.z_dspinbox.setValue(0.3998)
+
+    print("Saving pictures")
+    save_screen(qtbot, main_app.main_wnd)
+    main_app.exportAsPicture(
+        os.path.join(SCREEN_OUT_DIR, f"spec_95.png")
+    )

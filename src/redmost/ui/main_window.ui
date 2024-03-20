@@ -455,6 +455,16 @@ selected</string>
               </widget>
              </item>
              <item>
+              <widget class="QCheckBox" name="log_y_check_box">
+               <property name="text">
+                <string>Log Y</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
               <spacer name="horizontal_spacer_2">
                <property name="orientation">
                 <enum>Qt::Horizontal</enum>
@@ -1073,10 +1083,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <addaction name="separator"/>
     <addaction name="action_import_spectra"/>
     <addaction name="separator"/>
-    <addaction name="separator"/>
-    <addaction name="action_import_zcat"/>
-    <addaction name="action_export_zcat"/>
-    <addaction name="separator"/>
     <addaction name="action_exit"/>
     <addaction name="separator"/>
    </widget>
@@ -1096,8 +1102,18 @@ li.checked::marker { content: &quot;\2612&quot;; }
     </property>
     <addaction name="action_settings"/>
    </widget>
+   <widget class="QMenu" name="menuExport">
+    <property name="title">
+     <string>&amp;Tools</string>
+    </property>
+    <addaction name="action_import_zcat"/>
+    <addaction name="action_export_zcat"/>
+    <addaction name="separator"/>
+    <addaction name="action_export_as_a_picture"/>
+   </widget>
    <addaction name="menuFile"/>
    <addaction name="menu_edit"/>
+   <addaction name="menuExport"/>
    <addaction name="menu_about"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
@@ -1123,6 +1139,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <addaction name="action_zoom_out"/>
    <addaction name="action_zoom_fit"/>
    <addaction name="separator"/>
+   <addaction name="action_export_as_a_picture"/>
   </widget>
   <action name="action_open_project">
    <property name="icon">
@@ -1263,12 +1280,20 @@ li.checked::marker { content: &quot;\2612&quot;; }
   </action>
   <action name="action_import_zcat">
    <property name="text">
-    <string>Import spectroscopi catalogue</string>
+    <string>Import spectroscopi &amp;catalogue</string>
    </property>
   </action>
   <action name="action_export_zcat">
    <property name="text">
-    <string>Export spectroscopic catalogue</string>
+    <string>E&amp;xport spectroscopic catalogue</string>
+   </property>
+  </action>
+  <action name="action_export_as_a_picture">
+   <property name="icon">
+    <iconset theme="image-x-generic"/>
+   </property>
+   <property name="text">
+    <string>&amp;Export as a picture</string>
    </property>
   </action>
  </widget>

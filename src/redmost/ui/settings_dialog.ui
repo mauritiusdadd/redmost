@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>456</width>
-    <height>184</height>
+    <height>195</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -47,10 +47,26 @@
        <string>Appearance</string>
       </attribute>
       <layout class="QGridLayout" name="gridLayout">
+       <item row="2" column="1">
+        <widget class="QComboBox" name="style_combo_box">
+         <item>
+          <property name="text">
+           <string>system default</string>
+          </property>
+         </item>
+        </widget>
+       </item>
        <item row="3" column="0">
         <widget class="QLabel" name="label">
          <property name="text">
           <string>Icon theme</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="0">
+        <widget class="QLabel" name="label_2">
+         <property name="text">
+          <string>Application style</string>
          </property>
         </widget>
        </item>
@@ -64,22 +80,6 @@
          <item>
           <property name="text">
            <string>feather-dark</string>
-          </property>
-         </item>
-        </widget>
-       </item>
-       <item row="2" column="0">
-        <widget class="QLabel" name="label_2">
-         <property name="text">
-          <string>Application style</string>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="1">
-        <widget class="QComboBox" name="style_combo_box">
-         <item>
-          <property name="text">
-           <string>system default</string>
           </property>
          </item>
         </widget>
