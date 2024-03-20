@@ -300,7 +300,7 @@ def get_redshift_from_lines(
         return None
 
     if z_points is None:
-        z_points = int(1000 * (z_max - z_min) / tol)
+        z_points = int(5000 * (z_max - z_min) / tol)
 
     mymodel = Emission1D(identifications, sigma=tol, redshift=0)
 
@@ -311,13 +311,13 @@ def get_redshift_from_lines(
     if len(z_values) <= 1:
         return None
 
-    prob_values = np.zeros_like(z_values)
-    for j, z in enumerate(z_values):
+    prob_values = np.zeros_like(z_values, dtype=float)
+    for j, z in enumerate(list(z_values)):
         rest_lines_lam = np.array([
             x[0] for x in get_lines(z=z)
         ])
 
-        # We compute the matching at object restframe so redshift=0
+        # We compute the matching at object rest frame so redshift=0
         prob_values[j] = np.sum(mymodel.evaluate(rest_lines_lam))
 
     peak_indices = find_peaks_cwt(prob_values, 1)

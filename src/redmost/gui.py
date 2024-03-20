@@ -1769,7 +1769,6 @@ class GuiApp:
     def _updateMouseLabel(self, mouse_pos: QtCore.QPointF) -> None:
         self.mousePosLabel.setText(f"\u03BB = {mouse_pos.x():.2f}")
 
-
     def acceptSettings(self, *args, **kwargs) -> None:
         self.saveSettings()
         self.loadSettings()
