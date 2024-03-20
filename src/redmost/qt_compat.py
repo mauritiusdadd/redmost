@@ -7,32 +7,25 @@ from __future__ import annotations
 
 import os
 import sys
+from typing import TYPE_CHECKING
 from typing import Dict, Union, Optional, Any
 from types import ModuleType
 from collections import namedtuple
 
-from utils import get_icon
+from redmost.utils import get_icon
 
-try:
-    import PyQt6
-except (ModuleNotFoundError, ImportError):
-    HAS_PYQT6 = False
-else:
-    HAS_PYQT6 = True
 
-try:
-    import PySide6
-except (ModuleNotFoundError, ImportError):
-    HAS_PYSIDE6 = False
-else:
-    HAS_PYSIDE6 = True
-
-try:
-    import PyQt5
-except (ModuleNotFoundError, ImportError):
-    HAS_PYQT5 = False
-else:
-    HAS_PYQT5 = True
+if TYPE_CHECKING:
+    # NOTE: These imports will be actually executed only by the type-checking
+    #       programs, like mypy.
+    try:
+        from PyQt6 import QtCore, QtGui, QtWidgets, QtTest, QtCharts
+        from PyQt6.QtCore import pyqtSignal as Signal
+        from PyQt6.QtCore import pyqtSlot as Slot
+        from PyQt6.QtCore import pyqtProperty as Property
+    except (ModuleNotFoundError, ImportError):
+        from PySide6 import QtCore, QtGui, QtWidgets, QtTest, QtCharts
+        from PySide6.QtCore import Signal, Slot, Property
 
 
 VersionTuple = namedtuple(
@@ -86,43 +79,27 @@ class QtBackend:
     access the Qt classes.
     """
 
-    QtCore: Union[None, ModuleType]
-    QtGui: Union[None, ModuleType]
-    QtTest: Union[None, ModuleType]
-    QtWidgets: Union[None, ModuleType]
-    QtCharts: Union[None, ModuleType]
-
-    qInfo: Union[None, Any]
-    qDebug: Union[None, Any]
-    qWarning: Union[None, Any]
-    qCritical: Union[None, Any]
-    qFatal: Union[None, Any]
-
-    Signal: Union[None, Any]
-    Slot: Union[None, Any]
-    Property: Union[None, Any]
-
     def __init__(self) -> None:
         self._import_errors = {}
         self.is_pyside: Union[None, bool] = None
         self.is_pyqt: Union[None, bool] = None
         self.qt_api_name: Union[None, str] = None
 
-        self.QtCore = None
-        self.QtGui = None
-        self.QtTest= None
-        self.QtWidgets = None
-        self.QtCharts = None
+        self.QtCore: Optional[ModuleType] = None
+        self.QtGui: Optional[ModuleType] = None
+        self.QtTest: Optional[ModuleType] = None
+        self.QtWidgets: Optional[ModuleType] = None
+        self.QtCharts: Optional[ModuleType] = None
 
-        self.qInfo = None
-        self.qDebug = None
-        self.qWarning = None
-        self.qCritical = None
-        self.qFatal = None
+        self.qInfo: Optional[QtCore.qInfo] = None
+        self.qDebug: Optional[QtCore.qDebug] = None
+        self.qWarning: Optional[QtCore.qWarning] = None
+        self.qCritical: Optional[QtCore.qCritical] = None
+        self.qFatal: Optional[QtCore.qFatal] = None
 
-        self.Signal = None
-        self.Slot = None
-        self.Property = None
+        self.Signal: Optional[Signal] = None
+        self.Slot: Optional[Slot] = None
+        self.Property: Optional[Property] = None
 
         self.set_qt_api()
 
@@ -168,7 +145,7 @@ class QtBackend:
                 "installed.\n" + errors
             )
 
-        self.QtCore = QtCore = self._import_module("QtCore")
+        self.QtCore = self._import_module("QtCore")
         self.QtGui = self._import_module("QtGui")
         self.QtTest = self._import_module("QtTest")
         self.QtWidgets = self._import_module("QtWidgets")
@@ -181,26 +158,26 @@ class QtBackend:
         self._check_qt_api_version()
 
         # qInfo is not exposed in PySide2/6 (#232)
-        if hasattr(QtCore, "QMessageLogger"):
-            self.qInfo = lambda msg: QtCore.QMessageLogger().info(msg)
-        elif hasattr(QtCore, "qInfo"):
-            self.qInfo = QtCore.qInfo
+        if hasattr(self.QtCore, "QMessageLogger"):
+            self.qInfo = lambda msg: self.QtCore.QMessageLogger().info(msg)
+        elif hasattr(self.QtCore, "qInfo"):
+            self.qInfo = self.QtCore.qInfo
         else:
             self.qInfo = None
 
-        self.qDebug = QtCore.qDebug
-        self.qWarning = QtCore.qWarning
-        self.qCritical = QtCore.qCritical
-        self.qFatal = QtCore.qFatal
+        self.qDebug = self.QtCore.qDebug
+        self.qWarning = self.QtCore.qWarning
+        self.qCritical = self.QtCore.qCritical
+        self.qFatal = self.QtCore.qFatal
 
         if self.is_pyside:
-            self.Signal = QtCore.Signal
-            self.Slot = QtCore.Slot
-            self.Property = QtCore.Property
+            self.Signal = self.QtCore.Signal
+            self.Slot = self.QtCore.Slot
+            self.Property = self.QtCore.Property
         elif self.is_pyqt:
-            self.Signal = QtCore.pyqtSignal
-            self.Slot = QtCore.pyqtSlot
-            self.Property = QtCore.pyqtProperty
+            self.Signal = self.QtCore.pyqtSignal
+            self.Slot = self.QtCore.pyqtSlot
+            self.Property = self.QtCore.pyqtProperty
         else:
             assert False, "Expected either is_pyqt or is_pyside"
 

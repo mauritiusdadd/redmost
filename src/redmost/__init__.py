@@ -17,7 +17,26 @@ PYPI_REPO_PAGE = "https://pypi.org/project/redmost/"
 PYPI_REPO_API_URL = "https://pypi.python.org/pypi/redmost/json"
 ICON_PACKAGE_URL = "https://github.com/feathericons/feather"
 
-LICENSE = """
+ABOUT_TEXT = """
+
+ACKNOWLEDGEMENTS
+
+If you use this software for your work, please consider to cite
+
+- <a href="https://zenodo.org/records/10818017">zenodo.org/records/10818017</a>
+
+Also remember to acknowledge:
+
+- astropy: <a href=https://www.astropy.org/acknowledging.html>astropy.org</a>
+- specutils: <a href=https://github.com/astropy/specutils/blob/main/specutils/CITATION>github.com/astropy/specutils</a>
+- redrock: <a href=https://github.com/desihub/redrock>github.com/desihub/redrock</a> (if you use the redrock backend)
+
+This program uses icons derived from the following themes:
+
+- feather: <a href=https://github.com/feathericons/feather>github.com/feathericons/feather</a>
+
+LICENSE
+
 BSD 3-Clause License
 
 Copyright (c) 2023-2024, Maurizio D'Addona <mauritiusdadd@gmail.com>

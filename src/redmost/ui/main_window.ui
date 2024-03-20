@@ -1065,7 +1065,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
    </property>
    <widget class="QMenu" name="menuFile">
     <property name="title">
-     <string>Fi&amp;le</string>
+     <string>&amp;File</string>
     </property>
     <addaction name="action_open_project"/>
     <addaction name="action_save_project"/>
@@ -1078,7 +1078,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
    </widget>
    <widget class="QMenu" name="menu_about">
     <property name="title">
-     <string>Help</string>
+     <string>&amp;Help</string>
     </property>
     <addaction name="separator"/>
     <addaction name="action_online_user_manual"/>
@@ -1086,7 +1086,14 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <addaction name="action_controls_layout"/>
     <addaction name="action_about"/>
    </widget>
+   <widget class="QMenu" name="menu_edit">
+    <property name="title">
+     <string>&amp;Edit</string>
+    </property>
+    <addaction name="action_settings"/>
+   </widget>
    <addaction name="menuFile"/>
+   <addaction name="menu_edit"/>
    <addaction name="menu_about"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
@@ -1237,6 +1244,11 @@ li.checked::marker { content: &quot;\2612&quot;; }
    </property>
    <property name="text">
     <string>&amp;Controls layout</string>
+   </property>
+  </action>
+  <action name="action_settings">
+   <property name="text">
+    <string>&amp;Settings</string>
    </property>
   </action>
  </widget>
