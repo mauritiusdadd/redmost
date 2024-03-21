@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Dialog</class>
+ <widget class="QDialog" name="Dialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>640</width>
+    <height>480</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Dialog</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QTableWidget" name="control_table_widget">
+     <property name="sizeAdjustPolicy">
+      <enum>QAbstractScrollArea::AdjustToContents</enum>
+     </property>
+     <property name="autoScroll">
+      <bool>false</bool>
+     </property>
+     <property name="editTriggers">
+      <set>QAbstractItemView::NoEditTriggers</set>
+     </property>
+     <property name="showDropIndicator" stdset="0">
+      <bool>false</bool>
+     </property>
+     <property name="dragDropOverwriteMode">
+      <bool>false</bool>
+     </property>
+     <property name="alternatingRowColors">
+      <bool>true</bool>
+     </property>
+     <property name="selectionMode">
+      <enum>QAbstractItemView::NoSelection</enum>
+     </property>
+     <property name="selectionBehavior">
+      <enum>QAbstractItemView::SelectRows</enum>
+     </property>
+     <property name="textElideMode">
+      <enum>Qt::ElideNone</enum>
+     </property>
+     <property name="verticalScrollMode">
+      <enum>QAbstractItemView::ScrollPerPixel</enum>
+     </property>
+     <property name="horizontalScrollMode">
+      <enum>QAbstractItemView::ScrollPerPixel</enum>
+     </property>
+     <property name="showGrid">
+      <bool>true</bool>
+     </property>
+     <property name="wordWrap">
+      <bool>false</bool>
+     </property>
+     <property name="cornerButtonEnabled">
+      <bool>false</bool>
+     </property>
+     <attribute name="horizontalHeaderDefaultSectionSize">
+      <number>310</number>
+     </attribute>
+     <attribute name="verticalHeaderVisible">
+      <bool>false</bool>
+     </attribute>
+     <attribute name="verticalHeaderHighlightSections">
+      <bool>false</bool>
+     </attribute>
+     <row>
+      <property name="text">
+       <string>LMB</string>
+      </property>
+     </row>
+     <row>
+      <property name="text">
+       <string>RMB</string>
+      </property>
+     </row>
+     <row>
+      <property name="text">
+       <string>MMB</string>
+      </property>
+     </row>
+     <row>
+      <property name="text">
+       <string>MW</string>
+      </property>
+     </row>
+     <row>
+      <property name="text">
+       <string>SHIFT+MV</string>
+      </property>
+     </row>
+     <row>
+      <property name="text">
+       <string>CTRL+MV</string>
+      </property>
+     </row>
+     <column>
+      <property name="text">
+       <string>CONTROL</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>ACTION</string>
+      </property>
+     </column>
+     <item row="0" column="0">
+      <property name="text">
+       <string>Left Mouse Button (LMB)</string>
+      </property>
+     </item>
+     <item row="0" column="1">
+      <property name="text">
+       <string>Select area to zoom; Add a new line</string>
+      </property>
+     </item>
+     <item row="1" column="0">
+      <property name="text">
+       <string>Right Mouse Button (RMB)</string>
+      </property>
+     </item>
+     <item row="1" column="1">
+      <property name="text">
+       <string>Nothing</string>
+      </property>
+     </item>
+     <item row="2" column="0">
+      <property name="text">
+       <string>Middle Mouse Button (MMB)</string>
+      </property>
+     </item>
+     <item row="2" column="1">
+      <property name="text">
+       <string>Pan</string>
+      </property>
+     </item>
+     <item row="3" column="0">
+      <property name="text">
+       <string>Mouse Wheel (MW)</string>
+      </property>
+     </item>
+     <item row="3" column="1">
+      <property name="text">
+       <string>Vertical scroll</string>
+      </property>
+     </item>
+     <item row="4" column="0">
+      <property name="text">
+       <string>SHIFT + MW</string>
+      </property>
+     </item>
+     <item row="4" column="1">
+      <property name="text">
+       <string>Horizontal scroll</string>
+      </property>
+     </item>
+     <item row="5" column="0">
+      <property name="text">
+       <string>CTRL + MV</string>
+      </property>
+     </item>
+     <item row="5" column="1">
+      <property name="text">
+       <string>Zoom</string>
+      </property>
+     </item>
+    </widget>
+   </item>
+   <item>
+    <widget class="QDialogButtonBox" name="button_box">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Close</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>button_box</sender>
+   <signal>accepted()</signal>
+   <receiver>Dialog</receiver>
+   <slot>accept()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>248</x>
+     <y>254</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>157</x>
+     <y>274</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>button_box</sender>
+   <signal>rejected()</signal>
+   <receiver>Dialog</receiver>
+   <slot>reject()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>316</x>
+     <y>260</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>286</x>
+     <y>274</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+</ui>

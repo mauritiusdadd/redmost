@@ -1280,7 +1280,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
   </action>
   <action name="action_import_zcat">
    <property name="text">
-    <string>Import spectroscopi &amp;catalogue</string>
+    <string>Import spectroscopic &amp;catalogue</string>
    </property>
   </action>
   <action name="action_export_zcat">

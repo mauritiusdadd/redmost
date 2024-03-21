@@ -294,7 +294,7 @@ def get_redshift_from_lines(
         Best estimations of the redshift sorted from the most probable to the
         least probable.
     :return z_probs:
-        Pseudo-probabilities of the estimation (the higher the better).
+        Pseudo-probabilities of the estimation (the higher, the better).
     """
     if len(identifications) < 2:
         return None

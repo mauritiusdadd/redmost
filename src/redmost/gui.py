@@ -702,6 +702,10 @@ class GlobalState(Enum):
     REUQUEST_CANCEL = 5
 
 
+class ControlMappingDialog(qt_api.QtWidgets.QDialog):
+    control_table_widget: QtWidgets.QTableWidget
+
+
 class AboutDialog(qt_api.QtWidgets.QDialog):
 
     def __init__(
@@ -1026,6 +1030,11 @@ class GuiApp:
             self.restoreSettings
         )
 
+        self.control_mapping_wnd = cast(
+            ControlMappingDialog,
+            qt_api.loadUiWidget("control_mapping_dialog.ui")
+        )
+
         self.main_wnd.setWindowTitle("redmost")
         self.main_wnd.setWindowIcon(
             qt_api.QtGui.QIcon(utils.get_data_file("redmost.png"))
@@ -1226,6 +1235,10 @@ class GuiApp:
         self.main_wnd.splitter_plots.setSizes([500, 300])
 
         # Connect signals
+
+        self.main_wnd.action_controls_layout.triggered.connect(
+            self.control_mapping_wnd.open
+        )
 
         self.main_wnd.log_y_check_box.toggled.connect(
             self.redrawCurrentSpec
