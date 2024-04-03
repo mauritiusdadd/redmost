@@ -27,24 +27,30 @@ Redmost supports supports both PyQt6 and PySide6 backends, with precedence to Py
 
 .. code-block:: bash
 
-    pip install .[pyqt6]
+    pip install redmost[pyqt6]
 
 for PyQt6 backend or
 
 .. code-block:: bash
 
-    pip install .[pyside6]
+    pip install redmost[pyside6]
 
 for PySide6 backend, or
 
 .. code-block:: bash
 
-    pip install .[pyqt5]
+    pip install redmost[pyqt5]
+    
+After the installation, to update redmost to the most recent release, use
+
+.. code-block:: bash
+
+    pip install redmost --upgrade
 
 Installing from GitHub
 ======================
 
-If you like to use the bleeding-edge version, you can install Specex directly from the |github_mark| `GitHub repository <https://github.com/mauritiusdadd/redmost>`_
+If you like to use the bleeding-edge version, you can install Redmost directly from the |github_mark| `GitHub repository <https://github.com/mauritiusdadd/redmost>`_
 
 .. code-block:: bash
 
@@ -69,14 +75,12 @@ or
 
     pip install .[pyqt5]
 
-Updating
-========
 
-After the installation, to update redmost to the most recent release, use
+After the installation, to update redmost use
 
 .. code-block:: bash
-
-    pip install redmost --upgrade
+    git pull
+    pip install . --upgrade
 
 Install third party backends
 ============================
