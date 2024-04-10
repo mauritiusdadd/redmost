@@ -3086,7 +3086,7 @@ class GuiApp:
                     'row': int(line_info['row']),
                     'data': float(line_info['data']),
                     'text': str(line_info['text']),
-                    'checked': QtCore.Qt.CheckState(
+                    'checked': qt_api.QtCore.Qt.CheckState(
                         line_info['checked']
                     )
                 })
