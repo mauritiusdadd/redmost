@@ -31,8 +31,8 @@ def identifySpecexFits(origin, *args, **kwargs) -> bool:
 
     valid_id_keys = [
         f"{i}{j}"
-        for i in ['', 'OBJ', 'OBJ_', 'TARGET', 'TARGET_']
-        for j in ['ID', 'NUMBER', 'UID', 'UUID']
+        for i in ['', 'OBJ', 'OBJ_', 'TARGET', 'TARGET_', 'OBJECT', 'OBJECT_']
+        for j in ['ID', 'NUMBER', 'UID', 'UUID', '']
     ]
 
     with fits.open(args[0]) as hdul:
@@ -123,7 +123,22 @@ def specexFitsLoader(
         else:
             rc = rc_hdu.data
 
-        flux_wcs = wcs.WCS(flux_hdu.header)
+        try:
+            flux_wcs = wcs.WCS(flux_hdu.header)
+        except wcs.wcs.InconsistentAxisTypesError as exc:
+            crpix1 = flux_hdu.header.get('CRPIX1')
+            crval1 = flux_hdu.header.get('CRVAL1') 
+            cdelt1 = flux_hdu.header.get('CDELT1') 
+
+            if any([crpix1 is None, crval1 is None, cdelt1 is None]):
+                raise exc
+
+            # Fixing broken WCS
+            flux_hdu.header['CTYPE1'] = 'WAVE'
+            flux_hdu.header['Cunit1'] = 'Angstrom'
+            
+            flux_wcs = wcs.WCS(flux_hdu.header)
+
 
         if flux.shape != var.shape:
             raise ValueError(
