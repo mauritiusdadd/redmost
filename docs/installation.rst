@@ -1,3 +1,5 @@
+.. _installation_guide:
+
 .. |github_mark| image:: pics/github-mark.png
    :height: 1em
    :target: github_repo
@@ -79,6 +81,7 @@ or
 After the installation, to update redmost use
 
 .. code-block:: bash
+
     git pull
     pip install . --upgrade
 
