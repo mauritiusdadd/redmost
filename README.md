@@ -4,6 +4,8 @@
 
 <b>RED</b>shift <b>M</b>easurement <b>O</b>f <b>S</b>pec<b>T</b>ra is a Qt6 Graphical User Interface (GUI) to do redshift measurements on 1D spectra.
 
+![Redmost main window](https://github.com/mauritiusdadd/redmost/blob/main/docs/pics/main_ui_spectrum.png?raw=true)
+
 If [redrock][1] is correctly installed, it cat be used as a backend to measure the redshift.
 
 # Installation
