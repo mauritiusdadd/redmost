@@ -2,7 +2,7 @@
 [![DOCS](https://readthedocs.org/projects/redmost/badge/?version=latest)](https://redmost.readthedocs.io/en/latest/) [![Coverage Status](https://coveralls.io/repos/github/mauritiusdadd/redmost/badge.svg?branch=main)](https://coveralls.io/github/mauritiusdadd/redmost?branch=main) [![Testing PyQt6](https://github.com/mauritiusdadd/redmost/actions/workflows/test_linux_pyqt6.yml/badge.svg)](https://github.com/mauritiusdadd/redmost/actions/workflows/test_linux_pyqt6.yml) [![Testing PySide6](https://github.com/mauritiusdadd/redmost/actions/workflows/test_linux_pyside6.yml/badge.svg)](https://github.com/mauritiusdadd/redmost/actions/workflows/test_linux_pyside6.yml)
 # REDMOST 
 
-<b>RED</b>shift <b>M</b>easurement <b>O</b>f <b>S</b>pec<b>T</b>ra is a Qt6 Graphical User Interface (GUI) to do redshift measurements on 1D spectra.
+<b>RED</b>shift <b>M</b>easurements <b>O</b>f <b>S</b>pec<b>T</b>ra is a Qt6 Graphical User Interface (GUI) to do redshift measurements on 1D spectra.
 
 ![Redmost main window](https://github.com/mauritiusdadd/redmost/blob/main/docs/pics/main_ui_spectrum.png?raw=true)
 

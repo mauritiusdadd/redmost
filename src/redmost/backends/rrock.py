@@ -2,6 +2,7 @@ import os
 import uuid
 import pickle
 import argparse
+from packaging import version
 from typing import Tuple, List, Dict, Optional, Any, Callable
 
 import numpy as np
@@ -13,6 +14,8 @@ from astropy.nddata import StdDevUncertainty  # type: ignore
 from astropy.nddata import InverseVariance  # type: ignore
 
 from specutils import Spectrum1D  # type: ignore
+
+RR_GPU_MIN_VER = "0.16.0"
 
 try:
     import redrock
@@ -191,11 +194,21 @@ else:
         # Get the dictionary of wavelength grids
         dwave = dtargets.wavegrids()
 
+        print(f"Using redrock version {redrock.__version__}")
+
         _ = elapsed(
             start,
             "Distribution of {} targets".format(len(dtargets.all_target_ids)),
             comm=None
         )
+
+        opt_zfind_args = {}
+        opt_load_dist_templates_args = {}
+        use_gpu = False
+        if version.parse(redrock.__version__) >= version.parse(RR_GPU_MIN_VER):
+            print(f"GPU support: {use_gpu}")
+            opt_zfind_args['use_gpu'] = use_gpu
+            opt_load_dist_templates_args['use_gpu'] = use_gpu
 
         # Read the template data
         dtemplates = load_dist_templates(
@@ -203,13 +216,8 @@ else:
             templates=None,
             comm=None,
             mp_procs=1,
-            # use_gpu=True,
-            # gpu_mode=True
+            **opt_load_dist_templates_args
         )
-
-        opt_zfind_args = {}
-        # TODO: do more tests before enabling this
-        # opt_zfind_args['use_gpu'] = False
 
         # Compute the redshifts, including both the coarse scan and the
         # refinement.  This function only returns data on the rank 0 process.
