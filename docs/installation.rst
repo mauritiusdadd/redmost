@@ -92,6 +92,9 @@ Redmost uses modular backends to measure the redshift, although only redrock is 
 
 - redrock backend: `<https://github.com/desihub/redrock>`_
 
+.. note::
+    Redrock requires also additional dependencies such as: numba, fitsio and h5py. Please see `<https://github.com/desihub/redrock/blob/main/requirements.txt>`_ for a full list of requirements
+
 Running Redmost
 ===============
 

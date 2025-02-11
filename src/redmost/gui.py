@@ -12,12 +12,14 @@ import pickle
 import sys
 import json
 import uuid
+import pathlib
 import webbrowser
 from enum import Enum
 from typing import TYPE_CHECKING
 from typing import Optional, Union, Tuple, List, Dict, Callable, Any, cast
 
 import numpy as np
+import specutils
 from astropy.nddata import VarianceUncertainty  # type: ignore
 from astropy.nddata import StdDevUncertainty  # type: ignore
 from astropy.nddata import InverseVariance  # type: ignore
@@ -32,6 +34,8 @@ from redmost import utils
 from redmost import lines
 from redmost import backends
 
+from redmost import splashscreen
+
 from redmost.qt_compat import qt_api, get_qapp
 
 if TYPE_CHECKING:
@@ -39,6 +43,14 @@ if TYPE_CHECKING:
     #       programs, like mypy.
     from redmost.qt_compat import QtCore, QtGui, QtWidgets, QtCharts
     from redmost.qt_compat import Signal
+
+
+def bool2tr(val: bool, qapp: Any = get_qapp()):
+    return qapp.tr("YES") if val else qapp.tr("NO")
+
+
+def _open_online_doc(*args: Any, **kwargs: Any) -> None:
+    webbrowser.open(redmost.ONLINE_DOC_URL)
 
 
 class SpectrumQChartView(qt_api.QtCharts.QChartView):
@@ -405,8 +417,8 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
             if y_max is not None:
                 y_axis.setMax(y_max)
 
-    def setLinesType(self, type: str) -> None:
-        self._lines_type = type
+    def setLinesType(self, line_type: str) -> None:
+        self._lines_type = line_type
         self.updateLines()
 
     def setLinesVisible(self, show: bool) -> None:
@@ -463,7 +475,7 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
 
         self._sibling_locked = False
 
-    def resizeEvent(self, event, QResizeEvent=None) -> None:
+    def resizeEvent(self, event: QtGui.QResizeEvent = None) -> None:
         super().resizeEvent(event)
         if self.master:
             self.syncSiblingAxes()
@@ -615,6 +627,373 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         self.setAxesRange(*self._getDataBounds())
 
 
+class XCorrQChartView(qt_api.QtCharts.QChartView):
+    """Subclass of qt_api.QtCharts.QChartView with advanced features."""
+    onMouseMoveSeries = qt_api.Signal(object)
+    onMousePressSeries = qt_api.Signal(object)
+    onMouseReleaseSeries = qt_api.Signal(object)
+    onMouseDoubleClickSeries = qt_api.Signal(object)
+    onMouseWheelEvent = qt_api.Signal(object)
+
+    def __init__(self, *args: Any) -> None:
+        super().__init__(*args)
+
+        self._last_mouse_pos: QtCore.QPointF | None = None
+        self._best_z: Union[None, float] = None
+        self._mouse_z: Union[None, QtCore.QPointF] = None
+
+        self.master: bool = False
+        self.horizontal_lock: bool = True
+        self.vertical_lock: bool = False
+
+        self.setDragMode(qt_api.QtCharts.QChartView.DragMode.NoDrag)
+        self.setMouseTracking(True)
+        self.setRubberBand(
+            qt_api.QtCharts.QChartView.RubberBand.RectangleRubberBand
+        )
+
+        self.setViewportUpdateMode(
+            qt_api.QtWidgets.
+            QGraphicsView.
+            ViewportUpdateMode.
+            FullViewportUpdate
+        )
+
+        self.setSizePolicy(
+            qt_api.QtWidgets.QSizePolicy(
+                qt_api.QtWidgets.QSizePolicy.Policy.Expanding,
+                qt_api.QtWidgets.QSizePolicy.Policy.Expanding
+            )
+        )
+        self.chart().setSizePolicy(
+            qt_api.QtWidgets.QSizePolicy(
+                qt_api.QtWidgets.QSizePolicy.Policy.Expanding,
+                qt_api.QtWidgets.QSizePolicy.Policy.Expanding
+            )
+        )
+
+    def setRedshift(self, best_z: Optional[float] = None):
+        self._best_z = best_z
+
+    def _getDataBounds(self) -> Union[
+        Tuple[float, float, float, float],
+        Tuple[None, None, None, None],
+    ]:
+        x_min = None
+        x_max = None
+        y_min = None
+        y_max = None
+        for series in self.chart().series():
+            data: np.ndarray = np.array(
+                [(p.x(), p.y()) for p in series.points()]
+            )
+            p1x, p1y = np.min(data, axis=0)[0:2]
+            p2x, p2y = np.max(data, axis=0)[0:2]
+
+            if x_min is None:
+                x_min = p1x
+                y_min = p1y
+                x_max = p2x
+                y_max = p2y
+            else:
+                x_min = min(x_min, p1x)
+                y_min = min(y_min, p1y)
+                x_max = max(x_max, p2x)
+                y_max = max(y_max, p2y)
+        return x_min, y_min, x_max, y_max
+
+    def drawForeground(
+        self,
+        painter: QtGui.QPainter,
+        rect: QtCore.QRectF
+    ) -> None:
+        super().drawForeground(painter, rect)
+
+        if len(self.chart().series()) == 0:
+            return
+
+        painter.save()
+        plot_area: QtCore.QRectF = self.chart().plotArea()
+        pen: QtGui.QPen = qt_api.QtGui.QPen()
+        pen_color: QtGui.QColor
+
+        if self._best_z is not None:
+            pen_color = qt_api.QtGui.QColor("#aa333333")
+            pen.setColor(pen_color)
+            pen.setWidthF(1.0)
+            pen.setDashPattern((6, 6, 6, 6))
+            painter.setPen(pen)
+
+            best_z_line_x = self.chart().mapToPosition(
+                qt_api.QtCore.QPointF(self._best_z, 0.0)
+            ).x()
+
+            p_line_top = qt_api.QtCore.QPointF(
+                best_z_line_x, plot_area.top()
+            )
+            p_line_bottom = qt_api.QtCore.QPointF(
+                best_z_line_x, plot_area.bottom()
+            )
+            painter.drawLine(p_line_bottom, p_line_top)
+            painter.drawText(p_line_bottom, f"{self._best_z:.4}")
+
+        if self._mouse_z is not None:
+            pen_color = qt_api.QtGui.QColor("#aa333333")
+            pen.setColor(pen_color)
+            pen.setWidthF(1.0)
+            pen.setDashPattern((6, 6, 6, 6))
+            painter.setPen(pen)
+
+            mouse_line_x = self.chart().mapToPosition(
+                qt_api.QtCore.QPointF(self._mouse_z, 0.0)
+            ).x()
+
+            if (
+                    (mouse_line_x >= plot_area.left()) and
+                    (mouse_line_x <= plot_area.right())
+            ):
+                p_line_top = qt_api.QtCore.QPointF(
+                    mouse_line_x, plot_area.top()
+                )
+                p_line_bottom = qt_api.QtCore.QPointF(
+                    mouse_line_x, plot_area.bottom()
+                )
+                painter.drawLine(p_line_bottom, p_line_top)
+
+        painter.restore()
+
+    def mouseDoubleClickEvent(self, event: QtGui.QMouseEvent) -> None:
+        """
+        Handle mouse double click events.
+
+        :param event: The input event.
+        """
+        super().mouseDoubleClickEvent(event)
+        self.onMouseDoubleClickSeries.emit((self.toSeriesPos(event), event))
+
+    def mouseMoveEvent(
+        self,
+        event: QtGui.QMouseEvent,
+        *args, **kwargs
+    ) -> None:
+        """
+        Handle mouse move events.
+
+        :param event: The input event.
+        """
+
+        try:
+            mouse_pos = event.position()
+        except AttributeError:
+            mouse_pos = event.pos()
+
+        if event.buttons() & qt_api.QtCore.Qt.MouseButton.MiddleButton:
+            if self._last_mouse_pos is None:
+                return
+
+            delta = mouse_pos - self._last_mouse_pos
+            self._last_mouse_pos = mouse_pos
+
+            self.scroll(-delta.x(), delta.y())
+
+            event.accept()
+
+        data_pos = self.toSeriesPos(event)
+
+        self._mouse_z = data_pos.x()
+
+        self.chart().update()
+        self.update()
+        super().mouseMoveEvent(event)
+
+        self.onMouseMoveSeries.emit((data_pos, event))
+
+    def mousePressEvent(
+        self,
+        event: QtGui.QMouseEvent,
+        *args, **kwargs
+    ) -> None:
+        """
+        Handle mouse button press events.
+
+        :param event: The input event.
+        """
+
+        if event.button() == qt_api.QtCore.Qt.MouseButton.MiddleButton:
+            get_qapp().setOverrideCursor(
+                qt_api.QtCore.Qt.CursorShape.SizeAllCursor
+            )
+
+            try:
+                self._last_mouse_pos = event.position()
+            except AttributeError:
+                self._last_mouse_pos = event.pos()
+
+            event.accept()
+
+        super().mousePressEvent(event)
+        self.onMousePressSeries.emit((self.toSeriesPos(event), event))
+
+    def mouseReleaseEvent(
+        self,
+        event: QtGui.QMouseEvent,
+        *args, **kwargs
+    ) -> None:
+        """
+        Handle mouse button release events.
+
+        :param event: The input event.
+        """
+        if event.button() == qt_api.QtCore.Qt.MouseButton.MiddleButton:
+            get_qapp().restoreOverrideCursor()
+            event.accept()
+        elif event.button() == qt_api.QtCore.Qt.MouseButton.RightButton:
+            qt_api.QtWidgets.QGraphicsView.mouseReleaseEvent(self, event)
+        else:
+            # Passtrough for rubber band handling
+            super().mouseReleaseEvent(event)
+
+        self.onMouseReleaseSeries.emit((self.toSeriesPos(event), event))
+
+
+    def scroll(self, dx: float, dy: float) -> None:
+        chart = self.chart()
+
+        if self.vertical_lock and self.horizontal_lock:
+            return
+        elif not (self.vertical_lock or self.horizontal_lock):
+            chart.scroll(dx, dy)
+        elif self.vertical_lock:
+            chart.scroll(dx, 0)
+        else:
+            chart.scroll(0, dy)
+
+    def resizeEvent(self, event: QtGui.QResizeEvent = None) -> None:
+        super().resizeEvent(event)
+        if self.master:
+            self.syncSiblingAxes()
+
+    def toSeriesPos(self, event: QtGui.QMouseEvent):
+        """
+        Convert mouse position from event location to data values.
+
+        :param event: The input event.
+        """
+        try:
+            widget_pos = event.position()
+        except AttributeError:
+            widget_pos = event.pos()
+
+        scene_pos = self.mapToScene(int(widget_pos.x()), int(widget_pos.y()))
+        chart_item_pos = self.chart().mapFromScene(scene_pos)
+        value_in_series = self.chart().mapToValue(chart_item_pos)
+        return value_in_series
+
+    def wheelEvent(self, event: QtGui.QWheelEvent, **kwargs) -> None:
+        """
+        Handle mouse wheel events.
+
+        :param event: The input event.
+        """
+
+        super().wheelEvent(event)
+        if not event.angleDelta().isNull():
+            delta_y = event.angleDelta().y() / 5
+            delta_x = event.angleDelta().x() / 5
+        elif not event.pixelDelta().isNull():
+            delta_y = event.pixelDelta().y()
+            delta_x = event.pixelDelta().x()
+        else:
+            delta_y = 0
+            delta_x = 0
+
+        modifiers = qt_api.QtWidgets.QApplication.keyboardModifiers()
+
+        if modifiers == qt_api.QtCore.Qt.KeyboardModifier.ShiftModifier:
+            # Vertical scroll
+            self.scroll(delta_y, delta_x)
+        elif modifiers == qt_api.QtCore.Qt.KeyboardModifier.ControlModifier:
+            # Horizontal scroll
+            if delta_y > 0:
+                self.zoomIn()
+            else:
+                self.zoomOut()
+        else:
+            self.scroll(delta_x, delta_y)
+
+        self.onMouseWheelEvent.emit(event)
+
+    def zoom(
+        self,
+        value: float,
+        x_center: Optional[float] = None,
+        y_center: Optional[float] = None
+    ) -> None:
+        """
+        Zoom.
+
+        :param value: Zoom value.
+        :param x_center: x of the zoom center
+        :param y_center: y of the zoom center
+        """
+
+        rect = self.chart().plotArea()
+
+        if x_center is None:
+            x_center = rect.width()/2
+
+        if y_center is None:
+            y_center = rect.height()/2
+
+        if not self.horizontal_lock:
+            width_original = rect.width()
+            rect.setWidth(width_original / value)
+            center_scale_x = x_center / width_original
+            left_offset = x_center - (rect.width() * center_scale_x)
+            rect.moveLeft(rect.x() + left_offset)
+
+        if not self.vertical_lock:
+            height_original = rect.height()
+            rect.setHeight(height_original / value)
+            center_scale_y = y_center / height_original
+            top_offset = y_center - (rect.height() * center_scale_y)
+            rect.moveTop(rect.y() + top_offset)
+
+        self.chart().zoomIn(rect)
+
+    def zoomIn(
+        self, value: float = 2.0,
+        x_center: Optional[float] = None,
+        y_center: Optional[float] = None
+    ) -> None:
+        """
+        Zoom in.
+
+        :param value: Zoom value. The default value is 2.0.
+        :param x_center: x of the zoom center
+        :param y_center: y of the zoom center
+        """
+        self.zoom(value, x_center, y_center)
+
+    def zoomOut(
+        self,
+        value: float = 0.5,
+        x_center: Optional[float] = None,
+        y_center: Optional[float] = None
+    ) -> None:
+        """
+        Zoom in.
+
+        :param value: Zoom value. The default value is 0.5.
+        :param x_center: x of the zoom center
+        :param y_center: y of the zoom center
+        """
+        self.zoom(value, x_center, y_center)
+
+    def zoomReset(self) -> None:
+        """Reset the zoom to fit the chart content."""
+        self.setAxesRange(*self._getDataBounds())
+
 class QRedrockHandler(qt_api.QtCore.QObject):
     """Class to handle redrock subprocess."""
 
@@ -650,7 +1029,7 @@ class QRedrockHandler(qt_api.QtCore.QObject):
         text = bytes(data_bytes).decode()  # type: ignore
         for line in text.splitlines():
             simplified = ' '.join(line.lower().strip().split())
-            if ("finished in" in simplified):
+            if "finished in" in simplified:
                 self._total_progress += 1
                 self.progress.emit(self._total_progress)
             elif "computing redshifts took:" in simplified:
@@ -666,7 +1045,7 @@ class QRedrockHandler(qt_api.QtCore.QObject):
             self.results = None
         self.finished.emit()
 
-    def run_redrock(self, spectra: Dict[uuid.UUID, Spectrum1D]) -> None:
+    def run(self, spectra: Dict[uuid.UUID, Spectrum1D]) -> None:
         self.reset.emit()
         self.maximum.emit(len(spectra))
         self.message.emit(self.qapp.tr("Building targets"))
@@ -691,6 +1070,86 @@ class QRedrockHandler(qt_api.QtCore.QObject):
                 self._result_dump_file
             ]
         )
+
+
+class QXCorrHandler(qt_api.QtCore.QObject):
+    """Class to handle xcorr subprocess."""
+
+    progress: Signal = qt_api.Signal(int)
+    maximum: Signal = qt_api.Signal(int)
+    reset: Signal = qt_api.Signal()
+    message: Signal = qt_api.Signal(str)
+    finished: Signal = qt_api.Signal()
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.qapp = get_qapp()
+        self.templates: Union[None, Dict[str, Spectrum1D]] = None
+        self.use_gpu: Union[str, bool] = False
+        self.gpu_device: Union[None, str] = None
+        self.z_min: float = 0
+        self.z_max: float = 6
+        self.z_step: float = 0.001
+        self.batch_size: int = 32
+        self.subtract_continuum: bool = True
+        self.continuum_smoothing_level: float = 50
+        self.best_z: Dict[uuid.UUID: Dict[str: float]] = {}
+        self.corr_data: Dict[uuid.UUID: Dict[str: np.ndarray]] = {}
+
+    def setGpuBackend(self, use_gpu: Union[str, bool]) -> None:
+        self.use_gpu = use_gpu
+
+    def setGpuDevice(self, device: Optional[str] = None):
+        self.gpu_device = device
+
+    def setContinuumSubtracted(self, subtract_continuun: bool):
+        self.subtract_continuum = bool(subtract_continuun)
+
+    def clear(self) -> None:
+        self.best_z = {}
+        self.corr_data = {}
+
+    def run(self, spectra: Dict[uuid.UUID, Spectrum1D]) -> None:
+        self.reset.emit()
+        self.maximum.emit(0)
+        self.maximum.emit(100)
+
+        self.message.emit(self.qapp.tr("Running X-Corr backend"))
+
+        def progress_callback(prog, total, text: str):
+            if total == 0:
+                self.maximum.emit(0)
+                self.progress.emit(0)
+            else:
+                self.maximum.emit(total)
+                self.progress.emit(prog)
+            self.message.emit(text)
+            self.qapp.processEvents()
+
+        if self.subtract_continuum:
+            sub_smooth = self.continuum_smoothing_level
+        else:
+            sub_smooth = False
+
+        results = backends.xcorr.xcorr_2d(
+            spectra=spectra,
+            templates=self.templates,
+            z_min=self.z_min,
+            z_max=self.z_max,
+            z_step=self.z_step,
+            use_gpu=self.use_gpu,
+            device=self.gpu_device,
+            continuum_subtracted=sub_smooth,
+            batch_size=self.batch_size,
+            progress_callback=progress_callback
+        )
+
+        self.best_z.update(results[0])
+        self.corr_data.update(results[1])
+
+        self.reset.emit()
+        self.message.emit(self.qapp.tr("X-Corr done!"))
+        self.finished.emit()
 
 
 class GlobalState(Enum):
@@ -720,9 +1179,14 @@ class AboutDialog(qt_api.QtWidgets.QDialog):
         properties: Dict[str, str] = {
             qapp.tr("PROGRAM VERSION"): redmost.__version__,
             qapp.tr("QT BACKEND"): qt_api.qt_api_name,
-            qapp.tr("HAS REDROCK"): (
-                qapp.tr("YES") if backends.HAS_REDROCK else qapp.tr("NO")
-            )
+            qapp.tr("HAS REDROCK"): bool2tr(backends.HAS_REDROCK),
+            qapp.tr("HAS X-CORR"): bool2tr(backends.HAS_XCORR),
+            qapp.tr("HAS GPU SUPPORT"): bool2tr(
+                utils.HAS_TENSORFLOW or
+                utils.HAS_TORCH
+            ),
+            qapp.tr("HAS PYTORCH"): bool2tr(utils.HAS_TORCH),
+            qapp.tr("HAS TENSORFLOW"): bool2tr(utils.HAS_TENSORFLOW)
         }
 
         button_box = qt_api.QtWidgets.QDialogButtonBox(self)
@@ -904,6 +1368,12 @@ class SettingsDialog(qt_api.QtWidgets.QDialog):
     qt_backend_combo_box: QtWidgets.QComboBox
     style_combo_box: QtWidgets.QComboBox
     icon_theme_combo_box: QtWidgets.QComboBox
+    gpu_backend_combo_box: QtWidgets.QComboBox
+    gpu_device_combo_box: QtWidgets.QComboBox
+    template_dirs_list_widget: QtWidgets.QListWidget
+    template_files_list_widget: QtWidgets.QListWidget
+    add_template_dir_push_button: QtWidgets.QPushButton
+    remove_template_dir_push_button: QtWidgets.QPushButton
 
 
 class MainWindow(qt_api.QtWidgets.QMainWindow):
@@ -938,7 +1408,7 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     flux_group_box: QtWidgets.QGroupBox
     flux_widget_layout: QtWidgets.QHBoxLayout
     import_zcat_button: QtWidgets.QPushButton
-    info_group_box: QtWidgets.QGroupBox
+    info_tab_widget: QtWidgets.QTabWidget
     lines_auto_button: QtWidgets.QPushButton
     lines_tol_dspinbox: QtWidgets.QDoubleSpinBox
     lines_match_list_widget: QtWidgets.QListWidget
@@ -975,6 +1445,19 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     toggle_similar_button: QtWidgets.QPushButton
     var_widget_layout: QtWidgets.QHBoxLayout
     wdisp_widget_layout: QtWidgets.QHBoxLayout
+    xcorr_all_radio: QtWidgets.QRadioButton
+    xcorr_csub_checkbox: QtWidgets.QCheckBox
+    xcorr_current_radio: QtWidgets.QRadioButton
+    xcorr_gpu_checkbox: QtWidgets.QCheckBox
+    xcorr_run_button: QtWidgets.QPushButton
+    xcorr_selected_radio: QtWidgets.QRadioButton
+    xcorr_templates_deselect_all_button: QtWidgets.QPushButton
+    xcorr_templates_select_all_button: QtWidgets.QPushButton
+    xcorr_templates_tree_widget: QtWidgets.QTreeWidget
+    xcorr_widget_layout: QtWidgets.QHBoxLayout
+    xcorr_z_max_dspinbox: QtWidgets.QDoubleSpinBox
+    xcorr_z_min_dspinbox: QtWidgets.QDoubleSpinBox
+    xcorr_z_step_dspinbox: QtWidgets.QDoubleSpinBox
     z_dspinbox: QtWidgets.QDoubleSpinBox
     z_min_dspinbox: QtWidgets.QDoubleSpinBox
     z_max_dspinbox: QtWidgets.QDoubleSpinBox
@@ -991,6 +1474,10 @@ class GuiApp:
             "github.com/mauritiusdadd/redmost"
         )
 
+        self.splash = splashscreen.SplashScreen()
+        self.splash.setValue(0)
+        self.splash.showMessage(self.qapp.tr("Initializing..."))
+
         self.settings: QtCore.QSettings = qt_api.QtCore.QSettings()
 
         self.open_spectra: Dict[uuid.UUID, Spectrum1D] = {}
@@ -1002,8 +1489,16 @@ class GuiApp:
         self.object_state_dict: Dict[uuid.UUID, Any] = {}
         self.current_project_file_path: Optional[str] = None
         self.current_open_dir: Optional[str] = None
+        self.xcor_tree_leaf_items: List[QtWidgets.QTreeWidgetItem] = []
+        self.xcorr_templates: Dict[str, Spectrum1D] = {}
+        self.cur_xcorr_leaf_item: Optional[QtWidgets.QTreeWidgetItem] = None
+        self.use_gpu: Union[str, bool] = False
+        self.compute_device: Union[str, None] = None
+        self.compute_device_id: int = -1
 
         self.global_state: Enum = GlobalState.READY
+        self._updateXcorrTemplateTreeState_lock = False
+        self._rebuild_xcorr_template_list = True
 
         self.qf_color: Dict[int, str] = {
             0: "#FFFFFF",
@@ -1023,11 +1518,32 @@ class GuiApp:
             SettingsDialog,
             qt_api.loadUiWidget("settings_dialog.ui")
         )
+
+        self.settings_wnd.gpu_backend_combo_box.currentIndexChanged.connect(
+            self.setGpuBackend
+        )
+
+        self.settings_wnd.gpu_device_combo_box.currentIndexChanged.connect(
+            self.setGpuDevice
+        )
+
         self.settings_wnd.accepted.connect(
             self.acceptSettings
         )
         self.settings_wnd.rejected.connect(
             self.restoreSettings
+        )
+
+        self.settings_wnd.template_dirs_list_widget.addItem(
+            backends.xcorr.TEMPLATE_DIR
+        )
+
+        self.settings_wnd.add_template_dir_push_button.clicked.connect(
+            self.doAddNewTemplateDir
+        )
+
+        self.settings_wnd.remove_template_dir_push_button.clicked.connect(
+            self.doRemoveCurrentTemplateDir
         )
 
         self.control_mapping_wnd = cast(
@@ -1037,10 +1553,10 @@ class GuiApp:
 
         self.main_wnd.setWindowTitle("redmost")
         self.main_wnd.setWindowIcon(
-            qt_api.QtGui.QIcon(utils.get_data_file("redmost.png"))
+            qt_api.QtGui.QIcon(utils.get_icon("redmost.png"))
         )
         self.qapp.setWindowIcon(
-            qt_api.QtGui.QIcon(utils.get_data_file("redmost.png"))
+            qt_api.QtGui.QIcon(utils.get_icon("redmost.png"))
         )
 
         self.msgBox: QtWidgets.QMessageBox
@@ -1086,6 +1602,7 @@ class GuiApp:
             self.setCurrentObjectRedshiftFromSingleLine
         )
 
+        self.splash.showMessage(self.qapp.tr("Loading backends..."))
         # Check for RedRock.
         if not backends.HAS_REDROCK:
             self.main_wnd.redrock_run_button.setEnabled(False)
@@ -1120,6 +1637,40 @@ class GuiApp:
             )
 
         self.main_wnd.redrock_current_radio.setEnabled(False)
+
+        # Check for X-Corr plugin.
+        if not backends.HAS_XCORR:
+            self.main_wnd.tab_xcorr.setEnabled(False)
+            self.xcorr_handler = None
+        else:
+            self.main_wnd.tab_xcorr.setEnabled(True)
+            if utils.HAS_TORCH or utils.HAS_TENSORFLOW:
+                self.main_wnd.xcorr_gpu_checkbox.setEnabled(True)
+            else:
+                self.main_wnd.xcorr_gpu_checkbox.setEnabled(False)
+
+            self.main_wnd.xcorr_run_button.clicked.connect(
+                self.doStartXCorr
+            )
+
+            self.xcorr_handler = QXCorrHandler()
+            self.xcorr_handler.reset.connect(
+                self.pbar.reset
+            )
+            self.xcorr_handler.maximum.connect(
+                self.pbar.setMaximum
+            )
+            self.xcorr_handler.progress.connect(
+                self.pbar.setValue
+            )
+            self.xcorr_handler.message.connect(
+                self.statusbar.showMessage
+            )
+            self.xcorr_handler.finished.connect(
+                self.collectXCorrResults
+            )
+
+        self.setXcorrTreeWidgetColumnWidth([200, 20])
 
         # Dialog for importing zcat
 
@@ -1223,6 +1774,30 @@ class GuiApp:
         )
         self.main_wnd.sky_widget_layout.addWidget(self.sky_chart_view)
 
+        # QChartView widget for XCorr
+
+        self.xcorr_chart_view: XCorrQChartView = XCorrQChartView(
+            self.main_wnd.other_charts_tab_widget
+        )
+        self.xcorr_chart_view.vertical_lock = True
+        self.xcorr_chart_view.setObjectName("var_chart_view")
+        self.xcorr_chart_view.setRenderHint(
+            qt_api.QtGui.QPainter.RenderHint.Antialiasing
+        )
+        self.xcorr_chart_view.setHorizontalScrollBarPolicy(
+            qt_api.QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.xcorr_chart_view.setVerticalScrollBarPolicy(
+            qt_api.QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.xcorr_chart_view.setContentsMargins(0, 0, 0, 0)
+        self.xcorr_chart_view.chart().setContentsMargins(0, 0, 0, 0)
+        self.xcorr_chart_view.chart().layout().setContentsMargins(0, 0, 0, 0)
+        self.xcorr_chart_view.setRubberBand(
+            qt_api.QtCharts.QChartView.RubberBand.NoRubberBand
+        )
+        self.main_wnd.xcorr_widget_layout.addWidget(self.xcorr_chart_view)
+
         # Add siblings to main flux QChartView
 
         self.flux_chart_view.addSibling(self.var_chart_view)
@@ -1322,6 +1897,10 @@ class GuiApp:
             self._updateMouseLabelFromEvent
         )
 
+        self.xcorr_chart_view.onMouseMoveSeries.connect(
+            self._updateMouseLabelXCorrFromEvent
+        )
+
         self.main_wnd.smoothing_check_box.stateChanged.connect(
             self.toggleSmothing
         )
@@ -1370,7 +1949,7 @@ class GuiApp:
         )
 
         self.main_wnd.action_online_user_manual.triggered.connect(
-            self._open_online_doc
+            _open_online_doc
         )
 
         self.main_wnd.action_about.triggered.connect(
@@ -1383,6 +1962,18 @@ class GuiApp:
 
         self.main_wnd.action_export_as_a_picture.triggered.connect(
             self.doExportAsPicture
+        )
+
+        self.main_wnd.xcorr_templates_tree_widget.itemChanged.connect(
+            self.updateXcorrTemplateTreeState
+        )
+
+        self.main_wnd.xcorr_templates_tree_widget.itemDoubleClicked.connect(
+            self.setCurrentObjectRedshiftFromXcorr
+        )
+
+        self.main_wnd.xcorr_templates_tree_widget.itemDoubleClicked.connect(
+            self.plotXcorrFunction
         )
 
         # Final steps
@@ -1431,6 +2022,16 @@ class GuiApp:
                 self.main_wnd.log_y_check_box.setCheckState,
                 qt_api.QtCore.Qt.CheckState
             ),
+            "xcorr_csub_checkbox": (
+                self.main_wnd.xcorr_csub_checkbox.checkState,
+                self.main_wnd.xcorr_csub_checkbox.setCheckState,
+                qt_api.QtCore.Qt.CheckState
+            ),
+            "xcorr_gpu_checkbox": (
+                self.main_wnd.xcorr_gpu_checkbox.checkState,
+                self.main_wnd.xcorr_gpu_checkbox.setCheckState,
+                qt_api.QtCore.Qt.CheckState
+            ),
             "check_for_updates": (
                 self.settings_wnd.update_check_box.checkState,
                 self.settings_wnd.update_check_box.setCheckState,
@@ -1445,18 +2046,44 @@ class GuiApp:
                 self.settings_wnd.icon_theme_combo_box.currentIndex,
                 self.settings_wnd.icon_theme_combo_box.setCurrentIndex,
                 int
+            ),
+            "gpu_backend": (
+                self.getGpuBackend,
+                self.setGpuBackend,
+                str
+            ),
+            "gpu_device": (
+                self.getGpuDeviceId,
+                self.setGpuDeviceId,
+                str
+            ),
+            "xcorr_template_dirs": (
+                self.getXcorrTemplateDirs,
+                self.setXcorrTemplateDirs,
+                lambda x: x if isinstance(x, list) else [x,]
+            ),
+            "xcorr_tree_widget_column_widths": (
+                self.getXcorrTreeWidgetColumnWidth,
+                self.setXcorrTreeWidgetColumnWidth,
+                lambda x: x if isinstance(x, list) else [int(x),]
             )
         }
 
-        self.loadSettings()
+        self.splash.showMessage(
+            self.qapp.tr("Loading settings and templates...")
+        )
+        self.loadSettings(prog_callback=self.splash.setValue)
         self.newProject()
 
+        self.splash.finish(self.main_wnd)
         self.main_wnd.show()
 
         if self.settings_wnd.update_check_box.isChecked():
             is_outdated, new_ver = utils.check_updates()
             if is_outdated:
                 self._show_update_message(new_ver)
+
+
 
     def _backup_current_object_state(self) -> None:
         """Backup the program state for the current object."""
@@ -1511,7 +2138,7 @@ class GuiApp:
     def _lock(self, *args, **kwargs) -> None:
         self.main_wnd.spec_group_box.setEnabled(False)
         self.main_wnd.red_group_box.setEnabled(False)
-        self.main_wnd.info_group_box.setEnabled(False)
+        self.main_wnd.info_tab_widget.setEnabled(False)
         self.flux_chart_view.setRubberBand(
             qt_api.QtCharts.QChartView.RubberBand.NoRubberBand
         )
@@ -1631,6 +2258,9 @@ class GuiApp:
         self.main_wnd.redrock_run_button.setIcon(
             qt_api.get_qicon("play", theme)
         )
+        self.main_wnd.xcorr_run_button.setIcon(
+            qt_api.get_qicon("play", theme)
+        )
         self.main_wnd.remove_selected_button.setIcon(
             qt_api.get_qicon("file-minus", theme)
         )
@@ -1646,9 +2276,6 @@ class GuiApp:
         self.main_wnd.toggle_similar_button.setIcon(
             qt_api.get_qicon("check-square", theme)
         )
-
-    def _open_online_doc(self, *args: Any, **kwargs: Any) -> None:
-        webbrowser.open(redmost.ONLINE_DOC_URL)
 
     def _restore_object_state(self, obj_uuid: uuid.UUID) -> None:
         """
@@ -1765,7 +2392,7 @@ class GuiApp:
     def _unlock(self, *args, **kwargs) -> None:
         self.main_wnd.spec_group_box.setEnabled(True)
         self.main_wnd.red_group_box.setEnabled(True)
-        self.main_wnd.info_group_box.setEnabled(True)
+        self.main_wnd.info_tab_widget.setEnabled(True)
         self.main_wnd.plot_group_box.setEnabled(True)
         self.flux_chart_view.setRubberBand(
             qt_api.QtCharts.QChartView.RubberBand.RectangleRubberBand
@@ -1779,8 +2406,14 @@ class GuiApp:
     def _updateMouseLabelFromEvent(self, *args) -> None:
         self._updateMouseLabel(args[0][0])
 
+    def _updateMouseLabelXCorrFromEvent(self, *args) -> None:
+        self._updateMouseLabelXCorr(args[0][0])
+
     def _updateMouseLabel(self, mouse_pos: QtCore.QPointF) -> None:
         self.mousePosLabel.setText(f"\u03BB = {mouse_pos.x():.2f}")
+
+    def _updateMouseLabelXCorr(self, mouse_pos: QtCore.QPointF) -> None:
+        self.mousePosLabel.setText(f"z = {mouse_pos.x():.4f}")
 
     def acceptSettings(self, *args, **kwargs) -> None:
         self.saveSettings()
@@ -1826,6 +2459,29 @@ class GuiApp:
         self.main_wnd.lines_table_widget.setItem(new_item_row, 0, lam_item)
         self.main_wnd.lines_table_widget.setItem(new_item_row, 1, rest_item)
         self.main_wnd.lines_table_widget.setItem(new_item_row, 2, match_item)
+
+    def addNewTemplateDir(self, dir_path, update=True) -> None:
+        dir_path = pathlib.Path(str(dir_path)).resolve()
+
+        for j in range(self.settings_wnd.template_dirs_list_widget.count()):
+            item = self.settings_wnd.template_dirs_list_widget.item(j)
+            existing_path = pathlib.Path(item.text()).resolve()
+            if dir_path == existing_path:
+                break
+        else:
+            self._rebuild_xcorr_template_list = True
+            self.settings_wnd.template_dirs_list_widget.addItem(
+                str(dir_path)
+            )
+            if update:
+                self.updateXcorrTemplateList()
+
+    def clearXcorrTreeWidgetZ(self) -> None:
+        for item in self.xcor_tree_leaf_items:
+            item.setText(1, "")
+
+        self.cur_xcorr_leaf_item = None
+        self.plotXcorrFunction()
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         self.msgBox.setText(
@@ -1895,6 +2551,14 @@ class GuiApp:
         self.global_state = GlobalState.READY
         self._unlock()
 
+
+    def collectXCorrResults(self) -> None:
+        if self.xcorr_handler is None:
+            return
+
+        self.showXcorrZ()
+
+
     def currentQualityFlagChanged(self, df_index):
         if self.current_uuid is None:
             return
@@ -1926,6 +2590,9 @@ class GuiApp:
         spec_uuid: uuid.UUID = new_item.data(
             qt_api.QtCore.Qt.ItemDataRole.UserRole
         )
+
+        self.showXcorrZ(spec_uuid)
+        self.plotXcorrFunction(self.cur_xcorr_leaf_item)
 
         self.showObjectInfo(spec_uuid)
 
@@ -2088,7 +2755,12 @@ class GuiApp:
 
             flux_series.setOpacity(0.2)
             smoothing_sigma = len(flux) / (1 + 2 * smoothing_factor)
-            smoothed_flux = utils.smooth_fft(flux, sigma=smoothing_sigma)
+            smoothed_flux = utils.smooth_fft(
+                flux,
+                sigma=smoothing_sigma,
+                use_gpu=self.use_gpu,
+                device=self.compute_device
+            )
             smoothed_flux_series = values2series(
                 wav, smoothed_flux, self.qapp.tr("Smoothed flux")
             )
@@ -2192,6 +2864,19 @@ class GuiApp:
         self.main_wnd.spec_group_box.setEnabled(False)
         self.global_state = GlobalState.SELECT_LINE_MANUAL
         self.qapp.setOverrideCursor(qt_api.QtCore.Qt.CursorShape.CrossCursor)
+
+    def doAddNewTemplateDir(self, *args: Any, **kwargs: Any) -> None:
+
+        url = qt_api.QtWidgets.QFileDialog.getExistingDirectoryUrl(
+            self.settings_wnd,
+            self.qapp.tr("Select a directory"),
+        )
+
+        if not url.isValid():
+            return
+
+        self.addNewTemplateDir(url.path())
+        self.updateXcorrTemplateList()
 
     def doDeleteAllLines(self, *args: Any, **kwargs: Any) -> None:
         """Delete all identified lines."""
@@ -2629,19 +3314,28 @@ class GuiApp:
             )
             z_list.addItem(new_z_item)
 
-    def doRemoveCurrentSpecItems(self) -> None:
-        if self.main_wnd.spec_list_widget.count() == 0:
-            return
-
-        current_row = self.main_wnd.spec_list_widget.currentRow()
-        item = self.main_wnd.spec_list_widget.item(current_row)
+    def removeSpecItem(self, item: QtWidgets.QListWidgetItem) -> None:
         if item is None:
             return
 
         item_uuid = item.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
-        self.main_wnd.spec_list_widget.takeItem(current_row)
+        item_row = self.main_wnd.spec_list_widget.row(item)
+        self.main_wnd.spec_list_widget.takeItem(item_row)
+
         self.open_spectra_items.pop(item_uuid)
         self.open_spectra_files.pop(item_uuid)
+
+        if self.xcorr_handler.best_z is not None:
+            try:
+                self.xcorr_handler.best_z.pop(item_uuid)
+            except KeyError:
+                pass
+
+        if self.xcorr_handler.corr_data is not None:
+            try:
+                self.xcorr_handler.best_z.pop(item_uuid)
+            except KeyError:
+                pass
 
         try:
             self.object_state_dict.pop(item_uuid)
@@ -2653,32 +3347,30 @@ class GuiApp:
         if self.main_wnd.spec_list_widget.count() == 0:
             self.newProject()
 
+    def doRemoveCurrentSpecItems(self) -> None:
+        if self.main_wnd.spec_list_widget.count() == 0:
+            return
+
+        current_row = self.main_wnd.spec_list_widget.currentRow()
+        item = self.main_wnd.spec_list_widget.item(current_row)
+        self.removeSpecItem(item)
+
     def doRemoveSelectedSpecItems(self) -> None:
         if self.main_wnd.spec_list_widget.count() == 0:
             return
 
         for row in range(self.main_wnd.spec_list_widget.count(), 0, -1):
             item = self.main_wnd.spec_list_widget.item(row - 1)
+            self.removeSpecItem(item)
 
-            if item is None:
-                continue
-            elif item.checkState() != qt_api.QtCore.Qt.CheckState.Checked:
-                continue
 
-            item_uuid = item.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
-            self.main_wnd.spec_list_widget.takeItem(row - 1)
-            self.open_spectra_items.pop(item_uuid)
-            self.open_spectra_files.pop(item_uuid)
-
-            try:
-                self.object_state_dict.pop(item_uuid)
-            except KeyError:
-                pass
-
-            del item
-
-        if self.main_wnd.spec_list_widget.count() == 0:
-            self.newProject()
+    def doRemoveCurrentTemplateDir(self, *args: Any, **kwargs: Any) -> None:
+        item = self.settings_wnd.template_dirs_list_widget.takeItem(
+            self.settings_wnd.template_dirs_list_widget.currentRow()
+        )
+        del item
+        self._rebuild_xcorr_template_list = True
+        self.updateXcorrTemplateList()
 
     def doSaveProject(self, *args: Any, **kwargs: Any) -> bool:
         """Save the current project."""
@@ -2774,7 +3466,60 @@ class GuiApp:
                 return
             for_rr[self.current_uuid] = self.open_spectra[self.current_uuid]
 
-        self.redrock_handler.run_redrock(for_rr)
+        self.redrock_handler.run(for_rr)
+
+
+    def doStartXCorr(self, *args, **kwargs) -> None:
+        if self.xcorr_handler is None:
+            # Should never happen since we disable the button to start this
+            # action if the xcorr backend is not found
+            return
+
+        self.statusbar.showMessage("Running xcorr backend...")
+
+        for_xcorr: Dict[uuid.UUID, Spectrum1D] = {}
+
+        if self.main_wnd.xcorr_all_radio.isChecked():
+            for_xcorr = self.open_spectra
+
+        elif self.main_wnd.xcorr_selected_radio.isChecked():
+
+            item: Union[None, QtWidgets.QListWidgetItem]
+            for row in range(self.main_wnd.spec_list_widget.count()):
+                item = self.main_wnd.spec_list_widget.item(row)
+
+                if item is None:
+                    # should never happen!
+                    continue
+
+                if item.checkState() == qt_api.QtCore.Qt.CheckState.Checked:
+                    item_uuid = item.data(
+                        qt_api.QtCore.Qt.ItemDataRole.UserRole
+                    )
+                    for_xcorr[item_uuid] = self.open_spectra[item_uuid]
+        else:
+            if self.current_uuid is None:
+                return
+            for_xcorr[self.current_uuid] = self.open_spectra[self.current_uuid]
+
+        self.xcorr_handler.z_min = self.main_wnd.xcorr_z_min_dspinbox.value()
+        self.xcorr_handler.z_max = self.main_wnd.xcorr_z_max_dspinbox.value()
+        self.xcorr_handler.z_step = self.main_wnd.xcorr_z_step_dspinbox.value()
+        if self.main_wnd.xcorr_gpu_checkbox.isChecked():
+            self.xcorr_handler.setGpuBackend(self.use_gpu)
+            self.xcorr_handler.setGpuDevice(self.compute_device)
+        else:
+            self.xcorr_handler.setGpuBackend(False)
+            self.xcorr_handler.setGpuDevice(None)
+        self.xcorr_handler.templates = self.getXcorrSelectedTemplates()
+        self.xcorr_handler.setContinuumSubtracted(
+            self.main_wnd.xcorr_csub_checkbox.isChecked()
+        )
+
+        self.pbar.show()
+        self.xcorr_handler.run(for_xcorr)
+        self.pbar.hide()
+
 
     def doToggleDone(self) -> None:
         check_state = None
@@ -2871,6 +3616,51 @@ class GuiApp:
 
         zcat_tbl.write(dest_file, overwrite=True)
 
+    def getGpuBackend(self):
+        if self.use_gpu:
+            return self.use_gpu
+        else:
+            return  "none"
+
+    def getGpuDevice(self):
+        return self.compute_device
+
+    def getGpuDeviceId(self):
+        return self.compute_device_id
+
+    def getXcorrSelectedTemplates(self) -> Dict[str, specutils.Spectrum1D]:
+
+        selected_templates = {}
+        for item in self.xcor_tree_leaf_items:
+            if item.checkState(0) == qt_api.QtCore.Qt.CheckState.Checked:
+                template_id = item.data(
+                    0, qt_api.QtCore.Qt.ItemDataRole.UserRole
+                )
+                selected_templates[template_id] = self.xcorr_templates[template_id]
+        return selected_templates
+
+
+
+    def getXcorrTemplateDirs(self) -> List[str]:
+        xcorr_template_dir_list = []
+        for j in range(self.settings_wnd.template_dirs_list_widget.count()):
+            item = self.settings_wnd.template_dirs_list_widget.item(j)
+            xcorr_template_dir_list.append(
+                str(pathlib.Path(item.text()).resolve())
+            )
+
+        return xcorr_template_dir_list
+
+    def getXcorrTreeWidgetColumnWidth(self) -> List[int]:
+        widths = [
+            int(self.main_wnd.xcorr_templates_tree_widget.columnWidth(col))
+            for col in range(
+                self.main_wnd.xcorr_templates_tree_widget.columnCount()
+            )
+        ]
+        return widths
+
+
     def getZcatColumnMapping(self, result: int) -> None:
 
         try:
@@ -2947,18 +3737,25 @@ class GuiApp:
         self.cancel_button.hide()
         self._unlock()
 
-    def loadIcons(self) -> None:
-        theme_name = str(self.settings_wnd.icon_theme_combo_box.currentText())
-        self._load_icons(theme_name)
+    def getCurrentTheme(self) -> str:
+        return str(self.settings_wnd.icon_theme_combo_box.currentText())
 
-    def loadSettings(self) -> None:
-        for key, (_, set_func, cast_func) in self._global_setting.items():
+    def loadIcons(self) -> None:
+        self._load_icons(self.getCurrentTheme())
+
+    def loadSettings(self, prog_callback: Optional[Callable] = None) -> None:
+        st_items = self._global_setting.items()
+        for j, (key, (_, set_func, cast_func)) in enumerate(st_items):
+            if prog_callback is not None:
+                prog_callback(int(100*j / len(st_items)))
+
             if self.settings.contains(key):
                 value = self.settings.value(key)
                 if value is None:
                     continue
                 elif cast_func is not None:
                     value = cast_func(value)
+
                 try:
                     set_func(value)
                 except (TypeError, ValueError):
@@ -2987,6 +3784,9 @@ class GuiApp:
         self.main_wnd.lines_match_list_widget.clear()
         self.main_wnd.lines_table_widget.setRowCount(0)
         self.main_wnd.obj_prop_table_widget.setRowCount(0)
+
+        self.xcorr_handler.clear()
+        self.clearXcorrTreeWidgetZ()
 
         flux_chart = self.flux_chart_view.chart()
         flux_chart.removeAllSeries()
@@ -3160,6 +3960,79 @@ class GuiApp:
         self.saveSettings()
         self.settings_wnd.open()
 
+    def plotXcorrFunction(
+            self,
+            item: Optional[QtWidgets.QTreeWidgetItem] = None,
+            col: int = 0
+    ) -> None:
+        self.cur_xcorr_leaf_item = item
+
+        xcorr_chart = self.xcorr_chart_view.chart()
+        xcorr_chart.removeAllSeries()
+        for ax in xcorr_chart.axes():
+            xcorr_chart.removeAxis(ax)
+
+        if item is None:
+            return
+
+        try:
+            object_corr = self.xcorr_handler.corr_data[self.current_uuid]
+            object_ze = self.xcorr_handler.best_z[self.current_uuid]
+        except KeyError:
+            return
+        else:
+            template_id = item.data(
+                0, qt_api.QtCore.Qt.ItemDataRole.UserRole
+            )
+
+        try:
+            vec_z, xcorr = object_corr[template_id]
+            best_z = object_ze[template_id]
+        except KeyError:
+            return
+
+        self.xcorr_chart_view.setRedshift(best_z)
+        xcorr_chart = self.xcorr_chart_view.chart()
+        xcorr_chart.removeAllSeries()
+
+        for ax in xcorr_chart.axes():
+            xcorr_chart.removeAxis(ax)
+
+        xcorr_series = values2series(vec_z, xcorr, self.qapp.tr("X-Corr"))
+        xcorr_chart.addSeries(xcorr_series)
+
+        if not xcorr_chart.axes():
+            xcorr_axis_x = qt_api.QtCharts.QValueAxis()
+
+            if self.main_wnd.log_y_check_box.isChecked():
+                xcorr_axis_y = qt_api.QtCharts.QLogValueAxis()
+            else:
+                xcorr_axis_y = qt_api.QtCharts.QValueAxis()
+
+            xcorr_chart.addAxis(
+                xcorr_axis_x, qt_api.QtCore.Qt.AlignmentFlag.AlignBottom
+            )
+            xcorr_chart.addAxis(
+                xcorr_axis_y, qt_api.QtCore.Qt.AlignmentFlag.AlignLeft
+            )
+        else:
+            xcorr_axis_x = xcorr_chart.axes()[0]
+            xcorr_axis_y = xcorr_chart.axes()[1]
+
+        xcorr_axis_x.setTickInterval(500)
+        xcorr_axis_x.setLabelFormat("%.2f")
+        xcorr_axis_x.setTitleText(str('redshift'))
+
+        xcorr_axis_y.setLabelFormat("%.2f")
+        xcorr_axis_y.setTitleText(str('xcorr value'))
+
+        xcorr_series.attachAxis(xcorr_axis_x)
+        xcorr_series.attachAxis(xcorr_axis_y)
+
+        xcorr_chart.setContentsMargins(0, 0, 0, 0)
+        xcorr_chart.setBackgroundRoundness(0)
+        xcorr_chart.legend().hide()
+
     def redrawCurrentSpec(self, *args, **kwargs) -> None:
         """Redraw the charts."""
         self.currentSpecItemChanged(
@@ -3171,6 +4044,7 @@ class GuiApp:
         self.global_state = GlobalState.REUQUEST_CANCEL
 
     def restoreSettings(self) -> None:
+        self._rebuild_xcorr_template_list = False
         self.loadSettings()
 
     def saveProject(self, file_name: str) -> None:
@@ -3257,11 +4131,66 @@ class GuiApp:
 
     def saveSettings(self) -> None:
         for key, (get_func, _, _) in self._global_setting.items():
-            self.settings.setValue(key, get_func())
+            val = get_func()
+            self.settings.setValue(key, val)
+
+    def setGpuBackend(self, backend_index: Union[int, str, None]):
+        self.settings_wnd.gpu_device_combo_box.clear()
+        if backend_index == 0 or backend_index is None:
+            self.settings_wnd.gpu_device_combo_box.setEnabled(False)
+            self.use_gpu = False
+        else:
+            self.settings_wnd.gpu_device_combo_box.setEnabled(True)
+            if backend_index == 1 or backend_index == 'tf':
+                self.use_gpu = 'tf'
+                self.settings_wnd.gpu_backend_combo_box.setCurrentIndex(1)
+            elif  backend_index == 2 or backend_index == 'torch':
+                self.use_gpu = 'torch'
+                self.settings_wnd.gpu_backend_combo_box.setCurrentIndex(2)
+            else:
+                self.settings_wnd.gpu_device_combo_box.clear()
+                self.settings_wnd.gpu_device_combo_box.setEnabled(False)
+                self.use_gpu = False
+                return
+
+            for device_name, device in utils.DEVICE_DICT[self.use_gpu].items():
+                self.settings_wnd.gpu_device_combo_box.addItem(
+                    device_name
+                )
+
+            if self.settings_wnd.gpu_device_combo_box.count() > 0:
+                self.settings_wnd.gpu_device_combo_box.setCurrentIndex(0)
+            else:
+                self.compute_device = None
+
+    def setGpuDevice(self, device_index: int):
+        device_id = self.settings_wnd.gpu_device_combo_box.itemText(
+            device_index
+        )
+
+        try:
+            self.compute_device = utils.DEVICE_DICT[self.use_gpu][device_id]
+        except KeyError:
+            self.compute_device_id = -1
+            self.setGpuBackend(None)
+            return
+        else:
+            self.compute_device_id = device_id
+
+    def setGpuDeviceId(self, device_id):
+        for k in range(self.settings_wnd.gpu_device_combo_box.count()):
+            id = self.settings_wnd.gpu_device_combo_box.itemText(k)
+            if id == device_id:
+                self.setGpuDevice(k)
+                break
+        else:
+            self.setGpuBackend(None)
 
     def setCurrentObjectRedshift(self, redshift: Optional[float]) -> None:
         if redshift is None:
             redshift = 0
+
+        self.main_wnd.z_dspinbox.setValue(redshift)
 
         self.flux_chart_view.setRedshift(redshift=redshift)
 
@@ -3288,6 +4217,31 @@ class GuiApp:
             ]
 
             item_col_2.setText('; '.join(best_matches))
+
+
+    def setCurrentObjectRedshiftFromXcorr(
+            self,
+            item: QtWidgets.QTreeWidgetItem,
+            col: int
+    ) -> None:
+        if item is None:
+            return
+
+        try:
+            object_ze = self.xcorr_handler.best_z[self.current_uuid]
+        except KeyError:
+            return
+        else:
+            template_id = item.data(
+                0, qt_api.QtCore.Qt.ItemDataRole.UserRole
+            )
+
+        try:
+            template_z = object_ze[template_id]
+        except KeyError:
+            return
+
+        self.setCurrentObjectRedshift(template_z)
 
     def setCurrentObjectRedshiftFromLines(self, row: int) -> None:
         if row < 0:
@@ -3339,6 +4293,17 @@ class GuiApp:
     def setSmoothingFactor(self, smoothing_value: float) -> None:
         self.redrawCurrentSpec()
 
+    def setXcorrTemplateDirs(self, dir_list: List[str]) -> None:
+        for dir_path in dir_list:
+            self.addNewTemplateDir(dir_path, update=False)
+        self.updateXcorrTemplateList()
+
+    def setXcorrTreeWidgetColumnWidth(self, widths: List[int]) -> None:
+        for col, col_width in enumerate(widths):
+            self.main_wnd.xcorr_templates_tree_widget.setColumnWidth(
+                col, int(col_width)
+            )
+
     def showObjectInfo(self, object_uuid: uuid.UUID) -> None:
         sp: Spectrum1D = self.open_spectra[object_uuid]
 
@@ -3379,6 +4344,32 @@ class GuiApp:
 
             self.main_wnd.obj_prop_table_widget.setItem(j, 0, val_item)
             self.main_wnd.obj_prop_table_widget.setItem(j, 1, com_item)
+
+    def showXcorrZ(self, object_uuid: Optional[uuid.UUID] = None) -> None:
+        if self.xcorr_handler.best_z is None:
+            return
+
+        if object_uuid is None:
+            if self.current_uuid is None:
+                return
+            object_uuid = self.current_uuid
+
+        try:
+            object_ze = self.xcorr_handler.best_z[object_uuid]
+        except KeyError:
+            self.clearXcorrTreeWidgetZ()
+        else:
+            for item in self.xcor_tree_leaf_items:
+                template_id = item.data(
+                    0, qt_api.QtCore.Qt.ItemDataRole.UserRole
+                )
+
+                try:
+                    template_z = object_ze[template_id]
+                except KeyError:
+                    item.setText(1, "None")
+                else:
+                    item.setText(1, str(template_z))
 
     def toggleSimilarSpecItems(
         self,
@@ -3423,6 +4414,129 @@ class GuiApp:
         """Run the main Qt Application."""
         self.main_wnd.show()
         sys.exit(self.qapp.exec())
+
+    def updateXcorrTemplateTreeState(self, *args: Any, **kwargs: Any) -> None:
+        if self._updateXcorrTemplateTreeState_lock:
+            return
+
+        def _set_children_state(
+            item: QtWidgets.QTreeWidgetItem,
+            state: QtCore.Qt.CheckState
+        ) -> None:
+            n_children = item.childCount()
+
+            item.setCheckState(0, state)
+            if n_children > 0:
+                for j in range(item.childCount()):
+                    _set_children_state(item.child(j), state)
+
+        def _set_parents_state(item: QtWidgets.QTreeWidgetItem):
+            parent = item.parent()
+
+            if parent is None:
+                return
+            elif isinstance(parent, qt_api.QtWidgets.QTreeWidget):
+                return
+
+            sibling_count = parent.childCount()
+            checked_count = 0
+            unchecked_count = 0
+            for j in range(sibling_count):
+                check_state = parent.child(j).checkState(0)
+                if check_state == qt_api.QtCore.Qt.CheckState.Checked:
+                    checked_count += 1
+                elif check_state == qt_api.QtCore.Qt.CheckState.Checked:
+                    unchecked_count += 1
+
+            if checked_count == sibling_count:
+                parent_state = qt_api.QtCore.Qt.CheckState.Checked
+            elif unchecked_count == sibling_count:
+                parent_state = qt_api.QtCore.Qt.CheckState.Unchecked
+            else:
+                parent_state = qt_api.QtCore.Qt.CheckState.PartiallyChecked
+
+            parent.setCheckState(0, parent_state)
+
+            _set_parents_state(parent)
+
+        self._updateXcorrTemplateTreeState_lock = True
+        _set_children_state(args[0], args[0].checkState(0))
+        _set_parents_state(args[0])
+        self._updateXcorrTemplateTreeState_lock = False
+
+    def updateXcorrTemplateList(self) -> None:
+
+        if not self._rebuild_xcorr_template_list:
+            return
+
+        folder_icon = qt_api.get_qicon("folder", self.getCurrentTheme())
+        book_icon = qt_api.get_qicon("book", self.getCurrentTheme())
+
+        def _build_folder_tree(
+                parts: List[str],
+                parent: QtWidgets.QTreeWidgetItem
+        ) -> Union[None, QtWidgets.QTreeWidgetItem]:
+            if len(parts) <= 1:
+                return None
+
+            for j in range(parent.childCount()):
+                child = parent.child(j)
+                if child.text(0) == parts[0]:
+                    break
+            else:
+                child = qt_api.QtWidgets.QTreeWidgetItem(parent)
+                child.setText(0, parts[0])
+                child.setCheckState(0, qt_api.QtCore.Qt.CheckState.Checked)
+                if len(parts) == 2:
+                    child.setIcon(0, book_icon)
+                    child.setData(
+                        0, qt_api.QtCore.Qt.ItemDataRole.UserRole,
+                        parts[1]
+                    )
+                    return child
+                else:
+                    child.setIcon(0, folder_icon)
+
+            return _build_folder_tree(parts[1:], child)
+
+        self.main_wnd.xcorr_templates_tree_widget.clear()
+
+        self.xcor_tree_leaf_items = []
+        self.xcorr_templates = {}
+
+        self.settings_wnd.template_files_list_widget.clear()
+        for dir_path in self.getXcorrTemplateDirs():
+            template_dict = backends.xcorr.load_templates(dir_path)
+
+            self.xcorr_templates[dir_path] = template_dict
+
+            top_level_item = qt_api.QtWidgets.QTreeWidgetItem(
+                self.main_wnd.xcorr_templates_tree_widget
+            )
+            top_level_item.setText(0, dir_path)
+            top_level_item.setIcon(0, folder_icon)
+
+            self.qapp.processEvents()
+
+            for local_template_id, template_sp in template_dict.items():
+                self.settings_wnd.template_files_list_widget.addItem(
+                    local_template_id
+                )
+                self.qapp.processEvents()
+                template_id = dir_path + '::' + local_template_id
+                path_parts = list(pathlib.PurePath(local_template_id).parts)
+                path_parts.append(template_id)
+
+                self.xcorr_templates[template_id] = template_sp
+
+                self.xcor_tree_leaf_items.append(
+                    _build_folder_tree(
+                        path_parts,
+                        parent=top_level_item
+                    )
+                )
+        self.main_wnd.xcorr_templates_tree_widget.expandAll()
+        self._rebuild_xcorr_template_list = False
 
 
 def values2series(

@@ -26,26 +26,11 @@
    <string>MainWindow</string>
   </property>
   <widget class="QWidget" name="central_widget">
-   <layout class="QHBoxLayout" name="horizontalLayout">
-    <item>
+   <layout class="QGridLayout" name="gridLayout_5">
+    <item row="0" column="0">
      <widget class="QSplitter" name="splitter_main">
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-        <horstretch>0</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
-      </property>
-      <property name="frameShape">
-       <enum>QFrame::NoFrame</enum>
-      </property>
-      <property name="frameShadow">
-       <enum>QFrame::Plain</enum>
-      </property>
       <property name="orientation">
-       <enum>Qt::Horizontal</enum>
-      </property>
-      <property name="handleWidth">
-       <number>10</number>
+       <enum>Qt::Orientation::Horizontal</enum>
       </property>
       <widget class="QGroupBox" name="spec_group_box">
        <property name="sizePolicy">
@@ -137,85 +122,74 @@ selected</string>
          </layout>
         </item>
         <item>
-         <widget class="QGroupBox" name="info_group_box">
+         <widget class="QTabWidget" name="info_tab_widget">
           <property name="enabled">
            <bool>false</bool>
           </property>
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Preferred" vsizetype="MinimumExpanding">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
+          <property name="currentIndex">
+           <number>0</number>
           </property>
-          <property name="title">
-           <string>Object Info</string>
-          </property>
-          <layout class="QVBoxLayout" name="verticalLayout_3">
-           <property name="spacing">
-            <number>5</number>
-           </property>
-           <property name="leftMargin">
-            <number>5</number>
-           </property>
-           <property name="topMargin">
-            <number>5</number>
-           </property>
-           <property name="rightMargin">
-            <number>5</number>
-           </property>
-           <property name="bottomMargin">
-            <number>5</number>
-           </property>
-           <item>
-            <widget class="QTableWidget" name="obj_prop_table_widget">
-             <property name="sizePolicy">
-              <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
-               <horstretch>0</horstretch>
-               <verstretch>0</verstretch>
-              </sizepolicy>
-             </property>
-             <property name="verticalScrollBarPolicy">
-              <enum>Qt::ScrollBarAlwaysOn</enum>
-             </property>
-             <property name="horizontalScrollBarPolicy">
-              <enum>Qt::ScrollBarAlwaysOn</enum>
-             </property>
-             <property name="sizeAdjustPolicy">
-              <enum>QAbstractScrollArea::AdjustIgnored</enum>
-             </property>
-             <property name="editTriggers">
-              <set>QAbstractItemView::AnyKeyPressed|QAbstractItemView::EditKeyPressed</set>
-             </property>
-             <property name="alternatingRowColors">
-              <bool>true</bool>
-             </property>
-             <property name="verticalScrollMode">
-              <enum>QAbstractItemView::ScrollPerItem</enum>
-             </property>
-             <property name="horizontalScrollMode">
-              <enum>QAbstractItemView::ScrollPerPixel</enum>
-             </property>
-             <attribute name="horizontalHeaderCascadingSectionResizes">
-              <bool>true</bool>
-             </attribute>
-             <column>
-              <property name="text">
-               <string>VALUE</string>
+          <widget class="QWidget" name="info_tab">
+           <attribute name="title">
+            <string>Object info</string>
+           </attribute>
+           <layout class="QGridLayout" name="gridLayout_6">
+            <item row="0" column="0">
+             <widget class="QTableWidget" name="obj_prop_table_widget">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
               </property>
-              <property name="font">
-               <font>
-                <bold>false</bold>
-               </font>
+              <property name="verticalScrollBarPolicy">
+               <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOn</enum>
               </property>
-             </column>
-             <column>
-              <property name="text">
-               <string>COMMENTS</string>
+              <property name="horizontalScrollBarPolicy">
+               <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOn</enum>
               </property>
-             </column>
-            </widget>
-           </item>
-          </layout>
+              <property name="sizeAdjustPolicy">
+               <enum>QAbstractScrollArea::SizeAdjustPolicy::AdjustIgnored</enum>
+              </property>
+              <property name="editTriggers">
+               <set>QAbstractItemView::EditTrigger::AnyKeyPressed|QAbstractItemView::EditTrigger::EditKeyPressed</set>
+              </property>
+              <property name="alternatingRowColors">
+               <bool>true</bool>
+              </property>
+              <property name="verticalScrollMode">
+               <enum>QAbstractItemView::ScrollMode::ScrollPerItem</enum>
+              </property>
+              <property name="horizontalScrollMode">
+               <enum>QAbstractItemView::ScrollMode::ScrollPerPixel</enum>
+              </property>
+              <attribute name="horizontalHeaderCascadingSectionResizes">
+               <bool>true</bool>
+              </attribute>
+              <column>
+               <property name="text">
+                <string>VALUE</string>
+               </property>
+               <property name="font">
+                <font>
+                 <bold>false</bold>
+                </font>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>COMMENTS</string>
+               </property>
+              </column>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="cutout_tab">
+           <attribute name="title">
+            <string>Image cutout</string>
+           </attribute>
+          </widget>
          </widget>
         </item>
        </layout>
@@ -231,13 +205,13 @@ selected</string>
            </sizepolicy>
           </property>
           <property name="frameShape">
-           <enum>QFrame::NoFrame</enum>
+           <enum>QFrame::Shape::NoFrame</enum>
           </property>
           <property name="frameShadow">
-           <enum>QFrame::Plain</enum>
+           <enum>QFrame::Shadow::Plain</enum>
           </property>
           <property name="orientation">
-           <enum>Qt::Vertical</enum>
+           <enum>Qt::Orientation::Vertical</enum>
           </property>
           <property name="handleWidth">
            <number>10</number>
@@ -279,23 +253,7 @@ selected</string>
                 <verstretch>0</verstretch>
                </sizepolicy>
               </property>
-              <layout class="QHBoxLayout" name="flux_widget_layout">
-               <property name="spacing">
-                <number>0</number>
-               </property>
-               <property name="leftMargin">
-                <number>0</number>
-               </property>
-               <property name="topMargin">
-                <number>0</number>
-               </property>
-               <property name="rightMargin">
-                <number>0</number>
-               </property>
-               <property name="bottomMargin">
-                <number>0</number>
-               </property>
-              </layout>
+              <layout class="QGridLayout" name="flux_widget_layout"/>
              </widget>
             </item>
            </layout>
@@ -340,7 +298,7 @@ selected</string>
            </widget>
            <widget class="QWidget" name="container_tab_wd">
             <attribute name="title">
-             <string>Wavlength dispersion</string>
+             <string>Wavelength dispersion</string>
             </attribute>
             <layout class="QGridLayout" name="wdisp_widget_layout">
              <property name="leftMargin">
@@ -381,6 +339,12 @@ selected</string>
               <number>0</number>
              </property>
             </layout>
+           </widget>
+           <widget class="QWidget" name="container_tab_xcorr">
+            <attribute name="title">
+             <string>X-Corr</string>
+            </attribute>
+            <layout class="QGridLayout" name="xcorr_widget_layout"/>
            </widget>
           </widget>
          </widget>
@@ -467,7 +431,7 @@ selected</string>
              <item>
               <spacer name="horizontal_spacer_2">
                <property name="orientation">
-                <enum>Qt::Horizontal</enum>
+                <enum>Qt::Orientation::Horizontal</enum>
                </property>
                <property name="sizeHint" stdset="0">
                 <size>
@@ -525,65 +489,13 @@ selected</string>
            </sizepolicy>
           </property>
           <property name="frameShape">
-           <enum>QFrame::StyledPanel</enum>
+           <enum>QFrame::Shape::StyledPanel</enum>
           </property>
           <layout class="QGridLayout" name="gridLayout" columnstretch="0,0,0">
-           <item row="2" column="0">
-            <widget class="QLabel" name="label_4">
-             <property name="sizePolicy">
-              <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
-               <horstretch>0</horstretch>
-               <verstretch>0</verstretch>
-              </sizepolicy>
-             </property>
-             <property name="text">
-              <string>quality flag</string>
-             </property>
-             <property name="alignment">
-              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="0">
-            <widget class="QLabel" name="label">
-             <property name="sizePolicy">
-              <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
-               <horstretch>0</horstretch>
-               <verstretch>0</verstretch>
-              </sizepolicy>
-             </property>
-             <property name="text">
-              <string>redshift value</string>
-             </property>
-             <property name="alignment">
-              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-             </property>
-            </widget>
-           </item>
-           <item row="0" column="2">
-            <widget class="QPushButton" name="next_spec_button">
-             <property name="text">
-              <string>next</string>
-             </property>
-            </widget>
-           </item>
            <item row="0" column="1">
             <widget class="QPushButton" name="previous_spec_button">
              <property name="text">
               <string>previous</string>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="1" colspan="2">
-            <widget class="QDoubleSpinBox" name="z_dspinbox">
-             <property name="decimals">
-              <number>4</number>
-             </property>
-             <property name="singleStep">
-              <double>0.001000000000000</double>
-             </property>
-             <property name="stepType">
-              <enum>QAbstractSpinBox::DefaultStepType</enum>
              </property>
             </widget>
            </item>
@@ -622,6 +534,58 @@ selected</string>
              </item>
             </widget>
            </item>
+           <item row="1" column="1" colspan="2">
+            <widget class="QDoubleSpinBox" name="z_dspinbox">
+             <property name="decimals">
+              <number>4</number>
+             </property>
+             <property name="singleStep">
+              <double>0.001000000000000</double>
+             </property>
+             <property name="stepType">
+              <enum>QAbstractSpinBox::StepType::DefaultStepType</enum>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="0">
+            <widget class="QLabel" name="label_4">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="text">
+              <string>quality flag</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="2">
+            <widget class="QPushButton" name="next_spec_button">
+             <property name="text">
+              <string>next</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="0">
+            <widget class="QLabel" name="label">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="text">
+              <string>redshift value</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+             </property>
+            </widget>
+           </item>
           </layout>
          </widget>
         </item>
@@ -634,13 +598,13 @@ selected</string>
            </sizepolicy>
           </property>
           <property name="tabPosition">
-           <enum>QTabWidget::East</enum>
+           <enum>QTabWidget::TabPosition::East</enum>
           </property>
           <property name="tabShape">
-           <enum>QTabWidget::Rounded</enum>
+           <enum>QTabWidget::TabShape::Rounded</enum>
           </property>
           <property name="currentIndex">
-           <number>0</number>
+           <number>2</number>
           </property>
           <widget class="QWidget" name="tab_lines">
            <attribute name="title">
@@ -695,7 +659,7 @@ selected</string>
                   </sizepolicy>
                  </property>
                  <property name="verticalScrollBarPolicy">
-                  <enum>Qt::ScrollBarAlwaysOn</enum>
+                  <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOn</enum>
                  </property>
                  <property name="columnCount">
                   <number>3</number>
@@ -815,7 +779,7 @@ selected</string>
                     <string>simga-tolerance:</string>
                    </property>
                    <property name="alignment">
-                    <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                    <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
                    </property>
                   </widget>
                  </item>
@@ -848,7 +812,7 @@ selected</string>
                     <string>min. z</string>
                    </property>
                    <property name="alignment">
-                    <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                    <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
                    </property>
                   </widget>
                  </item>
@@ -868,7 +832,7 @@ selected</string>
                     <string>max. z</string>
                    </property>
                    <property name="alignment">
-                    <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                    <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
                    </property>
                   </widget>
                  </item>
@@ -919,7 +883,7 @@ selected</string>
             <item>
              <widget class="QGroupBox" name="group_box_5">
               <property name="title">
-               <string>Options</string>
+               <string>Run mode</string>
               </property>
               <layout class="QVBoxLayout" name="verticalLayout_8">
                <property name="spacing">
@@ -991,16 +955,16 @@ selected</string>
                <item>
                 <widget class="QTextEdit" name="redrock_text_edit">
                  <property name="verticalScrollBarPolicy">
-                  <enum>Qt::ScrollBarAlwaysOn</enum>
+                  <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOn</enum>
                  </property>
                  <property name="horizontalScrollBarPolicy">
-                  <enum>Qt::ScrollBarAlwaysOn</enum>
+                  <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOn</enum>
                  </property>
                  <property name="undoRedoEnabled">
                   <bool>false</bool>
                  </property>
                  <property name="lineWrapMode">
-                  <enum>QTextEdit::NoWrap</enum>
+                  <enum>QTextEdit::LineWrapMode::NoWrap</enum>
                  </property>
                  <property name="readOnly">
                   <bool>true</bool>
@@ -1042,6 +1006,225 @@ li.checked::marker { content: &quot;\2612&quot;; }
             </item>
            </layout>
           </widget>
+          <widget class="QWidget" name="tab_xcorr">
+           <attribute name="title">
+            <string>X-Corr</string>
+           </attribute>
+           <layout class="QVBoxLayout" name="verticalLayout_2">
+            <property name="leftMargin">
+             <number>5</number>
+            </property>
+            <property name="topMargin">
+             <number>5</number>
+            </property>
+            <property name="rightMargin">
+             <number>5</number>
+            </property>
+            <property name="bottomMargin">
+             <number>5</number>
+            </property>
+            <item>
+             <widget class="QGroupBox" name="group_box_8">
+              <property name="title">
+               <string>Run mode</string>
+              </property>
+              <layout class="QVBoxLayout" name="verticalLayout_14">
+               <property name="spacing">
+                <number>5</number>
+               </property>
+               <property name="leftMargin">
+                <number>5</number>
+               </property>
+               <property name="topMargin">
+                <number>5</number>
+               </property>
+               <property name="rightMargin">
+                <number>5</number>
+               </property>
+               <property name="bottomMargin">
+                <number>5</number>
+               </property>
+               <item>
+                <widget class="QRadioButton" name="xcorr_all_radio">
+                 <property name="text">
+                  <string>for all ob&amp;jects</string>
+                 </property>
+                 <property name="checked">
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QRadioButton" name="xcorr_selected_radio">
+                 <property name="text">
+                  <string>for selected objects onl&amp;y</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QRadioButton" name="xcorr_current_radio">
+                 <property name="text">
+                  <string>for c&amp;urrent object only</string>
+                 </property>
+                 <property name="checked">
+                  <bool>false</bool>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <widget class="QGroupBox" name="groupBox">
+              <property name="title">
+               <string>Templates</string>
+              </property>
+              <layout class="QVBoxLayout" name="verticalLayout_10">
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
+               </property>
+               <item>
+                <widget class="QTreeWidget" name="xcorr_templates_tree_widget">
+                 <property name="verticalScrollBarPolicy">
+                  <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOn</enum>
+                 </property>
+                 <column>
+                  <property name="text">
+                   <string>Name</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Redshift</string>
+                  </property>
+                 </column>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <widget class="QGroupBox" name="groupBox_2">
+              <property name="title">
+               <string>Redshif scan settings</string>
+              </property>
+              <layout class="QVBoxLayout" name="verticalLayout_13">
+               <item>
+                <layout class="QGridLayout" name="gridLayout_3">
+                 <item row="1" column="1" colspan="2">
+                  <widget class="QDoubleSpinBox" name="xcorr_z_step_dspinbox">
+                   <property name="decimals">
+                    <number>5</number>
+                   </property>
+                   <property name="maximum">
+                    <double>5.000000000000000</double>
+                   </property>
+                   <property name="singleStep">
+                    <double>0.000100000000000</double>
+                   </property>
+                   <property name="value">
+                    <double>0.001000000000000</double>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="0" column="2">
+                  <widget class="QLabel" name="label_8">
+                   <property name="text">
+                    <string>max. z</string>
+                   </property>
+                   <property name="alignment">
+                    <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="0" column="0">
+                  <widget class="QLabel" name="label_7">
+                   <property name="text">
+                    <string>min. z</string>
+                   </property>
+                   <property name="alignment">
+                    <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="0" column="3">
+                  <widget class="QDoubleSpinBox" name="xcorr_z_max_dspinbox">
+                   <property name="value">
+                    <double>6.000000000000000</double>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="0" column="1">
+                  <widget class="QDoubleSpinBox" name="xcorr_z_min_dspinbox">
+                   <property name="maximum">
+                    <double>999.000000000000000</double>
+                   </property>
+                   <property name="singleStep">
+                    <double>0.001000000000000</double>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="1" column="0">
+                  <widget class="QLabel" name="label_9">
+                   <property name="text">
+                    <string>z step</string>
+                   </property>
+                   <property name="alignment">
+                    <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout">
+              <item>
+               <widget class="QCheckBox" name="xcorr_gpu_checkbox">
+                <property name="text">
+                 <string>use GPU</string>
+                </property>
+                <property name="checked">
+                 <bool>false</bool>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QCheckBox" name="xcorr_csub_checkbox">
+                <property name="text">
+                 <string>subtract
+continuum</string>
+                </property>
+                <property name="checked">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="xcorr_run_button">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="text">
+                 <string>Run</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </widget>
          </widget>
         </item>
         <item>
@@ -1059,6 +1242,10 @@ li.checked::marker { content: &quot;\2612&quot;; }
          </widget>
         </item>
        </layout>
+       <zorder>frame</zorder>
+       <zorder>import_zcat_button</zorder>
+       <zorder>export_zcat_button</zorder>
+       <zorder>tab_widget</zorder>
       </widget>
      </widget>
     </item>
@@ -1122,7 +1309,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <string>toolBar</string>
    </property>
    <property name="toolButtonStyle">
-    <enum>Qt::ToolButtonIconOnly</enum>
+    <enum>Qt::ToolButtonStyle::ToolButtonIconOnly</enum>
    </property>
    <attribute name="toolBarArea">
     <enum>TopToolBarArea</enum>
@@ -1201,7 +1388,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <string>Zoom in</string>
    </property>
    <property name="menuRole">
-    <enum>QAction::NoRole</enum>
+    <enum>QAction::MenuRole::NoRole</enum>
    </property>
   </action>
   <action name="action_zoom_out">
@@ -1215,7 +1402,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <string>Zoom out</string>
    </property>
    <property name="menuRole">
-    <enum>QAction::NoRole</enum>
+    <enum>QAction::MenuRole::NoRole</enum>
    </property>
   </action>
   <action name="action_zoom_fit">
@@ -1229,7 +1416,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <string>Zoom fit</string>
    </property>
    <property name="menuRole">
-    <enum>QAction::NoRole</enum>
+    <enum>QAction::MenuRole::NoRole</enum>
    </property>
   </action>
   <action name="action_new_project">
@@ -1243,7 +1430,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <string>Start a new empty project</string>
    </property>
    <property name="menuRole">
-    <enum>QAction::NoRole</enum>
+    <enum>QAction::MenuRole::NoRole</enum>
    </property>
   </action>
   <action name="action_online_user_manual">
@@ -1306,12 +1493,12 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <slot>setEnabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>553</x>
-     <y>672</y>
+     <x>614</x>
+     <y>800</y>
     </hint>
     <hint type="destinationlabel">
-     <x>594</x>
-     <y>672</y>
+     <x>750</x>
+     <y>801</y>
     </hint>
    </hints>
   </connection>

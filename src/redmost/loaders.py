@@ -21,6 +21,21 @@ KNOWN_RCURVE_EXT_NAMES = ['r', 'reso', 'resolution', 'rcurve', 'wd']
 KNOWN_RGB_EXT_NAMES = ['r', 'g', 'b', 'red', 'green', 'blue']
 
 
+def getHDU(
+        hdul: fits.HDUList,
+        valid_names: List[str],
+        index: Optional[Union[str, int]] = None
+):
+    if index is None:
+        for hdu in hdul:
+            if hdu.name.lower() in valid_names:
+                return hdu
+        else:
+            return None
+    else:
+        return hdul[index]
+
+
 def identifySpecexFits(origin, *args, **kwargs) -> bool:
     """Identify spectra extracted with python-specex."""
     if not (
@@ -36,6 +51,13 @@ def identifySpecexFits(origin, *args, **kwargs) -> bool:
     ]
 
     with fits.open(args[0]) as hdul:
+        flux_hdu = getHDU(hdul, KNOWN_SPEC_EXT_NAMES)
+        if flux_hdu is None:
+            return False
+
+        if flux_hdu.data is None:
+            return False
+
         for hdu in hdul:
             for key in valid_id_keys:
                 try:
@@ -43,7 +65,38 @@ def identifySpecexFits(origin, *args, **kwargs) -> bool:
                 except KeyError:
                     continue
                 else:
+                    try:
+                        specexFitsLoader(args[0])
+                    except Exception:
+                        return False
                     return True
+    return False
+
+def identifyClashVlt1dFits(origin, *args, **kwargs) -> bool:
+    """Identify spectra extracted with python-specex."""
+    if not (
+        isinstance(args[0], str) and
+        os.path.splitext(args[0].lower())[1] == '.fits'
+    ):
+        return False
+    with fits.open(args[0]) as hdul:
+        instrument = hdul[0].header.get('INSTRUME')
+        ctype1 = hdul[0].header.get('CTYPE1')
+        ctype2 = hdul[0].header.get('CTYPE2')
+        tunit = hdul[0].header.get('TUNIT')
+
+        if hdul[0].data.shape[0] != 1:
+            return False
+
+        if (instrument is None) or (instrument.strip() != 'VIMOS'):
+            return False
+
+        if (tunit is None) or (ctype1 is None) or (ctype2 is None):
+            return False
+
+        if (ctype1.strip() == 'LAMBDA') and (ctype2.strip() == 'OBJECT'):
+            return True
+
     return False
 
 
@@ -69,20 +122,6 @@ def specexFitsLoader(
         The spectral resolution parameter
     :return: A Spectrum1D object.
     """
-    def getHDU(
-        hdul: fits.HDUList,
-        valid_names: List[str],
-        index: Optional[Union[str, int]] = None
-    ):
-        if index is None:
-            for hdu in hdul:
-                if hdu.name.lower() in valid_names:
-                    return hdu
-            else:
-                return None
-        else:
-            return hdul[index]
-
     with fits.open(file_name, **kwargs) as hdulist:
         flux_hdu = getHDU(hdulist, KNOWN_SPEC_EXT_NAMES, index=flux_hdu_index)
         var_hdu = getHDU(hdulist, KNOWN_VARIANCE_EXT_NAMES)
@@ -135,7 +174,7 @@ def specexFitsLoader(
 
             # Fixing broken WCS
             flux_hdu.header['CTYPE1'] = 'WAVE'
-            flux_hdu.header['Cunit1'] = 'Angstrom'
+            flux_hdu.header['CUNIT1'] = 'Angstrom'
             
             flux_wcs = wcs.WCS(flux_hdu.header)
 
@@ -164,7 +203,16 @@ def specexFitsLoader(
         if mask is not None:
             flux_not_nan_mask &= ~(mask.astype(bool))
 
-        flux_units = units.Unit(flux_hdu.header['BUNIT'])
+        try:
+            flux_units = units.Unit(flux_hdu.header['BUNIT'])
+        except KeyError:
+            flux_units = units.Unit(flux_hdu.header['TUNIT'])
+
+            if flux_units.flux_units == 'dimensionless':
+                flux_units = flux_units * units.Unit(
+                    "Angstrom-1 cm-2 erg s-1"
+                )
+
         wave_units = units.Unit(flux_hdu.header['CUNIT1'])
 
         flux = flux.copy() * flux_units
@@ -200,6 +248,111 @@ def specexFitsLoader(
 
     return sp
 
+
+@data_loader(
+    label="clash-vlt-1d",
+    identifier=identifyClashVlt1dFits,
+    extensions=['fits']
+)
+def clashVlt1DFitsLoader(
+        file_name: str,
+        flux_hdu_index: Optional[Union[str, int]] = None,
+        resolution: Union[int, float] = 1,
+        **kwargs
+) -> Spectrum1D:
+    """
+    Load a python-specex spectrum.
+
+    :param file_name:
+        The path of the FITS file to read.
+    :param flux_hdu_index:
+        The extension name or index from which to read the spectrum
+    :param resolution:
+        The spectral resolution parameter
+    :return: A Spectrum1D object.
+    """
+    with fits.open(file_name, **kwargs) as hdulist:
+        flux_hdu = hdulist[0]
+        noise_hdu = getHDU(hdulist, ['NOISE',])
+
+        if flux_hdu is None:
+            raise ValueError("Cannot find flux data")
+
+        flux = flux_hdu.data[0]
+
+        if noise_hdu is None:
+            var = np.ones_like(flux)
+        else:
+            var = noise_hdu.data**2
+
+        hh = {
+            x: flux_hdu.header[x]for x in [
+                'BITPIX', 'NAXIS', 'NAXIS1', 'CRPIX1',
+                'CRVAL1', 'CDELT1',
+            ]
+        }
+        hh['NAXIS'] = 1
+        hh['CTYPE1'] = 'WAVE'
+        hh['CUNIT1'] = 'Angstrom'
+
+        flux_wcs = wcs.WCS(hh)
+
+        if flux.shape != var.shape:
+            raise ValueError(
+                "Spectral data invalid or corruptede: Flux data shape "
+                "do not match variance data one!"
+            )
+
+        # NOTE: Wavelenghts must be in Angstrom units
+        pixel = np.arange(len(flux))
+        lam = flux_wcs.pixel_to_world(pixel).Angstrom
+        flux = flux.astype('float32')
+
+        flux_not_nan_mask = ~np.isnan(flux)
+
+        try:
+            flux_units = units.Unit(flux_hdu.header['BUNIT'])
+        except KeyError:
+            flux_units = units.Unit(flux_hdu.header['TUNIT'])
+
+            if flux_units.physical_type == 'dimensionless':
+                flux_units = flux_units * units.Unit(
+                    "Angstrom-1 cm-2 erg s-1"
+                )
+
+        wave_units = units.Unit(flux_hdu.header['CUNIT1'])
+
+        flux = flux.copy() * flux_units
+        var = var.copy() * (flux_units ** 2)
+        lam = lam.copy() * wave_units
+
+        # If now wavelenght dispersion information is present, then
+        # compute it using the wavelenght
+        delta_lambda = np.ones_like(lam)
+        delta_lambda[1:] = (lam[1:] - lam[:-1])
+        delta_lambda = delta_lambda.to('Angstrom').value
+        rc = resolution / delta_lambda
+        rc[0] = rc[1]
+        rc[rc < 1e-3] = 2.
+
+        meta = {'header': hdulist[0].header}
+        uncertainty = VarianceUncertainty(var)
+
+        sp: Spectrum1D = Spectrum1D(
+            flux=flux,
+            spectral_axis=lam,
+            wcs=flux_wcs,
+            uncertainty=uncertainty,
+            meta=meta
+        )
+
+        sp.mask = flux_not_nan_mask
+        sp.rc = rc
+        sp.obj_id = None
+
+    return sp
+
+
 def read_sdss_extra(
     file: str
 ) -> Tuple[Union[np.ndarray, None], Union[np.ndarray, None]]:
@@ -222,9 +375,15 @@ def read_sdss_extra(
 
 def read(file: str) -> Spectrum1D:
     sp_formats = identify_spectrum_format(file)
-    sp = Spectrum1D.read(file)
+    orig_sp = Spectrum1D.read(file)
+    sp = Spectrum1D(
+        flux=orig_sp.flux,
+        spectral_axis=orig_sp.spectral_axis.to('AA')  # Convert to Angstrom
+    )
+    sp.uncertainty = orig_sp.uncertainty
     sp.wd = None
     sp.sky = None
+    sp.meta = orig_sp.meta
 
     # Try to read auxiliary data
     if 'SDSS-V spec' in sp_formats:

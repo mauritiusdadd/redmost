@@ -56,6 +56,8 @@ Redmost can use modular backends to measure the redshift, although only redrock 
 
 - redrock backend: [https://github.com/desihub/redrock][1]
 
+> **_NOTE:_**  Redrock requires also additional dependencies such as: numba, fitsio and h5py. Please see https://github.com/desihub/redrock/blob/main/requirements.txt for a full list of requirements
+
 # Run
 
 To run the program just run the command ```redmost``` in a terminal. If you have both PyQt and Pyside installed, you can force the program to use a specific backend using the environment variable ``QT_API``, for example:
