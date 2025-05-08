@@ -17,6 +17,8 @@ from specutils import Spectrum1D  # type: ignore
 
 RR_GPU_MIN_VER = "0.16.0"
 
+from os import environ
+
 try:
     import redrock
 except (ImportError, ModuleNotFoundError):
@@ -188,13 +190,20 @@ else:
 
     def run_redrock(targets: List[Target]) -> Tuple[Any, Any]:
         start = elapsed(None, "", comm=None)
+        print(f"Using redrock version {redrock.__version__}")
+
+        if 'RR_TEMPLATE_DIR' not in os.environ:
+            os.environ['RR_TEMPLATE_DIR'] = os.path.join(
+                os.path.dirname(redrock.__file__), 'templates'
+            )
+        print(f"Template directory: {os.environ.get('RR_TEMPLATE_DIR')}")
 
         dtargets = DistTargetsCopy(targets, comm=None, root=0)
 
         # Get the dictionary of wavelength grids
         dwave = dtargets.wavegrids()
 
-        print(f"Using redrock version {redrock.__version__}")
+
 
         _ = elapsed(
             start,
@@ -253,7 +262,7 @@ def run_redrock_on_pickled_targets(pickle_file: str):
     return run_redrock(targets)
 
 
-def main() -> None:
+def main(options: Optional[List] = None) -> None:
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
@@ -264,7 +273,7 @@ def main() -> None:
         'out_pickle_file'
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(options)
     result = run_redrock_on_pickled_targets(args.in_pickle_file)
 
     with open(args.out_pickle_file, "wb") as f:

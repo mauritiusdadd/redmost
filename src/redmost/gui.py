@@ -1016,6 +1016,9 @@ class QRedrockHandler(qt_api.QtCore.QObject):
         self.process.readyReadStandardOutput.connect(  # type: ignore
             self._process_output
         )
+        self.process.readyReadStandardError.connect(  # type: ignore
+            self._process_output
+        )
         self.process.finished.connect(  # type: ignore
             self.retrieve_results
         )
@@ -1037,12 +1040,17 @@ class QRedrockHandler(qt_api.QtCore.QObject):
 
         self.message.emit(str(text))
 
-    def retrieve_results(self) -> None:
-        try:
-            with open(self._result_dump_file, 'rb') as f:
-                self.results = pickle.load(f)
-        except Exception:
+    def retrieve_results(self, exit_status: int) -> None:
+        if exit_status != 0:
+            self.message.emit("*** REDROCK EXECUTION FAILED ***")
             self.results = None
+        else:
+            try:
+                with open(self._result_dump_file, 'rb') as f:
+                    self.results = pickle.load(f)
+            except Exception:
+                self.message.emit("*** REDROCK EXECUTION FAILED ***")
+                self.results = None
         self.finished.emit()
 
     def run(self, spectra: Dict[uuid.UUID, Spectrum1D]) -> None:

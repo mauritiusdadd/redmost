@@ -271,9 +271,20 @@ def clashVlt1DFitsLoader(
         The spectral resolution parameter
     :return: A Spectrum1D object.
     """
+
     with fits.open(file_name, **kwargs) as hdulist:
         flux_hdu = hdulist[0]
-        noise_hdu = getHDU(hdulist, ['NOISE',])
+        noise_hdu = getHDU(hdulist, ['noise',])
+
+        grism = flux_hdu.header.get('HIERARCH ESO INS ADF GRISM NAME')
+        if grism == 'LR_Blue':
+            # cut wavelengths <3600A and >6840A
+            w_min = units.Quantity(3600, 'angstrom')
+            w_max = units.Quantity(6800, 'angstrom')
+        else:
+            w_min = units.Quantity(4750, 'angstrom')
+            w_max = units.Quantity(9800, 'angstrom')
+            # cut wavelengths <4700A and >9900A
 
         if flux_hdu is None:
             raise ValueError("Cannot find flux data")
@@ -283,7 +294,7 @@ def clashVlt1DFitsLoader(
         if noise_hdu is None:
             var = np.ones_like(flux)
         else:
-            var = noise_hdu.data**2
+            var = noise_hdu.data[0]**2
 
         hh = {
             x: flux_hdu.header[x]for x in [
@@ -326,14 +337,29 @@ def clashVlt1DFitsLoader(
         var = var.copy() * (flux_units ** 2)
         lam = lam.copy() * wave_units
 
-        # If now wavelenght dispersion information is present, then
-        # compute it using the wavelenght
+        # If now wavelength dispersion information is present, then
+        # compute it using the wavelength
         delta_lambda = np.ones_like(lam)
         delta_lambda[1:] = (lam[1:] - lam[:-1])
         delta_lambda = delta_lambda.to('Angstrom').value
         rc = resolution / delta_lambda
         rc[0] = rc[1]
         rc[rc < 1e-3] = 2.
+
+
+        lam_mask = np.ones(len(flux), dtype=bool)
+
+        if w_min != None:
+            lam_mask &= lam >= w_min
+
+        if w_max != None:
+            lam_mask &= lam <= w_max
+
+        flux = flux[lam_mask]
+        var = var[lam_mask]
+        lam = lam[lam_mask]
+        flux_not_nan_mask = flux_not_nan_mask[lam_mask]
+        rc = rc[lam_mask]
 
         meta = {'header': hdulist[0].header}
         uncertainty = VarianceUncertainty(var)
