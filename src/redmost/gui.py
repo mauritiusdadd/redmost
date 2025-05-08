@@ -8,6 +8,7 @@ Created on Fri Nov 24 10:33:40 2023.
 from __future__ import annotations
 
 import os
+import copy
 import pickle
 import sys
 import json
@@ -88,6 +89,7 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         self.sync_width: bool = False
         self.redshift: float = 0
         self.vertical_lock: bool = False
+        self.masks: List[Dict[str: Any]] = []
 
         self.setDragMode(qt_api.QtCharts.QChartView.DragMode.NoDrag)
         self.setMouseTracking(True)
@@ -171,6 +173,7 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         painter.save()
         plot_area: QtCore.QRectF = self.chart().plotArea()
         pen: QtGui.QPen = qt_api.QtGui.QPen()
+        brush: QtGui.QBrush = qt_api.QtGui.QBrush()
         pen_color: QtGui.QColor
 
         if self._mouse_lambda is not None:
@@ -200,6 +203,57 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
             painter.restore()
             return
 
+        for mask in self.masks:
+            try:
+                mask_color = qt_api.QtGui.QColor(mask['color'])
+            except Exception:
+                mask_color = qt_api.QtGui.QColor("#aa333333")
+
+            try:
+                mask_color.setAlphaF(mask['alpha'])
+            except KeyError:
+                mask_color.setAlphaF(0.5)
+
+            pen.setColor(pen_color)
+            pen.setWidthF(1)
+            brush.setColor(mask_color)
+            brush.setStyle(qt_api.QtCore.Qt.BrushStyle.BDiagPattern)
+
+            painter.setPen(pen)
+            painter.setBrush(brush)
+
+            mask_x_start = self.chart().mapToPosition(
+                qt_api.QtCore.QPointF(mask['start'], 0)
+            ).x()
+
+            mask_x_end = self.chart().mapToPosition(
+                qt_api.QtCore.QPointF(mask['end'], 0)
+            ).x()
+
+            if (
+                (mask_x_end < plot_area.left()) or
+                (mask_x_start > plot_area.right())
+            ):
+                continue
+
+            if mask_x_end >= plot_area.right():
+                mask_x_end = plot_area.right()
+
+            if mask_x_start <= plot_area.left():
+                mask_x_start = plot_area.left()
+
+            mask_p1: QtCore.QPointF = qt_api.QtCore.QPointF(
+                mask_x_start, plot_area.top()
+            )
+            mask_p2: QtCore.QPointF = qt_api.QtCore.QPointF(
+                mask_x_end, plot_area.bottom()
+            )
+            mask_rect: QtCore.QRectF = qt_api.QtCore.QRectF(mask_p1, mask_p2)
+
+            path: QtGui.QPainterPath = qt_api.QtGui.QPainterPath()
+            path.addRect(mask_rect)
+            painter.fillPath(path, brush)
+
         for line_lambda, line_name, line_type in self._lines_buffer_list:
             pen_color = qt_api.QtGui.QColor(self.line_colors["unknown"])
 
@@ -221,19 +275,22 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
             ).x()
 
             if (line_x >= plot_area.left()) and (line_x <= plot_area.right()):
-                p_line_top = qt_api.QtCore.QPointF(
+                p_line_top: QtCore.QPointF = qt_api.QtCore.QPointF(
                     line_x, plot_area.top()
                 )
-                p_line_bottom = qt_api.QtCore.QPointF(
+                p_line_bottom: QtCore.QPointF = qt_api.QtCore.QPointF(
                     line_x, plot_area.bottom()
                 )
-                p_text_top = qt_api.QtCore.QPointF(
+                p_text_top: QtCore.QPointF = qt_api.QtCore.QPointF(
                     line_x, plot_area.top() - 5
                 )
                 painter.drawLine(p_line_bottom, p_line_top)
                 painter.drawText(p_text_top, line_name)
 
         painter.restore()
+
+    def setMasks(self, masks: List[Dict[str, Any]]) -> None:
+        self.masks = masks
 
     def hideLines(self) -> None:
         self.setLinesVisible(False)
@@ -1098,6 +1155,8 @@ class QXCorrHandler(qt_api.QtCore.QObject):
         self.z_min: float = 0
         self.z_max: float = 6
         self.z_step: float = 0.001
+        self.w_min_ang: Union[float, None] = None
+        self.w_max_ang: Union[float, None] = None
         self.batch_size: int = 32
         self.subtract_continuum: bool = True
         self.continuum_smoothing_level: float = 50
@@ -1117,7 +1176,11 @@ class QXCorrHandler(qt_api.QtCore.QObject):
         self.best_z = {}
         self.corr_data = {}
 
-    def run(self, spectra: Dict[uuid.UUID, Spectrum1D]) -> None:
+    def run(
+        self,
+        spectra: Dict[uuid.UUID, Spectrum1D],
+        w_masks: Optional[Dict[uuid.UUID, List[Dict[str, Any]]]] = None
+    ) -> None:
         self.reset.emit()
         self.maximum.emit(0)
         self.maximum.emit(100)
@@ -1145,6 +1208,9 @@ class QXCorrHandler(qt_api.QtCore.QObject):
             z_min=self.z_min,
             z_max=self.z_max,
             z_step=self.z_step,
+            w_min=self.w_min_ang,
+            w_max=self.w_max_ang,
+            w_masks=w_masks,
             use_gpu=self.use_gpu,
             device=self.gpu_device,
             continuum_subtracted=sub_smooth,
@@ -1395,6 +1461,8 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     action_import_zcat: QtGui.QAction
     action_export_zcat: QtGui.QAction
     action_export_as_a_picture: QtGui.QAction
+    action_mask_copy: QtGui.QAction
+    action_mask_paste: QtGui.QAction
     action_settings: QtGui.QAction
     action_zoom_in: QtGui.QAction
     action_zoom_out: QtGui.QAction
@@ -1422,6 +1490,20 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     lines_match_list_widget: QtWidgets.QListWidget
     lines_table_widget: QtWidgets.QTableWidget
     log_y_check_box: QtWidgets.QCheckBox
+    mask_add_button: QtWidgets.QPushButton
+    mask_apply_all_checkbox: QtWidgets.QCheckBox
+    mask_apply_button: QtWidgets.QPushButton
+    mask_cancel_button: QtWidgets.QPushButton
+    mask_delete_button: QtWidgets.QPushButton
+    mask_deleteall_button: QtWidgets.QPushButton
+    mask_desc_textbox: QtWidgets.QLineEdit
+    mask_enabled_checkbox: QtWidgets.QCheckBox
+    mask_end_spinbox: QtWidgets.QSpinBox
+    mask_name_textbox: QtWidgets.QLineEdit
+    mask_start_spinbox: QtWidgets.QSpinBox
+    mask_listwidget: QtWidgets.QListWidget
+    mask_properties_groupbox: QtWidgets.QGroupBox
+    masking_tab: QtWidgets.QWidget
     match_lines_button: QtWidgets.QPushButton
     next_spec_button: QtWidgets.QPushButton
     obj_prop_table_widget: QtWidgets.QTableWidget
@@ -1429,7 +1511,7 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     plot_group_box: QtWidgets.QGroupBox
     previous_spec_button: QtWidgets.QPushButton
     qflag_combo_box: QtWidgets.QComboBox
-    red_group_box: QtWidgets.QGroupBox
+    redshift_tools_tab: QtWidgets.QGroupBox
     redrock_all_radio: QtWidgets.QRadioButton
     redrock_selected_radio: QtWidgets.QRadioButton
     redrock_run_button: QtWidgets.QPushButton
@@ -1451,6 +1533,7 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     toggle_all_button: QtWidgets.QPushButton
     toggle_done_button: QtWidgets.QPushButton
     toggle_similar_button: QtWidgets.QPushButton
+    tools_tabwidget: QtWidgets.QTableWidget
     var_widget_layout: QtWidgets.QHBoxLayout
     wdisp_widget_layout: QtWidgets.QHBoxLayout
     xcorr_all_radio: QtWidgets.QRadioButton
@@ -1463,6 +1546,9 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     xcorr_templates_select_all_button: QtWidgets.QPushButton
     xcorr_templates_tree_widget: QtWidgets.QTreeWidget
     xcorr_widget_layout: QtWidgets.QHBoxLayout
+    xcorr_wav_max_spinbox: QtWidgets.QSpinBox
+    xcorr_wav_min_spinbox: QtWidgets.QSpinBox
+    xcorr_wrange_checkbox: QtWidgets.QCheckBox
     xcorr_z_max_dspinbox: QtWidgets.QDoubleSpinBox
     xcorr_z_min_dspinbox: QtWidgets.QDoubleSpinBox
     xcorr_z_step_dspinbox: QtWidgets.QDoubleSpinBox
@@ -1493,6 +1579,11 @@ class GuiApp:
         self.open_spectra_items: Dict[
             uuid.UUID, QtWidgets.QListWidgetItem
         ] = {}
+
+        self.spectral_masks: Dict[
+            uuid.UUID, Dict[uuid.UUID, Dict[str, Any]]
+        ] = {}
+
         self.current_uuid: Optional[uuid.UUID] = None
         self.object_state_dict: Dict[uuid.UUID, Any] = {}
         self.current_project_file_path: Optional[str] = None
@@ -1507,6 +1598,7 @@ class GuiApp:
         self.global_state: Enum = GlobalState.READY
         self._updateXcorrTemplateTreeState_lock = False
         self._rebuild_xcorr_template_list = True
+        self._copy_mask: Union[Dict[str, Any], None] = None
 
         self.qf_color: Dict[int, str] = {
             0: "#FFFFFF",
@@ -1652,6 +1744,8 @@ class GuiApp:
             self.xcorr_handler = None
         else:
             self.main_wnd.tab_xcorr.setEnabled(True)
+            self.main_wnd.xcorr_wrange_checkbox.setEnabled(True)
+            self.main_wnd.xcorr_wrange_checkbox.setChecked(False)
             if utils.HAS_TORCH or utils.HAS_TENSORFLOW:
                 self.main_wnd.xcorr_gpu_checkbox.setEnabled(True)
             else:
@@ -1819,6 +1913,49 @@ class GuiApp:
 
         # Connect signals
 
+        self.main_wnd.mask_add_button.clicked.connect(
+            self.doAddMask
+        )
+
+        self.main_wnd.mask_name_textbox.textChanged.connect(
+            self.maskPropChanged
+        )
+        self.main_wnd.mask_desc_textbox.textChanged.connect(
+            self.maskPropChanged
+        )
+        self.main_wnd.mask_start_spinbox.valueChanged.connect(
+            self.maskPropChanged
+        )
+        self.main_wnd.mask_end_spinbox.valueChanged.connect(
+            self.maskPropChanged
+        )
+        self.main_wnd.mask_enabled_checkbox.checkStateChanged.connect(
+            self.maskPropChanged
+        )
+        self.main_wnd.mask_apply_all_checkbox.checkStateChanged.connect(
+            self.maskPropChanged
+        )
+
+        self.main_wnd.mask_delete_button.clicked.connect(
+            self.doDeleteMask
+        )
+
+        self.main_wnd.mask_deleteall_button.clicked.connect(
+            self.doDeleteAllMask
+        )
+
+        self.main_wnd.mask_listwidget.currentItemChanged.connect(
+            self.currentMaskChanged
+        )
+
+        self.main_wnd.mask_apply_button.clicked.connect(
+            self.updateCurrentMask
+        )
+
+        self.main_wnd.mask_cancel_button.clicked.connect(
+            self.restoreCurrentMask
+        )
+
         self.main_wnd.action_controls_layout.triggered.connect(
             self.control_mapping_wnd.open
         )
@@ -1984,6 +2121,14 @@ class GuiApp:
             self.plotXcorrFunction
         )
 
+        self.main_wnd.action_mask_copy.triggered.connect(
+            self.doCopyMask
+        )
+
+        self.main_wnd.action_mask_paste.triggered.connect(
+            self.doPasteMask
+        )
+
         # Final steps
 
         # This dictionary contains the global settings that should be saved
@@ -2145,7 +2290,7 @@ class GuiApp:
 
     def _lock(self, *args, **kwargs) -> None:
         self.main_wnd.spec_group_box.setEnabled(False)
-        self.main_wnd.red_group_box.setEnabled(False)
+        self.main_wnd.redshift_tools_tab.setEnabled(False)
         self.main_wnd.info_tab_widget.setEnabled(False)
         self.flux_chart_view.setRubberBand(
             qt_api.QtCharts.QChartView.RubberBand.NoRubberBand
@@ -2399,7 +2544,7 @@ class GuiApp:
 
     def _unlock(self, *args, **kwargs) -> None:
         self.main_wnd.spec_group_box.setEnabled(True)
-        self.main_wnd.red_group_box.setEnabled(True)
+        self.main_wnd.redshift_tools_tab.setEnabled(True)
         self.main_wnd.info_tab_widget.setEnabled(True)
         self.main_wnd.plot_group_box.setEnabled(True)
         self.flux_chart_view.setRubberBand(
@@ -2559,13 +2704,11 @@ class GuiApp:
         self.global_state = GlobalState.READY
         self._unlock()
 
-
     def collectXCorrResults(self) -> None:
         if self.xcorr_handler is None:
             return
 
         self.showXcorrZ()
-
 
     def currentQualityFlagChanged(self, df_index):
         if self.current_uuid is None:
@@ -2584,11 +2727,14 @@ class GuiApp:
 
         :param new_item: The new list item.
         """
+
         if new_item is None:
             self.main_wnd.redrock_current_radio.setEnabled(False)
+            self.main_wnd.xcorr_current_radio.setEnabled(False)
             return
         else:
             self.main_wnd.redrock_current_radio.setEnabled(True)
+            self.main_wnd.xcorr_current_radio.setEnabled(True)
 
         if self.global_state != GlobalState.READY:
             return
@@ -2621,9 +2767,18 @@ class GuiApp:
             # If we actually change the spectrum, then reset the view
             self.current_uuid = spec_uuid
             self._restore_object_state(spec_uuid)
+            self.updateMaskList()
 
             for ax in flux_chart.axes():
                 flux_chart.removeAxis(ax)
+
+        try:
+            mask_list = list(self.spectral_masks[self.current_uuid].values())
+        except KeyError:
+            mask_list = []
+
+        self.flux_chart_view.setMasks(mask_list)
+        self.var_chart_view.setMasks(mask_list)
 
         for ax in var_chart.axes():
             var_chart.removeAxis(ax)
@@ -2885,6 +3040,229 @@ class GuiApp:
 
         self.addNewTemplateDir(url.path())
         self.updateXcorrTemplateList()
+
+    def addMask(
+        self,
+        spec_uuid: uuid.UUID,
+        mask_properties: Dict[str, Any],
+        mask_uuid: Optional[uuid.UUID] = None
+    ) -> uuid.UUID:
+        if mask_uuid is None:
+            mask_uuid = uuid.uuid4()
+
+        if spec_uuid not in self.spectral_masks:
+            self.spectral_masks[spec_uuid] = {}
+
+        self.spectral_masks[spec_uuid][mask_uuid] = mask_properties
+
+        return mask_uuid
+
+    def deleteMask(self, spec_uuid: uuid.UUID, mask_uuid: uuid.UUID) -> None:
+        try:
+            mask_properties = self.spectral_masks[spec_uuid][mask_uuid]
+        except KeyError:
+            pass
+        else:
+            if not mask_properties['global']:
+                self.spectral_masks[spec_uuid].pop(mask_uuid)
+        self.updateMaskList()
+
+    def currentMaskItem(self) -> Union[
+        Tuple[uuid.UUID, QtWidgets.QListWidgetItem],
+        None
+    ]:
+        if self.current_uuid is None:
+            return None
+
+        mask_item = self.main_wnd.mask_listwidget.currentItem()
+
+        if mask_item is None:
+            return None
+
+        mask_uuid = mask_item.data(
+            qt_api.QtCore.Qt.ItemDataRole.UserRole
+        )
+
+        return mask_uuid, mask_item
+
+    def doAddMask(self) -> None:
+        if self.current_uuid is None:
+            return
+
+        mask_properties = {
+            "name": "No name",
+            "description": "",
+            "start": 0,
+            "end": 0,
+            "enabled": True,
+            "global": False,
+            'linked': None
+        }
+
+        new_item = qt_api.QtWidgets.QListWidgetItem(mask_properties['name'])
+        new_item.setCheckState(qt_api.QtCore.Qt.CheckState.Checked)
+        new_item.setData(
+            qt_api.QtCore.Qt.ItemDataRole.UserRole,
+            self.addMask(self.current_uuid, mask_properties)
+        )
+
+        self.main_wnd.mask_listwidget.addItem(new_item)
+        self.main_wnd.mask_listwidget.setCurrentItem(new_item)
+        self.currentMaskChanged(new_item)
+        # self.redrawCurrentSpec()
+
+    def doCopyMask(self) -> None:
+        mask_uuid, _ = self.currentMaskItem()
+
+        try:
+            self._copy_mask = self.spectral_masks[self.current_uuid][mask_uuid]
+        except KeyError:
+            self._copy_mask = None
+
+    def doPasteMask(self) -> None:
+        if (self._copy_mask is None) or (self.current_uuid is None):
+            return
+
+        if self.current_uuid not in self.spectral_masks:
+            self.spectral_masks[self.current_uuid] = {}
+
+        mask_uuid = uuid.uuid4()
+        self.spectral_masks[self.current_uuid][mask_uuid] = copy.deepcopy(
+            self._copy_mask
+        )
+        self.updateMaskList()
+        self.redrawCurrentSpec()
+
+    def doDeleteMask(self) -> None:
+        self.deleteMask(self.current_uuid, self.currentMaskItem()[0])
+        self.redrawCurrentSpec()
+
+    def doDeleteAllMask(self) -> None:
+        if self.current_uuid is None:
+            return
+
+        try:
+            mask_dict = self.spectral_masks[self.current_uuid]
+        except KeyError:
+            return
+
+        for mask_uuid in list(mask_dict.keys()):
+            self.deleteMask(self.current_uuid, mask_uuid)
+
+        self.redrawCurrentSpec()
+
+    def updateMaskList(self) -> None:
+        self.main_wnd.mask_listwidget.clear()
+
+        if self.current_uuid is None:
+            return
+
+        try:
+            masks = self.spectral_masks[self.current_uuid]
+        except KeyError:
+            return
+
+        for mask_uuid, mask_properties in masks.items():
+            new_item = qt_api.QtWidgets.QListWidgetItem(
+                mask_properties['name']
+            )
+            new_item.setCheckState(qt_api.QtCore.Qt.CheckState.Checked)
+            new_item.setData(qt_api.QtCore.Qt.ItemDataRole.UserRole, mask_uuid)
+            self.main_wnd.mask_listwidget.addItem(new_item)
+
+    def updateCurrentMask(self) -> None:
+        mask_uuid, mask_item = self.currentMaskItem()
+        try:
+            mask_properties = self.spectral_masks[self.current_uuid][mask_uuid]
+        except KeyError:
+            mask_properties = {}
+            self.spectral_masks[self.current_uuid][mask_uuid] = mask_properties
+
+        mask_properties['name'] = self.main_wnd.mask_name_textbox.text()
+        mask_properties['description'] = self.main_wnd.mask_desc_textbox.text()
+        mask_properties['start'] = self.main_wnd.mask_start_spinbox.value()
+        mask_properties['end'] = self.main_wnd.mask_end_spinbox.value()
+        mask_properties['enabled'] = self.main_wnd.mask_enabled_checkbox.isChecked()
+        mask_properties['global'] = self.main_wnd.mask_apply_all_checkbox.isChecked()
+
+        if mask_properties['enabled']:
+            mask_item.setCheckState(qt_api.QtCore.Qt.CheckState.Checked)
+        else:
+            mask_item.setCheckState(qt_api.QtCore.Qt.CheckState.Unchecked)
+
+        if mask_properties['global']:
+            mask_item.setText("[ALL] " + mask_properties['name'])
+            mask_properties['linked'] = self.current_uuid
+            for spec_uuid in self.open_spectra.keys():
+                if spec_uuid == self.current_uuid:
+                    continue
+                self.addMask(spec_uuid, mask_properties, mask_uuid)
+        else:
+            mask_item.setText(mask_properties['name'])
+            if mask_properties['linked']:
+                for spec_uuid in self.open_spectra.keys():
+                    if spec_uuid == mask_properties['linked']:
+                        continue
+                    self.deleteMask(spec_uuid, mask_uuid)
+                mask_properties['linked'] = None
+
+        self.main_wnd.mask_delete_button.setEnabled(
+            not mask_properties['global']
+        )
+        self.main_wnd.mask_deleteall_button.setEnabled(
+            not mask_properties['global']
+        )
+        self.main_wnd.mask_apply_button.setEnabled(False)
+        self.main_wnd.mask_cancel_button.setEnabled(False)
+        self.redrawCurrentSpec()
+
+    def restoreCurrentMask(self) -> None:
+        if self.current_uuid is None:
+            return
+
+        mask_item = self.main_wnd.mask_listwidget.currentItem()
+        if mask_item is None:
+            return
+
+        self.currentMaskChanged(mask_item)
+
+    def currentMaskChanged(
+        self,
+        new_item: Optional[QtWidgets.QListWidgetItem],
+        *args: Any,
+        **kwargs: Any
+    ) -> None:
+        if (self.current_uuid is None) or (new_item is None):
+            self.main_wnd.mask_properties_groupbox.setEnabled(False)
+            self.main_wnd.mask_delete_button.setEnabled(False)
+            return
+
+        mask_uuid = new_item.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
+        mask_properties = self.spectral_masks[self.current_uuid][mask_uuid]
+        self.main_wnd.mask_name_textbox.setText(mask_properties['name'])
+        self.main_wnd.mask_start_spinbox.setValue(mask_properties['start'])
+        self.main_wnd.mask_end_spinbox.setValue(mask_properties['end'])
+        self.main_wnd.mask_enabled_checkbox.setChecked(
+            mask_properties['enabled']
+        )
+        self.main_wnd.mask_apply_all_checkbox.setChecked(
+            mask_properties['global']
+        )
+
+        self.main_wnd.mask_properties_groupbox.setEnabled(True)
+        self.main_wnd.mask_apply_button.setEnabled(False)
+        self.main_wnd.mask_cancel_button.setEnabled(False)
+
+        self.main_wnd.mask_delete_button.setEnabled(
+            not mask_properties['global']
+        )
+        self.main_wnd.mask_deleteall_button.setEnabled(
+            not mask_properties['global']
+        )
+
+    def maskPropChanged(self):
+        self.main_wnd.mask_apply_button.setEnabled(True)
+        self.main_wnd.mask_cancel_button.setEnabled(True)
 
     def doDeleteAllLines(self, *args: Any, **kwargs: Any) -> None:
         """Delete all identified lines."""
@@ -3513,6 +3891,18 @@ class GuiApp:
         self.xcorr_handler.z_min = self.main_wnd.xcorr_z_min_dspinbox.value()
         self.xcorr_handler.z_max = self.main_wnd.xcorr_z_max_dspinbox.value()
         self.xcorr_handler.z_step = self.main_wnd.xcorr_z_step_dspinbox.value()
+
+        if self.main_wnd.xcorr_wrange_checkbox.isChecked():
+            self.xcorr_handler.w_min_ang = float(
+                self.main_wnd.xcorr_wav_min_spinbox.value()
+            )
+            self.xcorr_handler.w_max_ang = float(
+                self.main_wnd.xcorr_wav_max_spinbox.value()
+            )
+        else:
+            self.xcorr_handler.w_min_ang = None
+            self.xcorr_handler.w_max_ang = None
+
         if self.main_wnd.xcorr_gpu_checkbox.isChecked():
             self.xcorr_handler.setGpuBackend(self.use_gpu)
             self.xcorr_handler.setGpuDevice(self.compute_device)
@@ -3524,8 +3914,17 @@ class GuiApp:
             self.main_wnd.xcorr_csub_checkbox.isChecked()
         )
 
+        w_masks = {}
+        for spec_uuid in for_xcorr.keys():
+            try:
+                w_masks[spec_uuid] = list(
+                    self.spectral_masks[spec_uuid].values()
+                )
+            except KeyError:
+                w_masks[spec_uuid] = []
+
         self.pbar.show()
-        self.xcorr_handler.run(for_xcorr)
+        self.xcorr_handler.run(for_xcorr, w_masks)
         self.pbar.hide()
 
 
