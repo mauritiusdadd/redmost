@@ -1312,7 +1312,7 @@ continuum</string>
            </property>
            <layout class="QVBoxLayout" name="verticalLayout_15">
             <item>
-             <widget class="QListWidget" name="mask_listwidget">
+             <widget class="QListWidget" name="mask_list_widget">
               <property name="verticalScrollBarPolicy">
                <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOn</enum>
               </property>

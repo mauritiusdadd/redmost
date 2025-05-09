@@ -1501,8 +1501,10 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     mask_end_spinbox: QtWidgets.QSpinBox
     mask_name_textbox: QtWidgets.QLineEdit
     mask_start_spinbox: QtWidgets.QSpinBox
-    mask_listwidget: QtWidgets.QListWidget
+    mask_list_widget: QtWidgets.QListWidget
+    mask_load_button: QtWidgets.QPushButton
     mask_properties_groupbox: QtWidgets.QGroupBox
+    mask_save_button: QtWidgets.QPushButton
     masking_tab: QtWidgets.QWidget
     match_lines_button: QtWidgets.QPushButton
     next_spec_button: QtWidgets.QPushButton
@@ -1587,7 +1589,10 @@ class GuiApp:
         self.current_uuid: Optional[uuid.UUID] = None
         self.object_state_dict: Dict[uuid.UUID, Any] = {}
         self.current_project_file_path: Optional[str] = None
-        self.current_open_dir: Optional[str] = None
+        self.current_open_dir: Union[None, str] = None
+        self.current_zcat_open_dir: Union[None, str] = None
+        self.current_image_open_dir: Union[None, str] = None
+        self.current_mask_open_dir: Union[None, str] = None
         self.xcor_tree_leaf_items: List[QtWidgets.QTreeWidgetItem] = []
         self.xcorr_templates: Dict[str, Spectrum1D] = {}
         self.cur_xcorr_leaf_item: Optional[QtWidgets.QTreeWidgetItem] = None
@@ -1916,7 +1921,6 @@ class GuiApp:
         self.main_wnd.mask_add_button.clicked.connect(
             self.doAddMask
         )
-
         self.main_wnd.mask_name_textbox.textChanged.connect(
             self.maskPropChanged
         )
@@ -1935,6 +1939,12 @@ class GuiApp:
         self.main_wnd.mask_apply_all_checkbox.checkStateChanged.connect(
             self.maskPropChanged
         )
+        self.main_wnd.mask_load_button.clicked.connect(
+            self.doLoadMasks
+        )
+        self.main_wnd.mask_save_button.clicked.connect(
+            self.doSaveMasks
+        )
 
         self.main_wnd.mask_delete_button.clicked.connect(
             self.doDeleteMask
@@ -1944,7 +1954,7 @@ class GuiApp:
             self.doDeleteAllMask
         )
 
-        self.main_wnd.mask_listwidget.currentItemChanged.connect(
+        self.main_wnd.mask_list_widget.currentItemChanged.connect(
             self.currentMaskChanged
         )
 
@@ -2365,6 +2375,15 @@ class GuiApp:
         )
         self.main_wnd.action_zoom_out.setIcon(
             qt_api.get_qicon("zoom-out", theme)
+        )
+        self.main_wnd.action_mask_copy.setIcon(
+            qt_api.get_qicon("copy", theme)
+        )
+        self.main_wnd.action_mask_copy.setIcon(
+            qt_api.get_qicon("copy", theme)
+        )
+        self.main_wnd.action_mask_paste.setIcon(
+            qt_api.get_qicon("clipboard", theme)
         )
 
         # icons for buttons
@@ -3074,7 +3093,7 @@ class GuiApp:
         if self.current_uuid is None:
             return None
 
-        mask_item = self.main_wnd.mask_listwidget.currentItem()
+        mask_item = self.main_wnd.mask_list_widget.currentItem()
 
         if mask_item is None:
             return None
@@ -3106,8 +3125,8 @@ class GuiApp:
             self.addMask(self.current_uuid, mask_properties)
         )
 
-        self.main_wnd.mask_listwidget.addItem(new_item)
-        self.main_wnd.mask_listwidget.setCurrentItem(new_item)
+        self.main_wnd.mask_list_widget.addItem(new_item)
+        self.main_wnd.mask_list_widget.setCurrentItem(new_item)
         self.currentMaskChanged(new_item)
         # self.redrawCurrentSpec()
 
@@ -3151,8 +3170,71 @@ class GuiApp:
 
         self.redrawCurrentSpec()
 
+    def doLoadMasks(self) -> None:
+        raise NotImplementedError()
+
+    def doSaveMasks(self) -> bool:
+        if self.current_uuid is None:
+            return False
+
+        if self.current_mask_open_dir is not None:
+            cur_dir = self.current_mask_open_dir
+        elif self.current_project_file_path is not None:
+            cur_dir = self.current_project_file_path
+        elif self.current_open_dir is not None:
+            cur_dir = self.current_open_dir
+        else:
+            cur_dir = '.'
+
+        open_list = qt_api.QtWidgets.QFileDialog.getSaveFileName(
+            self.main_wnd,
+            self.qapp.tr("Export masks to file"),
+            os.path.join(cur_dir, 'masks.json'),
+            (
+                f"{self.qapp.tr('JSON file')} (*.json);;"
+            ),
+            f"{self.qapp.tr('JSON file')} (*.json)"
+        )
+
+        try:
+            dest_file_path, file_type = open_list
+            serialized_masks = []
+
+            for x in self.spectral_masks[self.current_uuid].values():
+                mask_properties = copy.deepcopy(x)
+                for p in ['linked', 'global', 'enabled']:
+                    try:
+                        mask_properties.pop(p)
+                    except KeyError:
+                        continue
+                serialized_masks.append(mask_properties)
+
+            with open(dest_file_path, 'w') as f:
+                json.dump(serialized_masks, f, indent=2)
+        except Exception as exc:
+            self.msgBox.setWindowTitle(self.qapp.tr("Error"))
+            self.msgBox.setText(
+                 self.qapp.tr(
+                     "An error has occurred while saving masks."
+                 )
+            )
+            self.msgBox.setInformativeText('')
+            self.msgBox.setDetailedText(str(exc))
+            self.msgBox.setIcon(
+                qt_api.QtWidgets.QMessageBox.Icon.Critical
+            )
+            self.msgBox.setStandardButtons(
+                qt_api.QtWidgets.QMessageBox.StandardButton.Ok
+            )
+            self.msgBox.exec()
+            return False
+
+        self.statusbar.showMessage(self.qapp.tr("Mask file saved"))
+        self.current_mask_open_dir = os.path.dirname(dest_file_path)
+        return True
+
     def updateMaskList(self) -> None:
-        self.main_wnd.mask_listwidget.clear()
+        self.main_wnd.mask_list_widget.clear()
 
         if self.current_uuid is None:
             return
@@ -3168,7 +3250,7 @@ class GuiApp:
             )
             new_item.setCheckState(qt_api.QtCore.Qt.CheckState.Checked)
             new_item.setData(qt_api.QtCore.Qt.ItemDataRole.UserRole, mask_uuid)
-            self.main_wnd.mask_listwidget.addItem(new_item)
+            self.main_wnd.mask_list_widget.addItem(new_item)
 
     def updateCurrentMask(self) -> None:
         mask_uuid, mask_item = self.currentMaskItem()
@@ -3220,7 +3302,7 @@ class GuiApp:
         if self.current_uuid is None:
             return
 
-        mask_item = self.main_wnd.mask_listwidget.currentItem()
+        mask_item = self.main_wnd.mask_list_widget.currentItem()
         if mask_item is None:
             return
 
@@ -3285,8 +3367,8 @@ class GuiApp:
 
         if item is None:
             return
-        elif self.current_open_dir is not None:
-            cur_dir = self.current_open_dir
+        elif self.current_image_open_dir is not None:
+            cur_dir = self.current_image_open_dir
         elif self.current_project_file_path is not None:
             cur_dir = os.path.dirname(self.current_project_file_path)
         else:
@@ -3337,14 +3419,14 @@ class GuiApp:
             )
             self.msgBox.exec()
         else:
-            self.current_open_dir = os.path.dirname(dest_file_path)
+            self.current_image_open_dir = os.path.dirname(dest_file_path)
             self.statusbar.showMessage(
                 self.qapp.tr("Picture saved")
             )
 
     def doExportZcat(self, *args, **kwargs) -> None:
-        if self.current_open_dir is not None:
-            cur_dir = self.current_open_dir
+        if self.current_zcat_open_dir is not None:
+            cur_dir = self.current_zcat_open_dir
         elif self.current_project_file_path is not None:
             cur_dir = os.path.dirname(self.current_project_file_path)
         else:
@@ -3382,7 +3464,7 @@ class GuiApp:
             )
             self.msgBox.exec()
         else:
-            self.current_open_dir = os.path.dirname(dest_file_path)
+            self.current_zcat_open_dir = os.path.dirname(dest_file_path)
             self.statusbar.showMessage(
                 self.qapp.tr("Redshift catalogue saved")
             )
@@ -3435,7 +3517,7 @@ class GuiApp:
         :return: THe path of the catalogue file.
         """
         if self.current_open_dir is not None:
-            cur_dir = self.current_open_dir
+            cur_dir = self.current_zcat_open_dir
         elif self.current_project_file_path is not None:
             cur_dir = os.path.dirname(self.current_project_file_path)
         else:
@@ -3478,7 +3560,7 @@ class GuiApp:
             self.msgBox.exec()
             return
 
-        self.current_open_dir = os.path.dirname(catalogue_file)
+        self.current_zcat_open_dir = os.path.dirname(catalogue_file)
         self.zcat_mapping_dialog.setup(zcat_tbl)
         self.zcat_mapping_dialog.open()
 
@@ -4186,6 +4268,9 @@ class GuiApp:
         self.current_uuid = None
         self.current_project_file_path = None
         self.current_open_dir = None
+        self.current_zcat_open_dir = None
+        self.current_image_open_dir = None
+        self.current_mask_open_dir = None
 
         self.main_wnd.spec_list_widget.clear()
         self.main_wnd.lines_match_list_widget.clear()
