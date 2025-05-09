@@ -3170,8 +3170,70 @@ class GuiApp:
 
         self.redrawCurrentSpec()
 
-    def doLoadMasks(self) -> None:
-        raise NotImplementedError()
+    def doLoadMasks(self) -> bool:
+        if self.current_uuid is None:
+            return False
+
+        if self.current_mask_open_dir is not None:
+            cur_dir = self.current_mask_open_dir
+        elif self.current_project_file_path is not None:
+            cur_dir = self.current_project_file_path
+        elif self.current_open_dir is not None:
+            cur_dir = self.current_open_dir
+        else:
+            cur_dir = '.'
+
+        mask_file_path, _ = qt_api.QtWidgets.QFileDialog.getOpenFileName(
+            self.main_wnd,
+            self.qapp.tr("Load masks from file"),
+            cur_dir,
+            (
+                f"{self.qapp.tr('JSON file')} (*.json);;"
+                f"{self.qapp.tr('All files')} (*.*)"
+            ),
+            f"{self.qapp.tr('JSON file')} (*.json)"
+        )
+
+        if not mask_file_path:
+            return False
+
+        try:
+            serialized_masks = []
+
+            with open(mask_file_path, 'r') as f:
+                serialized_masks = json.load(f)
+
+            for mask_properties in serialized_masks:
+                mask_properties['linked'] = None
+                mask_properties['global'] = False
+                mask_properties['enabled'] = True
+
+        except Exception as exc:
+            self.msgBox.setWindowTitle(self.qapp.tr("Error"))
+            self.msgBox.setText(
+                 self.qapp.tr(
+                     "An error has occurred while reading masks."
+                 )
+            )
+            self.msgBox.setInformativeText('')
+            self.msgBox.setDetailedText(str(exc))
+            self.msgBox.setIcon(
+                qt_api.QtWidgets.QMessageBox.Icon.Critical
+            )
+            self.msgBox.setStandardButtons(
+                qt_api.QtWidgets.QMessageBox.StandardButton.Ok
+            )
+            self.msgBox.exec()
+            return False
+
+        for mask_properties in serialized_masks:
+            self.addMask(self.current_uuid, mask_properties)
+        self.updateMaskList()
+        self.redrawCurrentSpec()
+
+        self.statusbar.showMessage(self.qapp.tr("Mask file loaded"))
+        self.current_mask_open_dir = os.path.dirname(mask_file_path)
+        return True
 
     def doSaveMasks(self) -> bool:
         if self.current_uuid is None:
@@ -3322,6 +3384,7 @@ class GuiApp:
         mask_uuid = new_item.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
         mask_properties = self.spectral_masks[self.current_uuid][mask_uuid]
         self.main_wnd.mask_name_textbox.setText(mask_properties['name'])
+        self.main_wnd.mask_desc_textbox.setText(mask_properties['description'])
         self.main_wnd.mask_start_spinbox.setValue(mask_properties['start'])
         self.main_wnd.mask_end_spinbox.setValue(mask_properties['end'])
         self.main_wnd.mask_enabled_checkbox.setChecked(
