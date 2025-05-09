@@ -217,7 +217,10 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
             pen.setColor(pen_color)
             pen.setWidthF(1)
             brush.setColor(mask_color)
-            brush.setStyle(qt_api.QtCore.Qt.BrushStyle.BDiagPattern)
+            try:
+                brush.setStyle(qt_api.QtCore.Qt.BrushStyle[mask['pattern']])
+            except KeyError:
+                brush.setStyle(qt_api.QtCore.Qt.BrushStyle.BDiagPattern)
 
             painter.setPen(pen)
             painter.setBrush(brush)
@@ -1491,14 +1494,17 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     lines_table_widget: QtWidgets.QTableWidget
     log_y_check_box: QtWidgets.QCheckBox
     mask_add_button: QtWidgets.QPushButton
+    mask_trasparency_spinbox: QtWidgets.QSpinBox
     mask_apply_all_checkbox: QtWidgets.QCheckBox
     mask_apply_button: QtWidgets.QPushButton
     mask_cancel_button: QtWidgets.QPushButton
+    mask_color_textbox: QtWidgets.QLineEdit
     mask_delete_button: QtWidgets.QPushButton
     mask_deleteall_button: QtWidgets.QPushButton
     mask_desc_textbox: QtWidgets.QLineEdit
     mask_enabled_checkbox: QtWidgets.QCheckBox
     mask_end_spinbox: QtWidgets.QSpinBox
+    mask_fill_combobox: QtWidgets.QComboBox
     mask_name_textbox: QtWidgets.QLineEdit
     mask_start_spinbox: QtWidgets.QSpinBox
     mask_list_widget: QtWidgets.QListWidget
@@ -1916,6 +1922,15 @@ class GuiApp:
         self.main_wnd.splitter_main.setSizes([200, 1000, 200])
         self.main_wnd.splitter_plots.setSizes([500, 300])
 
+        # Fill mask pattert combo-box
+        self.main_wnd.mask_fill_combobox.clear()
+        for x in list(qt_api.QtCore.Qt.BrushStyle):
+            if x.value >= 15:
+                break
+            self.main_wnd.mask_fill_combobox.addItem(
+                x.name, x.value
+            )
+
         # Connect signals
 
         self.main_wnd.mask_add_button.clicked.connect(
@@ -1937,6 +1952,15 @@ class GuiApp:
             self.maskPropChanged
         )
         self.main_wnd.mask_apply_all_checkbox.checkStateChanged.connect(
+            self.maskPropChanged
+        )
+        self.main_wnd.mask_color_textbox.textChanged.connect(
+            self.maskPropChanged
+        )
+        self.main_wnd.mask_fill_combobox.currentIndexChanged.connect(
+            self.maskPropChanged
+        )
+        self.main_wnd.mask_trasparency_spinbox.valueChanged.connect(
             self.maskPropChanged
         )
         self.main_wnd.mask_load_button.clicked.connect(
@@ -3113,6 +3137,9 @@ class GuiApp:
             "description": "",
             "start": 0,
             "end": 0,
+            "color": "black",
+            "pattern": "SolidPattern",
+            "alpha": 0.8,
             "enabled": True,
             "global": False,
             'linked': None
@@ -3326,6 +3353,9 @@ class GuiApp:
         mask_properties['description'] = self.main_wnd.mask_desc_textbox.text()
         mask_properties['start'] = self.main_wnd.mask_start_spinbox.value()
         mask_properties['end'] = self.main_wnd.mask_end_spinbox.value()
+        mask_properties['color'] = self.main_wnd.mask_color_textbox.text()
+        mask_properties['alpha'] = 1 - (self.main_wnd.mask_trasparency_spinbox.value()/100)
+        mask_properties['pattern'] = self.main_wnd.mask_fill_combobox.currentText()
         mask_properties['enabled'] = self.main_wnd.mask_enabled_checkbox.isChecked()
         mask_properties['global'] = self.main_wnd.mask_apply_all_checkbox.isChecked()
 
@@ -3387,6 +3417,13 @@ class GuiApp:
         self.main_wnd.mask_desc_textbox.setText(mask_properties['description'])
         self.main_wnd.mask_start_spinbox.setValue(mask_properties['start'])
         self.main_wnd.mask_end_spinbox.setValue(mask_properties['end'])
+        self.main_wnd.mask_color_textbox.setText(mask_properties['color'])
+        self.main_wnd.mask_trasparency_spinbox.setValue(
+            int(100 * (1 - mask_properties['alpha']))
+        )
+        self.main_wnd.mask_fill_combobox.setCurrentText(
+            mask_properties['pattern']
+        )
         self.main_wnd.mask_enabled_checkbox.setChecked(
             mask_properties['enabled']
         )

@@ -1369,23 +1369,112 @@ continuum</string>
             <string>Mask properties</string>
            </property>
            <layout class="QGridLayout" name="gridLayout_7">
-            <item row="1" column="0">
-             <widget class="QLabel" name="label_10">
+            <item row="2" column="0">
+             <widget class="QLabel" name="label_14">
               <property name="text">
-               <string>Name</string>
+               <string>Description</string>
               </property>
               <property name="alignment">
                <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
               </property>
              </widget>
             </item>
+            <item row="4" column="4">
+             <widget class="QComboBox" name="mask_fill_combobox">
+              <item>
+               <property name="text">
+                <string>Solid</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Diagonal B</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Diagonal F</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Diagonal cross</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Cross</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Horizontal</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Vertical</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Dense 6</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Dense 5</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Dense 4</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Dense 3</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Dense 2</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Dense 1</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+            <item row="8" column="3">
+             <widget class="QPushButton" name="mask_apply_button">
+              <property name="text">
+               <string>Apply</string>
+              </property>
+             </widget>
+            </item>
             <item row="3" column="2">
              <widget class="QSpinBox" name="mask_start_spinbox">
+              <property name="alignment">
+               <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+              </property>
               <property name="suffix">
                <string> A</string>
               </property>
               <property name="maximum">
                <number>999999</number>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="0">
+             <widget class="QLabel" name="label_15">
+              <property name="text">
+               <string>Color</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
               </property>
              </widget>
             </item>
@@ -1399,6 +1488,46 @@ continuum</string>
               </property>
              </widget>
             </item>
+            <item row="1" column="2" colspan="3">
+             <widget class="QLineEdit" name="mask_name_textbox">
+              <property name="clearButtonEnabled">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item row="7" column="2">
+             <widget class="QCheckBox" name="mask_enabled_checkbox">
+              <property name="text">
+               <string>Enabled</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="0">
+             <widget class="QLabel" name="label_10">
+              <property name="text">
+               <string>Name</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="4">
+             <widget class="QSpinBox" name="mask_end_spinbox">
+              <property name="alignment">
+               <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+              </property>
+              <property name="suffix">
+               <string> A</string>
+              </property>
+              <property name="maximum">
+               <number>999999</number>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="2">
+             <widget class="QLineEdit" name="mask_color_textbox"/>
+            </item>
             <item row="3" column="3">
              <widget class="QLabel" name="label_13">
               <property name="text">
@@ -1409,57 +1538,54 @@ continuum</string>
               </property>
              </widget>
             </item>
-            <item row="4" column="3" colspan="2">
+            <item row="2" column="2" colspan="3">
+             <widget class="QLineEdit" name="mask_desc_textbox">
+              <property name="clearButtonEnabled">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item row="7" column="3" colspan="2">
              <widget class="QCheckBox" name="mask_apply_all_checkbox">
               <property name="text">
                <string>Apply to all spectra</string>
               </property>
              </widget>
             </item>
-            <item row="4" column="2">
-             <widget class="QCheckBox" name="mask_enabled_checkbox">
-              <property name="text">
-               <string>Enabled</string>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="2" colspan="3">
-             <widget class="QLineEdit" name="mask_name_textbox"/>
-            </item>
-            <item row="3" column="4">
-             <widget class="QSpinBox" name="mask_end_spinbox">
-              <property name="suffix">
-               <string> A</string>
-              </property>
-              <property name="maximum">
-               <number>999999</number>
-              </property>
-             </widget>
-            </item>
-            <item row="2" column="0">
-             <widget class="QLabel" name="label_14">
-              <property name="text">
-               <string>Description</string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-              </property>
-             </widget>
-            </item>
-            <item row="2" column="2" colspan="3">
-             <widget class="QLineEdit" name="mask_desc_textbox"/>
-            </item>
-            <item row="5" column="4">
+            <item row="8" column="4">
              <widget class="QPushButton" name="mask_cancel_button">
               <property name="text">
                <string>Cancel</string>
               </property>
              </widget>
             </item>
-            <item row="5" column="3">
-             <widget class="QPushButton" name="mask_apply_button">
+            <item row="4" column="3">
+             <widget class="QLabel" name="label_16">
               <property name="text">
-               <string>Apply</string>
+               <string>Pattern</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item row="5" column="0">
+             <widget class="QLabel" name="label_17">
+              <property name="text">
+               <string>Trasparency</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item row="5" column="2">
+             <widget class="QSpinBox" name="mask_trasparency_spinbox">
+              <property name="alignment">
+               <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+              </property>
+              <property name="maximum">
+               <number>100</number>
               </property>
              </widget>
             </item>
