@@ -1568,6 +1568,19 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
 class GuiApp:
     """General class for the main GUI."""
 
+    DEFAULT_MASK_PROPERTIES = {
+        "name": "No name",
+        "description": "",
+        "start": 0,
+        "end": 0,
+        "color": "black",
+        "pattern": "SolidPattern",
+        "alpha": 0.8,
+        "enabled": True,
+        "global": False,
+        'linked': None
+    }
+
     def __init__(self) -> None:
         self.qapp: QtWidgets.QApplication = get_qapp()
         self.qapp.setApplicationName("Redmost")
@@ -2325,6 +2338,7 @@ class GuiApp:
     def _lock(self, *args, **kwargs) -> None:
         self.main_wnd.spec_group_box.setEnabled(False)
         self.main_wnd.redshift_tools_tab.setEnabled(False)
+        self.main_wnd.masking_tab.setEnabled(False)
         self.main_wnd.info_tab_widget.setEnabled(False)
         self.flux_chart_view.setRubberBand(
             qt_api.QtCharts.QChartView.RubberBand.NoRubberBand
@@ -2590,6 +2604,7 @@ class GuiApp:
         self.main_wnd.redshift_tools_tab.setEnabled(True)
         self.main_wnd.info_tab_widget.setEnabled(True)
         self.main_wnd.plot_group_box.setEnabled(True)
+        self.main_wnd.masking_tab.setEnabled(True)
         self.flux_chart_view.setRubberBand(
             qt_api.QtCharts.QChartView.RubberBand.RectangleRubberBand
         )
@@ -2774,10 +2789,13 @@ class GuiApp:
         if new_item is None:
             self.main_wnd.redrock_current_radio.setEnabled(False)
             self.main_wnd.xcorr_current_radio.setEnabled(False)
+            self.updateMaskList()
             return
         else:
             self.main_wnd.redrock_current_radio.setEnabled(True)
             self.main_wnd.xcorr_current_radio.setEnabled(True)
+            self.main_wnd.mask_add_button.setEnabled(True)
+            self.main_wnd.mask_load_button.setEnabled(True)
 
         if self.global_state != GlobalState.READY:
             return
@@ -3132,18 +3150,7 @@ class GuiApp:
         if self.current_uuid is None:
             return
 
-        mask_properties = {
-            "name": "No name",
-            "description": "",
-            "start": 0,
-            "end": 0,
-            "color": "black",
-            "pattern": "SolidPattern",
-            "alpha": 0.8,
-            "enabled": True,
-            "global": False,
-            'linked': None
-        }
+        mask_properties = copy.deepcopy(self.DEFAULT_MASK_PROPERTIES)
 
         new_item = qt_api.QtWidgets.QListWidgetItem(mask_properties['name'])
         new_item.setCheckState(qt_api.QtCore.Qt.CheckState.Checked)
@@ -3180,7 +3187,9 @@ class GuiApp:
         self.redrawCurrentSpec()
 
     def doDeleteMask(self) -> None:
-        self.deleteMask(self.current_uuid, self.currentMaskItem()[0])
+        current_mask_uuid = self.currentMaskItem()[0]
+        if current_mask_uuid is not None:
+            self.deleteMask(self.current_uuid, current_mask_uuid)
         self.redrawCurrentSpec()
 
     def doDeleteAllMask(self) -> None:
@@ -3231,6 +3240,10 @@ class GuiApp:
                 serialized_masks = json.load(f)
 
             for mask_properties in serialized_masks:
+                for key, val in self.DEFAULT_MASK_PROPERTIES.items():
+                    if key not in mask_properties:
+                        mask_properties[key] = copy.copy(val)
+
                 mask_properties['linked'] = None
                 mask_properties['global'] = False
                 mask_properties['enabled'] = True
@@ -3326,12 +3339,25 @@ class GuiApp:
         self.main_wnd.mask_list_widget.clear()
 
         if self.current_uuid is None:
+            self.main_wnd.mask_add_button.setEnabled(False)
+            self.main_wnd.mask_delete_button.setEnabled(False)
+            self.main_wnd.mask_deleteall_button.setEnabled(False)
+            self.main_wnd.mask_load_button.setEnabled(False)
+            self.main_wnd.mask_save_button.setEnabled(False)
             return
+        else:
+            self.main_wnd.mask_add_button.setEnabled(True)
+            self.main_wnd.mask_load_button.setEnabled(True)
 
         try:
             masks = self.spectral_masks[self.current_uuid]
         except KeyError:
             return
+        else:
+            if len(masks) > 0:
+                self.main_wnd.mask_delete_button.setEnabled(True)
+                self.main_wnd.mask_deleteall_button.setEnabled(True)
+                self.main_wnd.mask_save_button.setEnabled(True)
 
         for mask_uuid, mask_properties in masks.items():
             new_item = qt_api.QtWidgets.QListWidgetItem(
@@ -3413,6 +3439,11 @@ class GuiApp:
 
         mask_uuid = new_item.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
         mask_properties = self.spectral_masks[self.current_uuid][mask_uuid]
+
+        for key, val in self.DEFAULT_MASK_PROPERTIES.items():
+            if key not in mask_properties:
+                mask_properties[key] = copy.copy(val)
+
         self.main_wnd.mask_name_textbox.setText(mask_properties['name'])
         self.main_wnd.mask_desc_textbox.setText(mask_properties['description'])
         self.main_wnd.mask_start_spinbox.setValue(mask_properties['start'])
@@ -4365,6 +4396,7 @@ class GuiApp:
         self.open_spectra_files = {}
         self.open_spectra = {}
         self.object_state_dict = {}
+        self.spectral_masks = {}
         self.current_uuid = None
         self.current_project_file_path = None
         self.current_open_dir = None
@@ -4376,6 +4408,7 @@ class GuiApp:
         self.main_wnd.lines_match_list_widget.clear()
         self.main_wnd.lines_table_widget.setRowCount(0)
         self.main_wnd.obj_prop_table_widget.setRowCount(0)
+        self.updateMaskList()
 
         self.xcorr_handler.clear()
         self.clearXcorrTreeWidgetZ()
