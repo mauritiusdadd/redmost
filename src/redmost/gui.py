@@ -15,6 +15,7 @@ import json
 import uuid
 import pathlib
 import webbrowser
+import traceback
 from enum import Enum
 from typing import TYPE_CHECKING
 from typing import Optional, Union, Tuple, List, Dict, Callable, Any, cast
@@ -1995,6 +1996,10 @@ class GuiApp:
             self.currentMaskChanged
         )
 
+        self.main_wnd.mask_list_widget.itemChanged.connect(
+            self.maskChanged
+        )
+
         self.main_wnd.mask_apply_button.clicked.connect(
             self.updateCurrentMask
         )
@@ -2854,7 +2859,9 @@ class GuiApp:
         wav_unit: units.Unit = sp.spectral_axis.unit
 
         flux: np.ndarray = sp.flux.value
-        flux_unit: units.Unit = sp.flux.unit
+        mean_flux = 10**utils.find_exp(np.nanmean(flux))
+        flux = flux / mean_flux
+        flux_unit: units.Unit = sp.flux.unit * mean_flux
 
         var: Union[np.ndarray, None] = None
         var_unit: Union[units.Unit, None] = None
@@ -2866,14 +2873,14 @@ class GuiApp:
         sky_unit: Union[units.Unit, None] = None
 
         if isinstance(sp.uncertainty, VarianceUncertainty):
-            var = sp.uncertainty.array
-            var_unit = sp.uncertainty.unit
+            var = sp.uncertainty.array / (mean_flux**2)
+            var_unit = sp.uncertainty.unit * (mean_flux**2)
         elif isinstance(sp.uncertainty, InverseVariance):
-            var = 1 / sp.uncertainty.array
-            var_unit = 1 / sp.uncertainty.unit
+            var = 1 / (sp.uncertainty.array * (mean_flux**2))
+            var_unit = 1 / (sp.uncertainty.unit / (mean_flux**2))
         elif isinstance(sp.uncertainty, StdDevUncertainty):
-            var = sp.uncertainty.array ** 2
-            var_unit = sp.uncertainty.unit ** 2
+            var = (sp.uncertainty.array / mean_flux) ** 2
+            var_unit = (sp.uncertainty.unit * mean_flux) ** 2
 
         try:
             wd_data = sp.wd  # type: ignore
@@ -3187,9 +3194,12 @@ class GuiApp:
         self.redrawCurrentSpec()
 
     def doDeleteMask(self) -> None:
-        current_mask_uuid = self.currentMaskItem()[0]
-        if current_mask_uuid is not None:
-            self.deleteMask(self.current_uuid, current_mask_uuid)
+        current_mask = self.currentMaskItem()
+        if current_mask is None:
+            return
+
+        if current_mask[0] is not None:
+            self.deleteMask(self.current_uuid, current_mask[0])
         self.redrawCurrentSpec()
 
     def doDeleteAllMask(self) -> None:
@@ -3255,7 +3265,9 @@ class GuiApp:
                      "An error has occurred while reading masks."
                  )
             )
-            self.msgBox.setInformativeText('')
+            self.msgBox.setInformativeText(
+                traceback.format_exc()
+            )
             self.msgBox.setDetailedText(str(exc))
             self.msgBox.setIcon(
                 qt_api.QtWidgets.QMessageBox.Icon.Critical
@@ -3360,9 +3372,11 @@ class GuiApp:
                 self.main_wnd.mask_save_button.setEnabled(True)
 
         for mask_uuid, mask_properties in masks.items():
-            new_item = qt_api.QtWidgets.QListWidgetItem(
-                mask_properties['name']
-            )
+            if mask_properties['global']:
+                mask_title = "[ALL] " + mask_properties['name']
+            else:
+                mask_title = mask_properties['name']
+            new_item = qt_api.QtWidgets.QListWidgetItem(mask_title)
             new_item.setCheckState(qt_api.QtCore.Qt.CheckState.Checked)
             new_item.setData(qt_api.QtCore.Qt.ItemDataRole.UserRole, mask_uuid)
             self.main_wnd.mask_list_widget.addItem(new_item)
@@ -3425,6 +3439,30 @@ class GuiApp:
             return
 
         self.currentMaskChanged(mask_item)
+
+    def maskChanged(
+        self,
+        mask_item: Optional[QtWidgets.QListWidgetItem],
+        *args: Any,
+        **kwargs: Any
+    ) -> None:
+        if (self.current_uuid is None) or (mask_item is None):
+            return
+
+        mask_uuid = mask_item.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
+
+        try:
+            mask_properties = self.spectral_masks[self.current_uuid][mask_uuid]
+        except KeyError:
+            mask_properties = {}
+            self.spectral_masks[self.current_uuid][mask_uuid] = mask_properties
+
+        for key, val in self.DEFAULT_MASK_PROPERTIES.items():
+            if key not in mask_properties:
+                mask_properties[key] = copy.copy(val)
+
+        mask_properties['enabled'] = mask_item.checkState() == qt_api.QtCore.Qt.CheckState.Checked
+        self.redrawCurrentSpec()
 
     def currentMaskChanged(
         self,
@@ -4130,11 +4168,15 @@ class GuiApp:
         w_masks = {}
         for spec_uuid in for_xcorr.keys():
             try:
-                w_masks[spec_uuid] = list(
-                    self.spectral_masks[spec_uuid].values()
-                )
+                mask_dict = self.spectral_masks[spec_uuid]
             except KeyError:
                 w_masks[spec_uuid] = []
+            else:
+                w_masks[spec_uuid] = list(
+                    mask
+                    for mask in mask_dict.values()
+                    if mask['enabled']
+                )
 
         self.pbar.show()
         self.xcorr_handler.run(for_xcorr, w_masks)
@@ -4544,6 +4586,34 @@ class GuiApp:
                 }
             }
 
+        self.spectral_masks = {}
+        try:
+            spectral_masks = serialized_dict['spectral_masks']
+        except KeyError:
+            pass
+        else:
+            for obj_uuid_str, serialized_masks in spectral_masks.items():
+                obj_uuid = uuid.UUID(obj_uuid_str)
+                self.spectral_masks[obj_uuid] = {}
+                for mask_uuid_str, properties in serialized_masks.items():
+                    mask_uuid = uuid.UUID(mask_uuid_str)
+                    mask_properties: Dict[str, Any] = copy.deepcopy(
+                        self.DEFAULT_MASK_PROPERTIES
+                    )
+
+                    for key, val in properties.items():
+                        mask_properties[key] = val
+
+                    try:
+                        if properties['linked'] is not None:
+                            mask_properties['linked'] = uuid.UUID(
+                                str(properties['linked'])
+                            )
+                    except KeyError:
+                        pass
+
+                    self.spectral_masks[obj_uuid][mask_uuid] = mask_properties
+
         if current_spec_list_item is not None:
             self.main_wnd.spec_list_widget.setCurrentItem(
                 current_spec_list_item
@@ -4704,6 +4774,7 @@ class GuiApp:
 
         # Serialize objects info for json dumping
         serialized_object_info_dict: Dict[str, Any] = {}
+        serialized_object_mask_dict: Dict[str, Any] = {}
         for obj_uuid, obj_info in self.object_state_dict.items():
             serialized_lines_list: List[Dict[str, Any]] = []
             serialized_z_list: List[Dict[str, Any]] = []
@@ -4740,6 +4811,29 @@ class GuiApp:
 
             serialized_object_info_dict[obj_uuid.hex] = serialized_info_dict
 
+            try:
+                masks = self.spectral_masks[obj_uuid]
+            except KeyError:
+                pass
+            else:
+                serialized_masks: Dict[str, Any] = {}
+                for mask_uuid, masks_properties in masks.items():
+                    serialized_masks[mask_uuid.hex] = copy.deepcopy(
+                        masks_properties
+                    )
+                    try:
+                        linked_uuid = masks_properties['linked']
+                    except KeyError:
+                        serialized_link = None
+                    else:
+                        try:
+                            serialized_link = linked_uuid.hex
+                        except Exception:
+                            serialized_link = None
+                    serialized_masks[mask_uuid.hex]['linked'] = serialized_link
+
+                serialized_object_mask_dict[obj_uuid.hex] = serialized_masks
+
         if self.current_uuid is None:
             serialized_current_uuid = None
         else:
@@ -4748,7 +4842,8 @@ class GuiApp:
         project_dict = {
             'current_uuid': serialized_current_uuid,
             'open_files': serialized_open_file_list,
-            'objects_properties': serialized_object_info_dict
+            'objects_properties': serialized_object_info_dict,
+            'spectral_masks': serialized_object_mask_dict
         }
 
         with open(file_name, 'w') as f:

@@ -346,7 +346,6 @@ def clashVlt1DFitsLoader(
         rc[0] = rc[1]
         rc[rc < 1e-3] = 2.
 
-
         lam_mask = np.ones(len(flux), dtype=bool)
 
         if w_min != None:
