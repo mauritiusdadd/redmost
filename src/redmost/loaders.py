@@ -1,16 +1,22 @@
+import copy
 import os
-from typing import Optional, Union, List, Tuple
+import pathlib
+from typing import Optional, Union, List, Tuple, Dict, Any
 
 import numpy as np
 
 from astropy.nddata import VarianceUncertainty  # type: ignore
-from astropy.io import fits  # type: ignore
+from astropy.nddata import StdDevUncertainty  # type: ignore
+from astropy.nddata import InverseVariance  # type: ignore
+from astropy.io import fits, registry
 from astropy.table import Table  # type: ignore
 from astropy import wcs  # type: ignore
 from astropy import units  # type: ignore
 from specutils import Spectrum1D  # type: ignore
 from specutils.io.registers import identify_spectrum_format  # type: ignore
 from specutils.io.registers import data_loader  # type: ignore
+
+from redmost import utils
 
 KNOWN_SPEC_EXT_NAMES = ['spec', 'spectrum', 'flux', 'data', 'sci', 'science']
 KNOWN_VARIANCE_EXT_NAMES = ['stat', 'stats', 'var', 'variance', 'noise', 'err']
@@ -80,24 +86,26 @@ def identifyClashVlt1dFits(origin, *args, **kwargs) -> bool:
     ):
         return False
     with fits.open(args[0]) as hdul:
+        if hdul[0].header.get('NAXIS') != 1:
+            return False
+
         instrument = hdul[0].header.get('INSTRUME')
         ctype1 = hdul[0].header.get('CTYPE1')
-        ctype2 = hdul[0].header.get('CTYPE2')
         tunit = hdul[0].header.get('TUNIT')
 
-        if hdul[0].data.shape[0] != 1:
+        if len(hdul[0].data.shape) != 1:
             return False
 
         if (instrument is None) or (instrument.strip() != 'VIMOS'):
             return False
 
-        if (tunit is None) or (ctype1 is None) or (ctype2 is None):
+        if (tunit is None) or (ctype1 is None):
             return False
 
-        if (ctype1.strip() == 'LAMBDA') and (ctype2.strip() == 'OBJECT'):
-            return True
+        if ctype1.strip() != 'WAVE':
+            return False
 
-    return False
+    return True
 
 
 @data_loader(
@@ -289,24 +297,14 @@ def clashVlt1DFitsLoader(
         if flux_hdu is None:
             raise ValueError("Cannot find flux data")
 
-        flux = flux_hdu.data[0]
+        flux = flux_hdu.data
 
         if noise_hdu is None:
             var = np.ones_like(flux)
         else:
-            var = noise_hdu.data[0]**2
+            var = noise_hdu.data**2
 
-        hh = {
-            x: flux_hdu.header[x]for x in [
-                'BITPIX', 'NAXIS', 'NAXIS1', 'CRPIX1',
-                'CRVAL1', 'CDELT1',
-            ]
-        }
-        hh['NAXIS'] = 1
-        hh['CTYPE1'] = 'WAVE'
-        hh['CUNIT1'] = 'Angstrom'
-
-        flux_wcs = wcs.WCS(hh)
+        flux_wcs = wcs.WCS(flux_hdu.header)
 
         if flux.shape != var.shape:
             raise ValueError(
@@ -314,7 +312,7 @@ def clashVlt1DFitsLoader(
                 "do not match variance data one!"
             )
 
-        # NOTE: Wavelenghts must be in Angstrom units
+        # NOTE: Wavelengths must be in Angstrom units
         pixel = np.arange(len(flux))
         lam = flux_wcs.pixel_to_world(pixel).Angstrom
         flux = flux.astype('float32')
@@ -398,17 +396,189 @@ def read_sdss_extra(
 
     return sky, wd
 
-def read(file: str) -> Spectrum1D:
-    sp_formats = identify_spectrum_format(file)
-    orig_sp = Spectrum1D.read(file)
-    sp = Spectrum1D(
+
+class Spectrum2D:
+    def __init__(
+        self,
+        flux: Optional[Union[np.ndarray, units.Quantity]] = None,
+        spectral_axis: Optional[units.Quantity] = None,
+        uncertainty: Optional[Union[
+            StdDevUncertainty, VarianceUncertainty, InverseVariance
+        ]] = None
+    ) -> None:
+        self.wcs: Union[wcs.WCS, None] = None
+        self.spectral_axis: Union[units.Quantity, None] = spectral_axis
+        self.flux: Union[np.ndarray, None] = None
+
+        if flux is not None:
+            if isinstance(flux, units.Quantity):
+                self.flux = flux
+            else:
+                self.flux = flux * units.dimensionless_unscaled
+
+        self.uncertainty = uncertainty
+        self.meta: Dict[Any, Any] = {}
+
+    @classmethod
+    def read(
+        cls, file_path: str, ext: Union[int, str] = 0,
+        format: Optional[str] = None
+    ) -> "Spectrum2D":
+        data, header = fits.getdata(filename=file_path, ext=ext, header=True)
+
+        try:
+            flux_units = units.Unit(header['BUNIT'])
+        except KeyError:
+            try:
+                flux_units = units.Unit(header['TUNIT'])
+            except KeyError:
+                flux_units = 1 * units.dimensionless_unscaled
+
+        sp_2d = cls(flux=data * flux_units)
+
+        try:
+            sp_wcs = wcs.WCS(header)
+        except Exception:
+            sp_wcs = None
+        else:
+            if not sp_wcs.has_spectral:
+                # Try to fix wrong WCSs
+                for j in range(sp_wcs.naxis):
+                    axis_key = f'CTYPE{j+1:d}'
+                    unit_key = f'CUNIT{j+1:d}'
+
+                    axis_type = header.get(axis_key)
+                    axis_unit = header.get(unit_key)
+
+                    if axis_unit is None:
+                        continue
+                    else:
+                        try:
+                            actual_unit = units.Unit(axis_unit)
+                        except Exception:
+                            actual_unit = None
+                            continue
+                        else:
+                            try:
+                                _ = actual_unit.to(units.angstrom)
+                            except Exception:
+                                # Not a wavelength
+                                continue
+
+                    if axis_type.strip().lower() in KNOWN_WAVE_EXT_NAMES:
+                        header[axis_key] = 'WAVE'
+                        break
+                sp_wcs = wcs.WCS(header)
+
+            sp_2d.wcs = sp_wcs
+            if sp_wcs.has_spectral:
+                pixel = np.arange(data.shape[1])
+                lam = sp_wcs.spectral.pixel_to_world(pixel).Angstrom
+                sp_2d.spectral_axis = lam * units.angstrom
+            sp_2d.meta['header'] = copy.deepcopy(header)
+        return sp_2d
+
+def identifyClashVlt2dFits(origin, *args, **kwargs) -> bool:
+    """Identify VIMOS 2D spectra."""
+    if not (
+        isinstance(args[0], str) and
+        os.path.splitext(args[0].lower())[1] == '.fits'
+    ):
+        return False
+
+    with fits.open(args[0]) as hdul:
+        if hdul[0].header.get('NAXIS') != 2:
+            return False
+
+        instrument = hdul[0].header.get('INSTRUME')
+
+        if (instrument is None) or (instrument.strip() != 'VIMOS'):
+            return False
+
+        if hdul[0].data.shape[0] == 1:
+            return False
+
+    return True
+
+
+
+@data_loader(
+    label="clash-vlt-2d",
+    identifier=identifyClashVlt2dFits,
+    extensions=['fits']
+)
+def clashVlt2DFitsLoader(
+        file_name: str,
+        flux_hdu_index: Optional[Union[str, int]] = None,
+        resolution: Union[int, float] = 1,
+        **kwargs
+) -> Spectrum2D:
+    """
+    Load a python-specex spectrum.
+
+    :param file_name:
+        The path of the FITS file to read.
+    :param flux_hdu_index:
+        The extension name or index from which to read the spectrum
+    :param resolution:
+        The spectral resolution parameter
+    :return: A Spectrum1D object.
+    """
+
+    return Spectrum2D.read(file_name, ext=flux_hdu_index)
+
+
+def identify_format(filename, dtype=Spectrum1D):
+    """
+    Reimplemented from specutils
+    """
+    # check for valid string input
+    if (
+        not isinstance(filename, (str, pathlib.Path)) or
+        not os.path.isfile(filename)
+    ):
+        raise ValueError(f'{filename} is not a valid string path to a file')
+
+    # identify the file format
+    valid_format = registry.identify_format(
+        'read', dtype, filename, None, {}, {}
+    )
+
+    return valid_format
+
+
+
+def read(file: str) -> Union[Spectrum1D, Spectrum2D]:
+    sp_formats = identify_format(file)
+
+    spec_class: Union[Spectrum1D, Spectrum2D]
+    for spec_format in sp_formats:
+        if spec_format == 'clash-vlt-2d':
+            spec_class = Spectrum2D
+            break
+        elif spec_format == 'clash-vlt-1d':
+            spec_class = Spectrum1D
+            break
+    else:
+        spec_class = Spectrum1D
+
+    orig_sp = spec_class.read(file, format=spec_format)
+
+    sp = type(orig_sp)(
         flux=orig_sp.flux,
         spectral_axis=orig_sp.spectral_axis.to('AA')  # Convert to Angstrom
     )
+
     sp.uncertainty = orig_sp.uncertainty
     sp.wd = None
     sp.sky = None
     sp.meta = orig_sp.meta
+
+    if sp.meta is None:
+        sp.meta = {}
+
+    sp.meta['file_name'] = os.path.basename(file)
+    sp.meta['full_path'] = os.path.realpath(file)
 
     # Try to read auxiliary data
     if 'SDSS-V spec' in sp_formats:

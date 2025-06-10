@@ -216,47 +216,114 @@ selected</string>
           <property name="handleWidth">
            <number>10</number>
           </property>
-          <widget class="QGroupBox" name="flux_group_box">
+          <widget class="QTabWidget" name="flux_tabwidget">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
              <horstretch>0</horstretch>
              <verstretch>0</verstretch>
             </sizepolicy>
            </property>
-           <property name="title">
-            <string>Flux</string>
+           <property name="currentIndex">
+            <number>0</number>
            </property>
-           <property name="flat">
-            <bool>false</bool>
-           </property>
-           <layout class="QGridLayout" name="fluxGroupBoxGridLayout">
-            <property name="leftMargin">
-             <number>0</number>
-            </property>
-            <property name="topMargin">
-             <number>0</number>
-            </property>
-            <property name="rightMargin">
-             <number>0</number>
-            </property>
-            <property name="bottomMargin">
-             <number>0</number>
-            </property>
-            <property name="spacing">
-             <number>0</number>
-            </property>
-            <item row="0" column="0">
-             <widget class="QWidget" name="flux_container_widget" native="true">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <layout class="QGridLayout" name="flux_widget_layout"/>
-             </widget>
-            </item>
-           </layout>
+           <widget class="QWidget" name="flux_tab_1d">
+            <attribute name="title">
+             <string>Flux 1D</string>
+            </attribute>
+            <layout class="QGridLayout" name="fluxGroupBoxGridLayout">
+             <property name="leftMargin">
+              <number>0</number>
+             </property>
+             <property name="topMargin">
+              <number>0</number>
+             </property>
+             <property name="rightMargin">
+              <number>0</number>
+             </property>
+             <property name="bottomMargin">
+              <number>0</number>
+             </property>
+             <property name="spacing">
+              <number>0</number>
+             </property>
+             <item row="0" column="0">
+              <widget class="QWidget" name="flux_container_widget_1d" native="true">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <layout class="QGridLayout" name="flux_widget_layout_1d">
+                <property name="leftMargin">
+                 <number>0</number>
+                </property>
+                <property name="topMargin">
+                 <number>0</number>
+                </property>
+                <property name="rightMargin">
+                 <number>0</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>0</number>
+                </property>
+                <property name="spacing">
+                 <number>0</number>
+                </property>
+               </layout>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+           <widget class="QWidget" name="flux_tab_2d">
+            <attribute name="title">
+             <string>Flux 2D</string>
+            </attribute>
+            <layout class="QGridLayout" name="gridLayout_8">
+             <property name="leftMargin">
+              <number>0</number>
+             </property>
+             <property name="topMargin">
+              <number>0</number>
+             </property>
+             <property name="rightMargin">
+              <number>0</number>
+             </property>
+             <property name="bottomMargin">
+              <number>0</number>
+             </property>
+             <property name="spacing">
+              <number>0</number>
+             </property>
+             <item row="0" column="0">
+              <widget class="QWidget" name="flux_container_widget_2d" native="true">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <layout class="QGridLayout" name="flux_widget_layout_2d">
+                <property name="leftMargin">
+                 <number>0</number>
+                </property>
+                <property name="topMargin">
+                 <number>0</number>
+                </property>
+                <property name="rightMargin">
+                 <number>0</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>0</number>
+                </property>
+                <property name="spacing">
+                 <number>0</number>
+                </property>
+               </layout>
+              </widget>
+             </item>
+            </layout>
+           </widget>
           </widget>
           <widget class="QTabWidget" name="other_charts_tab_widget">
            <property name="sizePolicy">
@@ -443,6 +510,67 @@ selected</string>
              </item>
             </layout>
            </item>
+           <item>
+            <layout class="QGridLayout" name="grid_layout_9">
+             <item row="0" column="4">
+              <widget class="QDoubleSpinBox" name="cmap_min_dspinbox">
+               <property name="minimum">
+                <double>-999999999.000000000000000</double>
+               </property>
+               <property name="maximum">
+                <double>999999999.000000000000000</double>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="5">
+              <widget class="QLabel" name="label_19">
+               <property name="text">
+                <string>map max.</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="0">
+              <widget class="QLabel" name="label_20">
+               <property name="text">
+                <string>Color map</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1" colspan="2">
+              <widget class="QComboBox" name="cmap_combo_box"/>
+             </item>
+             <item row="0" column="3">
+              <widget class="QLabel" name="label_18">
+               <property name="text">
+                <string>map min.</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="6">
+              <widget class="QDoubleSpinBox" name="cmap_max_dspinbox">
+               <property name="minimum">
+                <double>-999999999.000000000000000</double>
+               </property>
+               <property name="maximum">
+                <double>999999999.000000000000000</double>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="7">
+              <spacer name="horizontalSpacer">
+               <property name="orientation">
+                <enum>Qt::Orientation::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
           </layout>
          </widget>
         </item>
@@ -465,7 +593,7 @@ selected</string>
         </size>
        </property>
        <property name="currentIndex">
-        <number>0</number>
+        <number>1</number>
        </property>
        <widget class="QWidget" name="redshift_tools_tab">
         <property name="enabled">

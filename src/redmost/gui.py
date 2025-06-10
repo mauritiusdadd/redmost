@@ -16,6 +16,7 @@ import uuid
 import pathlib
 import webbrowser
 import traceback
+import hashlib
 from enum import Enum
 from typing import TYPE_CHECKING
 from typing import Optional, Union, Tuple, List, Dict, Callable, Any, cast
@@ -39,6 +40,13 @@ from redmost import backends
 from redmost import splashscreen
 
 from redmost.qt_compat import qt_api, get_qapp
+
+try:
+    from matplotlib import colormaps
+except ImportError:
+    HAS_MPL = False
+else:
+    HAS_MPL = True
 
 if TYPE_CHECKING:
     # NOTE: These imports will be actually executed only by the type-checking
@@ -91,6 +99,7 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         self.redshift: float = 0
         self.vertical_lock: bool = False
         self.masks: List[Dict[str: Any]] = []
+        self.allow_empty: bool = False
 
         self.setDragMode(qt_api.QtCharts.QChartView.DragMode.NoDrag)
         self.setMouseTracking(True)
@@ -136,8 +145,11 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
             data: np.ndarray = np.array(
                 [(p.x(), p.y()) for p in series.points()]
             )
-            p1x, p1y = np.min(data, axis=0)[0:2]
-            p2x, p2y = np.max(data, axis=0)[0:2]
+            try:
+                p1x, p1y = np.min(data, axis=0)[0:2]
+                p2x, p2y = np.max(data, axis=0)[0:2]
+            except ValueError:
+                continue
 
             if x_min is None:
                 x_min = p1x
@@ -149,6 +161,10 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
                 y_min = min(y_min, p1y)
                 x_max = max(x_max, p2x)
                 y_max = max(y_max, p2y)
+
+            if y_min == y_max:
+                y_max = y_min + 1
+
         return x_min, y_min, x_max, y_max
 
     def addSibling(self, sibling: SpectrumQChartView) -> None:
@@ -168,17 +184,17 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
     ) -> None:
         super().drawForeground(painter, rect)
 
-        if len(self.chart().series()) == 0:
+        if (not self.allow_empty) and (len(self.chart().series()) == 0):
             return
 
         painter.save()
         plot_area: QtCore.QRectF = self.chart().plotArea()
         pen: QtGui.QPen = qt_api.QtGui.QPen()
         brush: QtGui.QBrush = qt_api.QtGui.QBrush()
-        pen_color: QtGui.QColor
 
+        pen_color: QtGui.QColor
+        pen_color = qt_api.QtGui.QColor("#aa333333")
         if self._mouse_lambda is not None:
-            pen_color = qt_api.QtGui.QColor("#aa333333")
             pen.setColor(pen_color)
             pen.setWidthF(1.0)
             pen.setDashPattern((6, 6, 6, 6))
@@ -200,10 +216,6 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
                 )
                 painter.drawLine(p_line_bottom, p_line_top)
 
-        if not self.show_lines:
-            painter.restore()
-            return
-
         for mask in self.masks:
             try:
                 mask_color = qt_api.QtGui.QColor(mask['color'])
@@ -215,7 +227,7 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
             except KeyError:
                 mask_color.setAlphaF(0.5)
 
-            pen.setColor(pen_color)
+            pen.setColor(mask_color)
             pen.setWidthF(1)
             brush.setColor(mask_color)
             try:
@@ -257,6 +269,10 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
             path: QtGui.QPainterPath = qt_api.QtGui.QPainterPath()
             path.addRect(mask_rect)
             painter.fillPath(path, brush)
+
+        if not self.show_lines:
+            painter.restore()
+            return
 
         for line_lambda, line_name, line_type in self._lines_buffer_list:
             pen_color = qt_api.QtGui.QColor(self.line_colors["unknown"])
@@ -686,6 +702,142 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         self._sibling_locked = False
 
         self.setAxesRange(*self._getDataBounds())
+
+
+class SpectrumQChartView2D(SpectrumQChartView):
+
+    def __init__(self, *args: Any) -> None:
+        self._orig_data: Union[np.ndarray, None] = None
+        self._data: Union[np.ndarray, None] = None
+        self._spectral_axis: Union[np.ndarray, None] = None
+        self.spec_qimg: Union[QtGui.QImage, None] = None
+        self.cmap: Union[Callable, None] = None
+        self.vmin: Union[float, None] = None
+        self.vmax: Union[float, None] = None
+        self.start_1d: Union[float, None] = None
+        self.end_1d: Union[float, None] = None
+        super().__init__(*args)
+
+    def setColorMap(self, cmap, update=True):
+        self.cmap = cmap
+        if update:
+            self.update()
+
+    def setVmin(self, vmin, update=True):
+        self.vmin = vmin
+        if update:
+            self.update()
+
+    def setVmax(self, vmax, update=True):
+        self.vmax = vmax
+        if update:
+            self.update()
+
+    def update(self):
+        self.setSpectrumImage(self._orig_data)
+        self.chart().update()
+        super().update()
+
+    def setSpectralAxis(self, wav_angstrom: Union[np.ndarray, List, Tuple]):
+        self._spectral_axis = np.asarray(wav_angstrom)
+
+    def setSpectrumImage(self, data: np.ndarray) -> None:
+        self._orig_data = data
+        if data is None:
+            return
+
+        if self.cmap is not None:
+            x: np.ndarray = np.clip(data, a_min=self.vmin, a_max=self.vmax)
+            x = x - np.nanmin(x)
+            x = x / np.nanmax(x)
+            x[~np.isfinite(x)] = 0
+            self._data = (255 * self.cmap(x)[..., 0:3]).astype(np.uint8).copy()
+            img_format = qt_api.QtGui.QImage.Format.Format_RGB888
+            bytes_per_line = 3 * self._data.shape[1]
+        else:
+            x: np.ndarray = data - np.nanmin(data)
+            x[~np.isfinite(x)] = 0
+            img_format = qt_api.QtGui.QImage.Format.Format_Grayscale8
+            self._data = (255 * (x / np.nanmax(x))).astype(np.uint8).copy()
+            bytes_per_line = self._data.shape[1]
+
+        self.spec_qimg = qt_api.QtGui.QImage(
+            self._data.data,
+            self._data.shape[1], self._data.shape[0],
+            bytes_per_line, img_format
+        )
+
+    def drawForeground(
+            self,
+            painter: QtGui.QPainter,
+            rect: QtCore.QRectF
+    ) -> None:
+        if self.spec_qimg is not None:
+
+            plot_area: QtCore.QRectF = self.chart().plotArea()
+            if self._spectral_axis is None:
+                qimg_rect = plot_area
+            else:
+                x_left = self.chart().mapToPosition(
+                    qt_api.QtCore.QPointF(np.nanmin(self._spectral_axis), 0.0)
+                ).x()
+
+                x_rigt = self.chart().mapToPosition(
+                    qt_api.QtCore.QPointF(
+                        np.nanmax(self._spectral_axis), self.spec_qimg.height()
+                    )
+                ).x()
+
+                top_left: QtCore.QPointF = qt_api.QtCore.QPointF(
+                    x_left, plot_area.top()
+                )
+                bottom_right: QtCore.QPointF = qt_api.QtCore.QPointF(
+                    x_rigt, plot_area.bottom()
+                )
+
+                qimg_rect: QtCore.QRectF = qt_api.QtCore.QRectF(
+                    top_left, bottom_right
+                )
+
+            painter.drawImage(qimg_rect, self.spec_qimg)
+            painter.restore()
+
+            # Draw 1D start and end vertical limits
+            pen: QtGui.QPen = qt_api.QtGui.QPen()
+            pen_color: QtGui.QColor = qt_api.QtGui.QColor("red")
+            pen_color.setAlphaF(0.7)
+
+            pen.setColor(pen_color)
+            pen.setWidthF(2)
+            painter.setPen(pen)
+
+            plot_area_h = plot_area.bottom() - plot_area.top()
+
+            if self.start_1d is not None:
+                spec_start_y = self.start_1d / self._data.shape[0]
+                start_line_left = qt_api.QtCore.QPointF(
+                    plot_area.left(),
+                    plot_area.top() + plot_area_h * spec_start_y
+                )
+                start_line_right = qt_api.QtCore.QPointF(
+                    plot_area.right(),
+                    plot_area.top() + plot_area_h * spec_start_y
+                )
+                painter.drawLine(start_line_left, start_line_right)
+
+            if self.end_1d is not None:
+                spec_end_y =  self.end_1d / self._data.shape[0]
+                end_line_left = qt_api.QtCore.QPointF(
+                    plot_area.left(),
+                    plot_area.top() + plot_area_h * spec_end_y
+                )
+                end_line_right = qt_api.QtCore.QPointF(
+                    plot_area.right(),
+                    plot_area.top() + plot_area_h * spec_end_y
+                )
+                painter.drawLine(end_line_left, end_line_right)
+
+        super().drawForeground(painter, rect)
 
 
 class XCorrQChartView(qt_api.QtCharts.QChartView):
@@ -1479,14 +1631,18 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
 
     # Widgets
     add_line_button: QtWidgets.QPushButton
+    cmap_combo_box: QtWidgets.QComboBox
+    cmap_max_dspinbox: QtWidgets.QDoubleSpinBox
+    cmap_min_dspinbox: QtWidgets.QDoubleSpinBox
     container_tab_var: QtWidgets.QWidget
     container_tab_wd: QtWidgets.QWidget
     container_tab_sky: QtWidgets.QWidget
     delete_line_button: QtWidgets.QPushButton
     delete_lines_button: QtWidgets.QPushButton
     export_zcat_button: QtWidgets.QPushButton
-    flux_group_box: QtWidgets.QGroupBox
-    flux_widget_layout: QtWidgets.QHBoxLayout
+    flux_tabwidget: QtWidgets.QTableWidget
+    flux_widget_layout_1d: QtWidgets.QHBoxLayout
+    flux_widget_layout_2d: QtWidgets.QHBoxLayout
     import_zcat_button: QtWidgets.QPushButton
     info_tab_widget: QtWidgets.QTabWidget
     lines_auto_button: QtWidgets.QPushButton
@@ -1582,6 +1738,18 @@ class GuiApp:
         'linked': None
     }
 
+    DEFAULT_SPEC_INFO = {
+        'redshift': 0,
+        'quality_flag': 0,
+        'cmap': 'viridis',
+        'vmin': None,
+        'vmax': None,
+        'lines': {
+            'list': [],
+            'redshifts': []
+        }
+    }
+
     def __init__(self) -> None:
         self.qapp: QtWidgets.QApplication = get_qapp()
         self.qapp.setApplicationName("Redmost")
@@ -1597,7 +1765,7 @@ class GuiApp:
         self.settings: QtCore.QSettings = qt_api.QtCore.QSettings()
 
         self.open_spectra: Dict[uuid.UUID, Spectrum1D] = {}
-        self.open_spectra_files: Dict[uuid.UUID, str] = {}
+        self.open_spectra_2d: Dict[uuid.UUID, loaders.Spectrum2D] = {}
         self.open_spectra_items: Dict[
             uuid.UUID, QtWidgets.QListWidgetItem
         ] = {}
@@ -1727,6 +1895,57 @@ class GuiApp:
             self.setCurrentObjectRedshiftFromSingleLine
         )
 
+        # Fill colormap combobox
+        if HAS_MPL:
+
+            icon_w = 50
+            icon_h = 10
+            _icon_gray_data = np.repeat(
+                np.linspace(start=0, stop=1, num=icon_w)[None,...],
+                repeats=icon_h,
+                axis=0
+            )
+            self.main_wnd.cmap_combo_box.setEnabled(True)
+            self.main_wnd.cmap_combo_box.setToolTip(
+                "Set the current colormap for 2D/3D spectra"
+            )
+            item: QtWidgets.QListWidgetItem
+            for cmap_name in list(colormaps):
+                cmap = colormaps.get(cmap_name)
+                _rgb_icon_data: np.ndarray = (
+                        255 * cmap(_icon_gray_data)[..., 0:3]
+                ).astype(np.uint8).copy()
+                icon: QtGui.QIcon = qt_api.QtGui.QIcon(
+                    qt_api.QtGui.QPixmap(
+                        qt_api.QtGui.QImage(
+                            _rgb_icon_data.data,
+                            icon_w, icon_h, 3 * icon_w,
+                            qt_api.QtGui.QImage.Format.Format_RGB888
+                        )
+                    )
+                )
+
+                # NOTE: remember, QImage does not hold the data, it just reads
+                #       the memory location pointed at by the input. If no
+                #       reference is made for the input array it will be
+                #       collected by the garbage collector eventually, and the
+                #       QImage will try to read from an invalid memory segment.
+                #       To prevent this,we just make sure to keep a reference
+                #       of the input array
+                icon._data = _rgb_icon_data
+
+                self.main_wnd.cmap_combo_box.addItem(
+                    icon, cmap_name, cmap_name
+                )
+            self.main_wnd.cmap_combo_box.setIconSize(
+                qt_api.QtCore.QSize(icon_w, icon_h)
+            )
+        else:
+            self.main_wnd.cmap_combo_box.setEnabled(False)
+            self.main_wnd.cmap_combo_box.setToolTip(
+                "Please, install the matplotlib package to enable colormaps"
+            )
+
         self.splash.showMessage(self.qapp.tr("Loading backends..."))
         # Check for RedRock.
         if not backends.HAS_REDROCK:
@@ -1807,7 +2026,7 @@ class GuiApp:
         # QChartView widget for flux
 
         self.flux_chart_view: SpectrumQChartView = SpectrumQChartView(
-            self.main_wnd.flux_group_box
+            self.main_wnd.flux_tabwidget
         )
         self.flux_chart_view.master = True
         self.flux_chart_view.setObjectName("flux_chart_view")
@@ -1826,8 +2045,30 @@ class GuiApp:
         self.flux_chart_view.setRubberBand(
             qt_api.QtCharts.QChartView.RubberBand.RectangleRubberBand
         )
+        self.main_wnd.flux_widget_layout_1d.addWidget(self.flux_chart_view)
 
-        self.main_wnd.flux_widget_layout.addWidget(self.flux_chart_view)
+        self.flux_chart_view_2d: SpectrumQChartView2D = SpectrumQChartView2D(
+            self.main_wnd.flux_tabwidget
+        )
+        self.flux_chart_view_2d.master = False
+        self.flux_chart_view_2d.setObjectName("flux_chart_view_2d")
+        self.flux_chart_view_2d.setRenderHint(
+            qt_api.QtGui.QPainter.RenderHint.Antialiasing
+        )
+        self.flux_chart_view_2d.setHorizontalScrollBarPolicy(
+            qt_api.QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.flux_chart_view_2d.setVerticalScrollBarPolicy(
+            qt_api.QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.flux_chart_view_2d.setContentsMargins(0, 0, 0, 0)
+        self.flux_chart_view_2d.chart().setContentsMargins(0, 0, 0, 0)
+        self.flux_chart_view_2d.chart().layout().setContentsMargins(0, 0, 0, 0)
+        self.flux_chart_view_2d.setRubberBand(
+            qt_api.QtCharts.QChartView.RubberBand.RectangleRubberBand
+        )
+
+        self.main_wnd.flux_widget_layout_2d.addWidget(self.flux_chart_view_2d)
 
         # QChartView widget for variance
 
@@ -1930,6 +2171,7 @@ class GuiApp:
         self.flux_chart_view.addSibling(self.var_chart_view)
         self.flux_chart_view.addSibling(self.wdisp_chart_view)
         self.flux_chart_view.addSibling(self.sky_chart_view)
+        self.flux_chart_view.addSibling(self.flux_chart_view_2d)
 
         # Set QSplitters initial sizes
 
@@ -1946,6 +2188,15 @@ class GuiApp:
             )
 
         # Connect signals
+        self.main_wnd.cmap_combo_box.currentIndexChanged.connect(
+            self.doUpdateColorMap
+        )
+        self.main_wnd.cmap_min_dspinbox.valueChanged.connect(
+            self.doUpdateColorMap
+        )
+        self.main_wnd.cmap_max_dspinbox.valueChanged.connect(
+            self.doUpdateColorMap
+        )
 
         self.main_wnd.mask_add_button.clicked.connect(
             self.doAddMask
@@ -2131,6 +2382,10 @@ class GuiApp:
 
         self.main_wnd.show_lines_check_box.toggled.connect(
             self.flux_chart_view.setLinesVisible
+        )
+
+        self.main_wnd.show_lines_check_box.toggled.connect(
+            self.flux_chart_view_2d.setLinesVisible
         )
 
         self.main_wnd.z_dspinbox.valueChanged.connect(
@@ -2331,6 +2586,11 @@ class GuiApp:
         obj_state = {
             'redshift': self.main_wnd.z_dspinbox.value(),
             'quality_flag': self.main_wnd.qflag_combo_box.currentIndex(),
+            'cmap': self.main_wnd.cmap_combo_box.currentData(
+                qt_api.QtCore.Qt.ItemDataRole.UserRole,
+            ),
+            'vmin': self.main_wnd.cmap_min_dspinbox.value(),
+            'vmax': self.main_wnd.cmap_max_dspinbox.value(),
             'lines': {
                 'list': lines_list,
                 'redshifts': redshifts_form_lines
@@ -2346,6 +2606,9 @@ class GuiApp:
         self.main_wnd.masking_tab.setEnabled(False)
         self.main_wnd.info_tab_widget.setEnabled(False)
         self.flux_chart_view.setRubberBand(
+            qt_api.QtCharts.QChartView.RubberBand.NoRubberBand
+        )
+        self.flux_chart_view_2d.setRubberBand(
             qt_api.QtCharts.QChartView.RubberBand.NoRubberBand
         )
 
@@ -2580,6 +2843,27 @@ class GuiApp:
         except KeyError:
             quality_flag = 0
 
+        try:
+            vmin = old_state['vmin']
+        except KeyError:
+            vmin = 0
+        if vmin is not None:
+            self.main_wnd.cmap_min_dspinbox.setValue(vmin)
+
+        try:
+            vmax = old_state['vmax']
+        except KeyError:
+            vmax = 1
+        if vmax is not None:
+            self.main_wnd.cmap_max_dspinbox.setValue(vmax)
+
+        try:
+            cmap_name = old_state['cmap']
+        except KeyError:
+            cmap_name = self.DEFAULT_SPEC_INFO['cmap']
+        if cmap_name is not None:
+            self.main_wnd.cmap_combo_box.setCurrentText(cmap_name)
+
         self.main_wnd.qflag_combo_box.setCurrentIndex(quality_flag)
 
         self._update_spec_item_qf(obj_uuid, quality_flag)
@@ -2611,6 +2895,9 @@ class GuiApp:
         self.main_wnd.plot_group_box.setEnabled(True)
         self.main_wnd.masking_tab.setEnabled(True)
         self.flux_chart_view.setRubberBand(
+            qt_api.QtCharts.QChartView.RubberBand.RectangleRubberBand
+        )
+        self.flux_chart_view_2d.setRubberBand(
             qt_api.QtCharts.QChartView.RubberBand.RectangleRubberBand
         )
 
@@ -2750,14 +3037,7 @@ class GuiApp:
             try:
                 info_dict = self.object_state_dict[obj_uuid]
             except KeyError:
-                info_dict = {
-                    'redshift': None,
-                    'quality_flag': 0,
-                    'lines': {
-                        'list': [],
-                        'redshifts': []
-                    }
-                }
+                info_dict = copy.deepcopy(self.DEFAULT_SPEC_INFO)
                 self.object_state_dict[obj_uuid] = info_dict
 
             info_dict['redshift'] = row['z']
@@ -2819,6 +3099,9 @@ class GuiApp:
         flux_chart = self.flux_chart_view.chart()
         flux_chart.removeAllSeries()
 
+        flux_chart_2d = self.flux_chart_view_2d.chart()
+        flux_chart_2d.removeAllSeries()
+
         var_chart = self.var_chart_view.chart()
         var_chart.removeAllSeries()
 
@@ -2844,6 +3127,7 @@ class GuiApp:
             mask_list = []
 
         self.flux_chart_view.setMasks(mask_list)
+        self.flux_chart_view_2d.setMasks(mask_list)
         self.var_chart_view.setMasks(mask_list)
 
         for ax in var_chart.axes():
@@ -2854,6 +3138,24 @@ class GuiApp:
             sky_chart.removeAxis(ax)
 
         sp: Spectrum1D = self.open_spectra[spec_uuid]
+
+        try:
+            sp_2d: loaders.Spectrum2D = sp.meta['linked']['2D']
+        except KeyError:
+            pass
+        else:
+            self.flux_chart_view_2d.setSpectralAxis(
+                sp_2d.spectral_axis.to(units.angstrom).value
+            )
+            self.flux_chart_view_2d.setSpectrumImage(
+                sp_2d.flux.value
+            )
+            self.flux_chart_view_2d.start_1d = sp_2d.meta['header'].get(
+                '1D_START'
+            )
+            self.flux_chart_view_2d.end_1d = sp_2d.meta['header'].get(
+                '1D_END'
+            )
 
         wav: np.ndarray = sp.spectral_axis.value
         wav_unit: units.Unit = sp.spectral_axis.unit
@@ -2916,6 +3218,25 @@ class GuiApp:
         else:
             flux_axis_x = flux_chart.axes()[0]
             flux_axis_y = flux_chart.axes()[1]
+
+        flux_2d_series = values2series(
+            wav, flux, self.qapp.tr("Flux")
+        )
+        flux_chart_2d.addSeries(flux_2d_series)
+
+        if not flux_chart_2d.axes():
+            flux_2d_axis_x = qt_api.QtCharts.QValueAxis()
+            flux_2d_axis_y = qt_api.QtCharts.QValueAxis()
+
+            flux_chart_2d.addAxis(
+                flux_2d_axis_x, qt_api.QtCore.Qt.AlignmentFlag.AlignBottom
+            )
+            flux_chart_2d.addAxis(
+                flux_2d_axis_y, qt_api.QtCore.Qt.AlignmentFlag.AlignLeft
+            )
+        else:
+            flux_2d_axis_x = flux_chart_2d.axes()[0]
+            flux_2d_axis_y = flux_chart_2d.axes()[1]
 
         if not var_chart.axes():
             var_axis_x = qt_api.QtCharts.QValueAxis()
@@ -2981,6 +3302,17 @@ class GuiApp:
         flux_series.attachAxis(flux_axis_x)
         flux_series.attachAxis(flux_axis_y)
 
+        flux_2d_axis_x.setTickInterval(500)
+        flux_2d_axis_x.setLabelFormat("%.2f")
+        flux_2d_axis_x.setTitleText(str(wav_unit))
+
+        flux_2d_axis_y.setLabelFormat("%.2f")
+        flux_2d_axis_y.setTitleText('pixels')
+
+        flux_2d_series.attachAxis(flux_2d_axis_x)
+        flux_2d_series.attachAxis(flux_2d_axis_y)
+        flux_2d_series.setOpacity(0.2)
+
         if self.main_wnd.smoothing_check_box.isChecked():
             smoothing_factor = self.main_wnd.smoothing_dspinbox.value()
 
@@ -3004,6 +3336,8 @@ class GuiApp:
             flux_chart.addSeries(smoothed_flux_series)
             smoothed_flux_series.attachAxis(flux_axis_x)
             smoothed_flux_series.attachAxis(flux_axis_y)
+
+
 
         if var is None:
             self.main_wnd.container_tab_var.setEnabled(False)
@@ -3073,6 +3407,10 @@ class GuiApp:
         flux_chart.setContentsMargins(0, 0, 0, 0)
         flux_chart.setBackgroundRoundness(0)
         flux_chart.legend().hide()
+
+        flux_chart_2d.setContentsMargins(0, 0, 0, 0)
+        flux_chart_2d.setBackgroundRoundness(0)
+        flux_chart_2d.legend().hide()
 
         var_chart.setContentsMargins(0, 0, 0, 0)
         var_chart.setBackgroundRoundness(0)
@@ -3767,7 +4105,7 @@ class GuiApp:
         :param file_list: List of file paths.
         :param file_types:  List of file types.
         """
-        exception_tracker: Dict[uuid.UUID, Tuple[str, str]] = {}
+        exception_tracker: List[Tuple[str, str]] = []
 
         self._lock()
         self.global_state = GlobalState.WAITING
@@ -3783,54 +4121,127 @@ class GuiApp:
             if self.global_state == GlobalState.REUQUEST_CANCEL:
                 break
 
+            if not os.path.isfile(file):
+                exception_tracker.append((
+                    file, "not found!"
+                ))
+                continue
+
+            item_uuid = uuid.uuid4()
+
             self.pbar.setValue(j + 1)
             self.statusbar.showMessage(
                 self.qapp.tr("Loading file") + f"{j + 1:d}/{n_files}..."
             )
             self.qapp.processEvents()
 
-            item_uuid: uuid.UUID = uuid.uuid4()
-
             # Check for a possible collision, even if it should never happen
-            while item_uuid in self.open_spectra_files.keys():
+            while item_uuid in self.open_spectra.keys():
                 item_uuid = uuid.uuid4()
 
             try:
-                sp: Spectrum1D = loaders.read(file)
+                sp: Union[Spectrum1D, loaders.Spectrum2D] = loaders.read(file)
             except Exception as exc:
-                exception_tracker[item_uuid] = (file, str(exc))
+                exception_tracker.append((file, str(exc)))
                 continue
             else:
                 if not al_least_one:
                     self.current_open_dir = os.path.dirname(file)
                     al_least_one = True
 
-            new_item = qt_api.QtWidgets.QListWidgetItem(os.path.basename(file))
+            sp.meta['uuid'] = item_uuid
+
+            try:
+                sp_header = sp.meta['header']
+            except KeyError:
+                sp_header = None
+
+            new_item: Union[QtWidgets.QListWidgetItem, None] = None
+            sp_1d: Union[Spectrum1D, None] = None
+
+            if isinstance(sp, Spectrum1D):
+                item_name = '[1D] ' + os.path.basename(file)
+                sp_1d = sp
+                if sp_header and 'SPEC_2D' in sp_header:
+                    for _uuid, _sp in self.open_spectra.items():
+                        if not _sp.meta.get('is_dummy'):
+                            continue
+
+                        try:
+                            sp_2d = _sp.meta['linked']['2D']
+                        except KeyError:
+                            continue
+
+                        if sp_2d.meta['file_name'] == sp_header['SPEC_2D']:
+                            sp_2d.meta['linked'] = {'1D': sp_1d}
+                            sp_1d.meta['linked'] = {'2D': sp_2d}
+                            new_item = self.open_spectra_items[_uuid]
+                            new_item.setText(
+                                '[1D|2D] ' + os.path.basename(file)
+                            )
+                            self.open_spectra[_uuid] = sp_1d
+                            break
+
+            elif isinstance(sp,loaders.Spectrum2D):
+                sp_2d = sp
+                item_name = '[2D] ' + os.path.basename(file)
+                if sp_header and 'SPEC_1D' in sp_header:
+                    for _uuid, _sp in self.open_spectra.items():
+                        if _sp.meta['file_name'] == sp_header['SPEC_1D']:
+                            sp_1d = _sp
+                            sp_2d.meta['linked'] = {'1D': sp_1d}
+                            sp_1d.meta['linked'] = {'2D': sp_2d}
+                            new_item = self.open_spectra_items[_uuid]
+                            new_item.setText(
+                                '[1D|2D] ' + os.path.basename(file)
+                            )
+                            break
+                if sp_1d is None:
+                    flux_from_2d = np.nansum(
+                        sp_2d.flux.value,
+                        axis=0
+                    )
+                    sp_1d = Spectrum1D(
+                        flux=flux_from_2d * sp_2d.flux.unit,
+                        spectral_axis=sp_2d.spectral_axis,
+                    )
+                    sp_1d.meta['file_name'] = None
+                    sp_1d.meta['full_path'] = None
+                    sp_1d.meta['is_dummy'] = True
+                    sp_1d.meta['linked'] = {'2D': sp_2d}
+            else:
+                exception_tracker.append((
+                    file, "Not a supported spectrum type"
+                ))
+                continue
+
+            self.qapp.processEvents()
+            if new_item is not None:
+                continue
+
+            new_item = qt_api.QtWidgets.QListWidgetItem(item_name)
             new_item.setCheckState(qt_api.QtCore.Qt.CheckState.Checked)
             new_item.setToolTip(file)
-            new_item.setData(qt_api.QtCore.Qt.ItemDataRole.UserRole, item_uuid)
+            new_item.setData(
+                qt_api.QtCore.Qt.ItemDataRole.UserRole, item_uuid
+            )
 
-            info_dict: Dict[str, Any] = {
-                'redshift': 0,
-                'quality_flag': 0,
-                'lines': {
-                    'list': [],
-                    'redshifts': []
-                }
-            }
+            info_dict: Dict[str, Any] = copy.deepcopy(self.DEFAULT_SPEC_INFO)
+            info_dict['vmin'] = float(np.nanmin(sp_1d.flux.value))
+            info_dict['vmax'] = float(np.nanmax(sp_1d.flux.value))
 
-            self.open_spectra[item_uuid] = sp
-            self.open_spectra_files[item_uuid] = os.path.abspath(file)
             self.open_spectra_items[item_uuid] = new_item
             self.object_state_dict[item_uuid] = info_dict
             self.main_wnd.spec_list_widget.addItem(new_item)
-            self.qapp.processEvents()
+            self.open_spectra[item_uuid] = sp_1d
 
         self.cancel_button.hide()
         self.pbar.hide()
         if len(self.open_spectra) > 0:
             self._unlock()
         self.global_state = GlobalState.READY
+
+        self.redrawCurrentSpec()
 
         if exception_tracker:
             self.msgBox.setWindowTitle(self.qapp.tr("Error"))
@@ -3843,10 +4254,9 @@ class GuiApp:
             self.msgBox.setDetailedText(
                 "\n\n".join(
                     [
-                        f"uuid: {exc_uuid}\n"
-                        f"file: {exc_data[0]}\n"
-                        f"reason: {exc_data[1]}"
-                        for exc_uuid, exc_data in exception_tracker.items()
+                        f"file: {fname}\n"
+                        f"reason: {reason_str}"
+                        for fname, reason_str in exception_tracker
                     ]
                 )
             )
@@ -3960,7 +4370,6 @@ class GuiApp:
         self.main_wnd.spec_list_widget.takeItem(item_row)
 
         self.open_spectra_items.pop(item_uuid)
-        self.open_spectra_files.pop(item_uuid)
 
         if self.xcorr_handler.best_z is not None:
             try:
@@ -4229,6 +4638,32 @@ class GuiApp:
                 continue
             other_item.setCheckState(ref_check_state)
 
+    def doUpdateColorMap(self, *args, **kwargs) -> None:
+        if not HAS_MPL:
+            return
+
+        if self.main_wnd.flux_tabwidget.currentIndex() == 1:
+            target = self.flux_chart_view_2d
+        else:
+            return
+
+        cmap_name = self.main_wnd.cmap_combo_box.currentData(
+                qt_api.QtCore.Qt.ItemDataRole.UserRole
+            )
+        cmap = colormaps.get(cmap_name)
+
+        if cmap is None:
+            return
+
+        vmin = self.main_wnd.cmap_min_dspinbox.value()
+        vmax = self.main_wnd.cmap_max_dspinbox.value()
+        self.object_state_dict[self.current_uuid]['cmap'] = cmap_name
+        self.object_state_dict[self.current_uuid]['vmin'] = vmin
+        self.object_state_dict[self.current_uuid]['vmax'] = vmax
+        target.setColorMap(cmap, update=False)
+        target.setVmin(vmin, update=False)
+        target.setVmax(vmax, update=True)
+
     def doZoomIn(self, *args, **kwargs) -> None:
         """Zoom In flux and var plots."""
         self.flux_chart_view.zoomIn()
@@ -4247,8 +4682,8 @@ class GuiApp:
             dtype=[int, str, float, int, str]
         )
 
-        for j, (o_uuid, o_path) in enumerate(self.open_spectra_files.items()):
-            spec_file = os.path.basename(o_path)
+        for j, (o_uuid, o_sp) in enumerate(self.open_spectra.items()):
+            spec_file = o_sp.meta['file_name']
 
             try:
                 info_dict = self.object_state_dict[o_uuid]
@@ -4363,10 +4798,10 @@ class GuiApp:
 
             spec_file = str(row[id_col]).strip()
 
-            for obj_uuid, obj_file in self.open_spectra_files.items():
+            for obj_uuid, obj_sp in self.open_spectra.items():
                 if obj_uuid in matched_uuids:
                     continue
-                elif os.path.basename(obj_file) == spec_file:
+                elif obj_sp.meta['file_name'] == spec_file:
                     matched_uuids.append(obj_uuid)
                     try:
                         info_dict = self.object_state_dict[obj_uuid]
@@ -4435,7 +4870,6 @@ class GuiApp:
             self._unlock()
 
     def newProject(self) -> None:
-        self.open_spectra_files = {}
         self.open_spectra = {}
         self.object_state_dict = {}
         self.spectral_masks = {}
@@ -4503,12 +4937,17 @@ class GuiApp:
             item_uuid = uuid.UUID(file_info['uuid'])
             item_row = int(file_info['index'])
 
-            file_path = os.path.realpath(
-                os.path.join(
-                    os.path.dirname(file_name),
-                    file_info['path']
+            if file_info['path'] is None:
+                file_path = None
+                is_dummy = True
+            else:
+                file_path = os.path.realpath(
+                    os.path.join(
+                        os.path.dirname(file_name),
+                        file_info['path']
+                    )
                 )
-            )
+                is_dummy = False
 
             if not os.path.exists(file_path):
                 if os.path.exists(file_info['path']):
@@ -4520,8 +4959,9 @@ class GuiApp:
                     )
                     continue
 
+            sp: Union[Spectrum1D, loaders.Spectrum2D]
             try:
-                sp: Spectrum1D = loaders.read(file_path)
+                sp = loaders.read(file_path)
             except Exception as exc:
                 exception_tracker[item_uuid] = (file_path, str(exc))
                 continue
@@ -4536,9 +4976,48 @@ class GuiApp:
             if item_uuid == current_uuid:
                 current_spec_list_item = new_item
 
+            sp.meta['file_name'] = os.path.basename(file_path)
+            sp.meta['full_path'] = file_path
+            sp.meta['is_dummy'] = is_dummy
+
+            try:
+                serialized_links = file_info['linked']
+            except KeyError:
+                pass
+            else:
+                links_dict = {}
+                try:
+                    for key, sp_path in serialized_links.items():
+                        linked_file_path = os.path.realpath(
+                            os.path.join(
+                                os.path.dirname(file_name),
+                                sp_path
+                            )
+                        )
+                        try:
+                            linked_sp = loaders.read(linked_file_path)
+                        except Exception as exc:
+                            exception_tracker[item_uuid] = (
+                                file_path,
+                                f"Cannot open linked {key} file {sp_path}: " +
+                                str(exc)
+                            )
+                        else:
+                            links_dict[key] = linked_sp
+                            if isinstance(sp, Spectrum1D):
+                                linked_sp.meta['linked'] = {'1D': sp}
+                            elif isinstance(sp, loaders.Spectrum2D):
+                                linked_sp.meta['linked'] = {'2D': sp}
+                except AttributeError as exc:
+                    exception_tracker[item_uuid] = (
+                        file_path, f"Corruped project file: {str(exc)}"
+                    )
+                    continue
+                else:
+                    sp.meta['linked'] = links_dict
+
             self.main_wnd.spec_list_widget.addItem(new_item)
             self.open_spectra[item_uuid] = sp
-            self.open_spectra_files[item_uuid] = file_path
             self.open_spectra_items[item_uuid] = new_item
             self.main_wnd.spec_list_widget.insertItem(item_row, new_item)
             self.qapp.processEvents()
@@ -4759,16 +5238,39 @@ class GuiApp:
                 qt_api.QtCore.Qt.ItemDataRole.UserRole
             )
 
-            file_info = {
+            spec_meta = self.open_spectra[item_uuid].meta
+
+
+            file_info: Dict[str, Any] = {
                 'index': k,
                 'uuid': item_uuid.hex,
                 'text': item.text(),
-                'path': os.path.relpath(
-                    self.open_spectra_files[item_uuid],
-                    proj_path
-                ),
-                'checked': int(item.checkState().value)  # type: ignore
+                'checked': int(item.checkState().value),
             }
+
+            try:
+                is_dummy = bool(spec_meta['is_dummy'])
+            except KeyError:
+                is_dummy = False
+
+            if is_dummy or (spec_meta['full_path'] is None):
+                file_info['path'] = None
+            else:
+                file_info['path'] = os.path.relpath(
+                    spec_meta['full_path'], proj_path
+                )
+
+            try:
+                serialized_links: Dict[str, Any] = {
+                    sp_type: os.path.relpath(
+                        sp.meta['full_path'], proj_path
+                    )
+                    for sp_type, sp in spec_meta['linked'].items()
+                }
+            except KeyError:
+                pass
+            else:
+                file_info['linked'] = serialized_links
 
             serialized_open_file_list.append(file_info)
 
@@ -4800,13 +5302,10 @@ class GuiApp:
                 except (TypeError, ValueError):
                     continue
 
-            serialized_info_dict: Dict[str, Any] = {
-                'redshift': float(obj_info['redshift']),
-                'quality_flag': int(obj_info['quality_flag']),
-                'lines': {
-                    'list': serialized_lines_list,
-                    'redshifts': serialized_z_list,
-                }
+            serialized_info_dict: Dict[str, Any] = copy.deepcopy(obj_info)
+            serialized_info_dict['lines'] = {
+                'list': serialized_lines_list,
+                'redshifts': serialized_z_list,
             }
 
             serialized_object_info_dict[obj_uuid.hex] = serialized_info_dict
@@ -4913,6 +5412,7 @@ class GuiApp:
         self.main_wnd.z_dspinbox.setValue(redshift)
 
         self.flux_chart_view.setRedshift(redshift=redshift)
+        self.flux_chart_view_2d.setRedshift(redshift=redshift)
 
         item_col_0: Union[QtWidgets.QTableWidgetItem, None]
         item_col_1: Union[QtWidgets.QTableWidgetItem, None]
@@ -5005,10 +5505,13 @@ class GuiApp:
     def setShowLinesType(self, type_index: int) -> None:
         if type_index == 0:
             self.flux_chart_view.setLinesType('')
+            self.flux_chart_view_2d.setLinesType('')
         elif type_index == 1:
             self.flux_chart_view.setLinesType('E')
+            self.flux_chart_view_2d.setLinesType('E')
         elif type_index == 2:
             self.flux_chart_view.setLinesType('A')
+            self.flux_chart_view_2d.setLinesType('A')
 
     def setSmoothingFactor(self, smoothing_value: float) -> None:
         self.redrawCurrentSpec()
@@ -5276,6 +5779,8 @@ def values2series(
     series.setName(name)
     series.setUseOpenGL(False)  # issues with transparency when set to True!
     for x, y in zip(x_values, y_values):
+        if not (np.isfinite(x) and np.isfinite(y)):
+            continue
         series.append(x, y)
 
     return series

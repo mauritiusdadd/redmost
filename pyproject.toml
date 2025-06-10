@@ -43,6 +43,7 @@ dependencies = [
     "numpy",
     "scipy",
     "astropy",
+    "matplotlib",
     "specutils",
 ]
 
