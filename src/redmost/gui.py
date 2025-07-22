@@ -28,6 +28,7 @@ from astropy.nddata import StdDevUncertainty  # type: ignore
 from astropy.nddata import InverseVariance  # type: ignore
 from astropy import units  # type: ignore
 from astropy.table import Table  # type: ignore
+from scipy.ndimage import gaussian_filter
 
 from specutils import Spectrum1D  # type: ignore
 
@@ -1689,8 +1690,10 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     show_lines_combo_box: QtWidgets.QComboBox
     single_line_combo_box: QtWidgets.QComboBox
     sky_widget_layout: QtWidgets.QHBoxLayout
-    smoothing_dspinbox: QtWidgets.QDoubleSpinBox
-    smoothing_check_box: QtWidgets.QCheckBox
+    smoothing_1d_dspinbox: QtWidgets.QDoubleSpinBox
+    smoothing_1d_check_box: QtWidgets.QCheckBox
+    smoothing_2d_dspinbox: QtWidgets.QDoubleSpinBox
+    smoothing_2d_check_box: QtWidgets.QCheckBox
     spec_group_box: QtWidgets.QGroupBox
     spec_list_widget: QtWidgets.QListWidget
     splitter_main: QtWidgets.QSplitter
@@ -1720,19 +1723,20 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     z_dspinbox: QtWidgets.QDoubleSpinBox
     z_min_dspinbox: QtWidgets.QDoubleSpinBox
     z_max_dspinbox: QtWidgets.QDoubleSpinBox
+    z_comment_textbox: QtWidgets.QLineEdit
 
 
 class GuiApp:
     """General class for the main GUI."""
 
     DEFAULT_MASK_PROPERTIES = {
-        "name": "No name",
+        "name": "Mask",
         "description": "",
         "start": 0,
         "end": 0,
-        "color": "black",
+        "color": "red",
         "pattern": "SolidPattern",
-        "alpha": 0.8,
+        "alpha": 0.2,
         "enabled": True,
         "global": False,
         'linked': None
@@ -2349,11 +2353,18 @@ class GuiApp:
             self._updateMouseLabelXCorrFromEvent
         )
 
-        self.main_wnd.smoothing_check_box.stateChanged.connect(
-            self.toggleSmothing
+        self.main_wnd.smoothing_1d_check_box.stateChanged.connect(
+            self.redrawCurrentSpec
         )
-        self.main_wnd.smoothing_dspinbox.valueChanged.connect(
-            self.setSmoothingFactor
+        self.main_wnd.smoothing_1d_dspinbox.valueChanged.connect(
+            self.redrawCurrentSpec
+        )
+
+        self.main_wnd.smoothing_2d_check_box.stateChanged.connect(
+            self.redrawCurrentSpec
+        )
+        self.main_wnd.smoothing_2d_dspinbox.valueChanged.connect(
+            self.redrawCurrentSpec
         )
 
         self.main_wnd.lines_auto_button.clicked.connect(
@@ -2457,14 +2468,24 @@ class GuiApp:
                 self.main_wnd.restoreGeometry,
                 None
             ),
-            "smoothing_state": (
-                self.main_wnd.smoothing_check_box.checkState,
-                self.main_wnd.smoothing_check_box.setCheckState,
+            "smoothing_1d_state": (
+                self.main_wnd.smoothing_1d_check_box.checkState,
+                self.main_wnd.smoothing_1d_check_box.setCheckState,
                 qt_api.QtCore.Qt.CheckState
             ),
-            "smoothing_value": (
-                self.main_wnd.smoothing_dspinbox.value,
-                self.main_wnd.smoothing_dspinbox.setValue,
+            "smoothing_1d_value": (
+                self.main_wnd.smoothing_1d_dspinbox.value,
+                self.main_wnd.smoothing_1d_dspinbox.setValue,
+                float,
+            ),
+            "smoothing_2d_state": (
+                self.main_wnd.smoothing_2d_check_box.checkState,
+                self.main_wnd.smoothing_2d_check_box.setCheckState,
+                qt_api.QtCore.Qt.CheckState
+            ),
+            "smoothing_2d_value": (
+                self.main_wnd.smoothing_2d_dspinbox.value,
+                self.main_wnd.smoothing_2d_dspinbox.setValue,
                 float,
             ),
             "show_lines": (
@@ -2491,6 +2512,36 @@ class GuiApp:
                 self.main_wnd.xcorr_gpu_checkbox.checkState,
                 self.main_wnd.xcorr_gpu_checkbox.setCheckState,
                 qt_api.QtCore.Qt.CheckState
+            ),
+            "xcorr_wrange_checkbox": (
+                self.main_wnd.xcorr_wrange_checkbox.checkState,
+                self.main_wnd.xcorr_wrange_checkbox.checkState,
+                qt_api.QtCore.Qt.CheckState
+            ),
+            "xcorr_wav_min": (
+                self.main_wnd.xcorr_wav_min_spinbox.value,
+                self.main_wnd.xcorr_wav_min_spinbox.setValue,
+                int
+            ),
+            "xcorr_wav_max": (
+                self.main_wnd.xcorr_wav_max_spinbox.value,
+                self.main_wnd.xcorr_wav_max_spinbox.setValue,
+                int
+            ),
+            "xcorr_z_min": (
+                self.main_wnd.xcorr_z_min_dspinbox.value,
+                self.main_wnd.xcorr_z_min_dspinbox.setValue,
+                float
+            ),
+            "xcorr_z_max": (
+                self.main_wnd.xcorr_z_max_dspinbox.value,
+                self.main_wnd.xcorr_z_max_dspinbox.setValue,
+                float
+            ),
+            "xcorr_z_step": (
+                self.main_wnd.xcorr_z_step_dspinbox.value,
+                self.main_wnd.xcorr_z_step_dspinbox.setValue,
+                float
             ),
             "check_for_updates": (
                 self.settings_wnd.update_check_box.checkState,
@@ -2585,6 +2636,7 @@ class GuiApp:
 
         obj_state = {
             'redshift': self.main_wnd.z_dspinbox.value(),
+            'comment': str(self.main_wnd.z_comment_textbox.text()),
             'quality_flag': self.main_wnd.qflag_combo_box.currentIndex(),
             'cmap': self.main_wnd.cmap_combo_box.currentData(
                 qt_api.QtCore.Qt.ItemDataRole.UserRole,
@@ -2842,6 +2894,14 @@ class GuiApp:
             quality_flag = old_state['quality_flag']
         except KeyError:
             quality_flag = 0
+
+        try:
+            z_comment = old_state['comment']
+        except KeyError:
+            z_comment = ""
+
+        if z_comment is not None:
+            self.main_wnd.z_comment_textbox.setText(z_comment)
 
         try:
             vmin = old_state['vmin']
@@ -3147,9 +3207,20 @@ class GuiApp:
             self.flux_chart_view_2d.setSpectralAxis(
                 sp_2d.spectral_axis.to(units.angstrom).value
             )
-            self.flux_chart_view_2d.setSpectrumImage(
-                sp_2d.flux.value
-            )
+
+            if self.main_wnd.smoothing_2d_check_box.isChecked():
+                sigma_2d = self.main_wnd.smoothing_2d_dspinbox.value()
+                if sigma_2d > 0:
+                    flux_2d_image = gaussian_filter(
+                        sp_2d.flux.value, sigma=sigma_2d
+                    )
+                else:
+                    flux_2d_image = sp_2d.flux.value
+            else:
+                flux_2d_image = sp_2d.flux.value
+
+            self.flux_chart_view_2d.setSpectrumImage(flux_2d_image)
+
             self.flux_chart_view_2d.start_1d = sp_2d.meta['header'].get(
                 '1D_START'
             )
@@ -3313,8 +3384,8 @@ class GuiApp:
         flux_2d_series.attachAxis(flux_2d_axis_y)
         flux_2d_series.setOpacity(0.2)
 
-        if self.main_wnd.smoothing_check_box.isChecked():
-            smoothing_factor = self.main_wnd.smoothing_dspinbox.value()
+        if self.main_wnd.smoothing_1d_check_box.isChecked():
+            smoothing_factor = self.main_wnd.smoothing_1d_dspinbox.value()
 
             flux_series.setOpacity(0.2)
             smoothing_sigma = len(flux) / (1 + 2 * smoothing_factor)
@@ -3336,8 +3407,6 @@ class GuiApp:
             flux_chart.addSeries(smoothed_flux_series)
             smoothed_flux_series.attachAxis(flux_axis_x)
             smoothed_flux_series.attachAxis(flux_axis_y)
-
-
 
         if var is None:
             self.main_wnd.container_tab_var.setEnabled(False)
@@ -4678,8 +4747,8 @@ class GuiApp:
 
     def exportZcat(self, dest_file, file_type) -> None:
         zcat_tbl = Table(
-            names=['INDEX', 'SPEC_FILE', 'Z', 'QF', 'UUID'],
-            dtype=[int, str, float, int, str]
+            names=['INDEX', 'SPEC_FILE', 'Z', 'QF', 'UUID', 'COMMENT'],
+            dtype=[int, str, float, int, str, str]
         )
 
         for j, (o_uuid, o_sp) in enumerate(self.open_spectra.items()):
@@ -4690,14 +4759,33 @@ class GuiApp:
             except KeyError:
                 redshift = -99.0
                 quality_flag = 0
+                sanitized_comment = ""
             else:
                 if info_dict['redshift'] is None:
                     redshift = -99.0
                 else:
                     redshift = info_dict['redshift']
+
+                if (
+                    ('comment' not in info_dict) or
+                    (info_dict['comment'] is None)
+                ):
+                    comment = ""
+                else:
+                    comment = info_dict['comment']
+
+                sanitized_comment = (
+                    '_'.join(comment.split())
+                    .replace('"', '')
+                    .replace("'", "")
+                )
+
                 quality_flag = info_dict['quality_flag']
 
-            new_row = (j, spec_file, redshift, quality_flag, o_uuid.hex)
+            new_row = (
+                j, spec_file, redshift, quality_flag, o_uuid.hex,
+                sanitized_comment
+            )
             zcat_tbl.add_row(new_row)
 
         # Get valid file extensions
@@ -5055,9 +5143,15 @@ class GuiApp:
             except KeyError:
                 quality_flag = 0
 
+            try:
+                z_comment = obj_info['comment']
+            except KeyError:
+                z_comment = ""
+
             self._update_spec_item_qf(obj_uuid, quality_flag)
             self.object_state_dict[obj_uuid] = {
                 'redshift': redshift,
+                'comment': z_comment,
                 'quality_flag': quality_flag,
                 'lines': {
                     'list': lines_list,
@@ -5342,7 +5436,7 @@ class GuiApp:
             'current_uuid': serialized_current_uuid,
             'open_files': serialized_open_file_list,
             'objects_properties': serialized_object_info_dict,
-            'spectral_masks': serialized_object_mask_dict
+            'spectral_masks': serialized_object_mask_dict,
         }
 
         with open(file_name, 'w') as f:
@@ -5513,9 +5607,6 @@ class GuiApp:
             self.flux_chart_view.setLinesType('A')
             self.flux_chart_view_2d.setLinesType('A')
 
-    def setSmoothingFactor(self, smoothing_value: float) -> None:
-        self.redrawCurrentSpec()
-
     def setXcorrTemplateDirs(self, dir_list: List[str]) -> None:
         for dir_path in dir_list:
             self.addNewTemplateDir(dir_path, update=False)
@@ -5629,9 +5720,6 @@ class GuiApp:
 
             if other_qf == ref_qf:
                 other_item.setCheckState(ref_check_state)
-
-    def toggleSmothing(self, show_smoothing: int) -> None:
-        self.redrawCurrentSpec()
 
     def run(self) -> None:
         """Run the main Qt Application."""

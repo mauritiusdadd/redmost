@@ -434,26 +434,6 @@ selected</string>
            <item>
             <layout class="QHBoxLayout" name="horizontal_layout_2">
              <item>
-              <widget class="QCheckBox" name="smoothing_check_box">
-               <property name="text">
-                <string>smoothing</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QDoubleSpinBox" name="smoothing_dspinbox">
-               <property name="minimum">
-                <double>0.000000000000000</double>
-               </property>
-               <property name="maximum">
-                <double>10.000000000000000</double>
-               </property>
-               <property name="value">
-                <double>3.000000000000000</double>
-               </property>
-              </widget>
-             </item>
-             <item>
               <widget class="QCheckBox" name="show_lines_check_box">
                <property name="enabled">
                 <bool>true</bool>
@@ -497,6 +477,63 @@ selected</string>
              </item>
              <item>
               <spacer name="horizontal_spacer_2">
+               <property name="orientation">
+                <enum>Qt::Orientation::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_2">
+             <item>
+              <widget class="QCheckBox" name="smoothing_1d_check_box">
+               <property name="text">
+                <string>1D smoothing</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QDoubleSpinBox" name="smoothing_1d_dspinbox">
+               <property name="minimum">
+                <double>0.000000000000000</double>
+               </property>
+               <property name="maximum">
+                <double>10.000000000000000</double>
+               </property>
+               <property name="value">
+                <double>3.000000000000000</double>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="smoothing_2d_check_box">
+               <property name="text">
+                <string>2D smoothing</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QDoubleSpinBox" name="smoothing_2d_dspinbox">
+               <property name="maximum">
+                <double>10.000000000000000</double>
+               </property>
+               <property name="singleStep">
+                <double>0.100000000000000</double>
+               </property>
+               <property name="value">
+                <double>1.000000000000000</double>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="horizontalSpacer_2">
                <property name="orientation">
                 <enum>Qt::Orientation::Horizontal</enum>
                </property>
@@ -593,7 +630,7 @@ selected</string>
         </size>
        </property>
        <property name="currentIndex">
-        <number>1</number>
+        <number>0</number>
        </property>
        <widget class="QWidget" name="redshift_tools_tab">
         <property name="enabled">
@@ -627,6 +664,38 @@ selected</string>
             <enum>QFrame::Shape::StyledPanel</enum>
            </property>
            <layout class="QGridLayout" name="gridLayout" columnstretch="0,0,0">
+            <item row="1" column="0">
+             <widget class="QLabel" name="label">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="text">
+               <string>redshift value</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="label_4">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="text">
+               <string>quality flag</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+              </property>
+             </widget>
+            </item>
             <item row="0" column="1">
              <widget class="QPushButton" name="previous_spec_button">
               <property name="text">
@@ -682,22 +751,6 @@ selected</string>
               </property>
              </widget>
             </item>
-            <item row="2" column="0">
-             <widget class="QLabel" name="label_4">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="text">
-               <string>quality flag</string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-              </property>
-             </widget>
-            </item>
             <item row="0" column="2">
              <widget class="QPushButton" name="next_spec_button">
               <property name="text">
@@ -705,21 +758,18 @@ selected</string>
               </property>
              </widget>
             </item>
-            <item row="1" column="0">
-             <widget class="QLabel" name="label">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
+            <item row="3" column="0">
+             <widget class="QLabel" name="label_21">
               <property name="text">
-               <string>redshift value</string>
+               <string>comments</string>
               </property>
               <property name="alignment">
                <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
               </property>
              </widget>
+            </item>
+            <item row="3" column="1" colspan="2">
+             <widget class="QLineEdit" name="z_comment_textbox"/>
             </item>
            </layout>
           </widget>
@@ -1042,7 +1092,7 @@ selected</string>
                    <string>for all ob&amp;jects</string>
                   </property>
                   <property name="checked">
-                   <bool>true</bool>
+                   <bool>false</bool>
                   </property>
                  </widget>
                 </item>
@@ -1059,7 +1109,7 @@ selected</string>
                    <string>for c&amp;urrent object only</string>
                   </property>
                   <property name="checked">
-                   <bool>false</bool>
+                   <bool>true</bool>
                   </property>
                  </widget>
                 </item>
@@ -1185,7 +1235,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                    <string>for all ob&amp;jects</string>
                   </property>
                   <property name="checked">
-                   <bool>true</bool>
+                   <bool>false</bool>
                   </property>
                  </widget>
                 </item>
@@ -1202,7 +1252,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                    <string>for c&amp;urrent object only</string>
                   </property>
                   <property name="checked">
-                   <bool>false</bool>
+                   <bool>true</bool>
                   </property>
                  </widget>
                 </item>
