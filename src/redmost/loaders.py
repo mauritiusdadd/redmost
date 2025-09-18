@@ -12,9 +12,14 @@ from astropy.io import fits, registry
 from astropy.table import Table  # type: ignore
 from astropy import wcs  # type: ignore
 from astropy import units  # type: ignore
-from specutils import Spectrum1D  # type: ignore
 from specutils.io.registers import identify_spectrum_format  # type: ignore
 from specutils.io.registers import data_loader  # type: ignore
+from specutils.manipulation import LinearInterpolatedResampler
+try:
+    from specutils import Spectrum
+except ImportError:
+    # The Spectrum1D class is deprecated and may be removed in a future version
+    from specutils import Spectrum1D as Spectrum
 
 from redmost import utils
 
@@ -118,7 +123,7 @@ def specexFitsLoader(
     flux_hdu_index: Optional[Union[str, int]] = None,
     resolution: Union[int, float] = 1,
     **kwargs
-) -> Spectrum1D:
+) -> Spectrum:
     """
     Load a python-specex spectrum.
 
@@ -128,7 +133,7 @@ def specexFitsLoader(
         The extension name or index from which to read the spectrum
     :param resolution:
         The spectral resolution parameter
-    :return: A Spectrum1D object.
+    :return: A Spectrum object.
     """
     with fits.open(file_name, **kwargs) as hdulist:
         flux_hdu = getHDU(hdulist, KNOWN_SPEC_EXT_NAMES, index=flux_hdu_index)
@@ -242,7 +247,7 @@ def specexFitsLoader(
         meta = {'header': hdulist[0].header}
         uncertainty = VarianceUncertainty(var)
 
-        sp: Spectrum1D = Spectrum1D(
+        sp: Spectrum = Spectrum(
             flux=flux,
             spectral_axis=lam,
             wcs=flux_wcs,
@@ -267,7 +272,7 @@ def clashVlt1DFitsLoader(
         flux_hdu_index: Optional[Union[str, int]] = None,
         resolution: Union[int, float] = 1,
         **kwargs
-) -> Spectrum1D:
+) -> Spectrum:
     """
     Load a python-specex spectrum.
 
@@ -277,7 +282,7 @@ def clashVlt1DFitsLoader(
         The extension name or index from which to read the spectrum
     :param resolution:
         The spectral resolution parameter
-    :return: A Spectrum1D object.
+    :return: A Spectrum object.
     """
 
     with fits.open(file_name, **kwargs) as hdulist:
@@ -361,7 +366,7 @@ def clashVlt1DFitsLoader(
         meta = {'header': hdulist[0].header}
         uncertainty = VarianceUncertainty(var)
 
-        sp: Spectrum1D = Spectrum1D(
+        sp: Spectrum = Spectrum(
             flux=flux,
             spectral_axis=lam,
             wcs=flux_wcs,
@@ -374,6 +379,80 @@ def clashVlt1DFitsLoader(
         sp.obj_id = None
 
     return sp
+
+
+def identifyJWSTStacked(origin, *args, **kwargs) -> bool:
+    """Identify spectra extracted with python-specex."""
+    if not (
+        isinstance(args[0], str) and
+        os.path.splitext(args[0].lower())[1] == '.fits'
+    ):
+        return False
+
+    with fits.open(args[0]) as hdul:
+        if len(hdul) < 2:
+            return False
+
+        if hdul[0].header.get('NAXIS') != 0:
+            return False
+
+        for hdu in hdul[1:]:
+            if hdu.name != 'SCI':
+                return False
+
+            for key in ['WMIN', 'WMAX', 'DLAM']:
+                if key not in hdu.header:
+                    return False
+
+    return True
+
+
+@data_loader(
+    label="jwst-stacked-1d",
+    identifier=identifyJWSTStacked,
+    extensions=['fits']
+)
+def JWSTStackedLoader(file_name: str, *args, **kwargs) -> Spectrum:
+    chunks = []
+
+    rms_file: Union[None, str] = file_name.replace('.fits', '_rms.fits')
+    if not os.path.isfile(rms_file):
+        rms_file = None
+
+    with fits.open(file_name) as hdul:
+        for j, hdu in enumerate(hdul):
+            if j == 0:
+                continue
+
+            flux = hdu.data * units.dimensionless_unscaled
+            if rms_file:
+                rms = StdDevUncertainty(fits.getdata(rms_file, ext=j))
+            else:
+                rms = None
+            header = hdu.header.copy()
+            w_min = header['WMIN']
+            w_max = header['WMAX']
+            d_lam = header['DLAM'] / 10000
+            # lam = np.arange(w_min, w_max, step=d_lam) * units.micrometer
+            lam = np.linspace(
+                w_min, w_max, num=len(flux), endpoint=True
+            ) * units.micrometer
+
+            sp = Spectrum(flux=flux, spectral_axis=lam, uncertainty=rms)
+            chunks.append(sp)
+
+    new_spectral_axis = np.sort(
+        np.concatenate([x.spectral_axis.value for x in chunks])
+    ) * units.micrometer
+    new_spectral_axis = new_spectral_axis.to(units.angstrom)
+
+    resampler = LinearInterpolatedResampler(
+        extrapolation_treatment='zero_fill'
+    )
+
+    resampled_chunks = [resampler(x, new_spectral_axis) for x in chunks]
+
+    return sum(resampled_chunks)
 
 
 def read_sdss_extra(
@@ -522,13 +601,13 @@ def clashVlt2DFitsLoader(
         The extension name or index from which to read the spectrum
     :param resolution:
         The spectral resolution parameter
-    :return: A Spectrum1D object.
+    :return: A Spectrum object.
     """
 
     return Spectrum2D.read(file_name, ext=flux_hdu_index)
 
 
-def identify_format(filename, dtype=Spectrum1D):
+def identify_format(filename, dtype=Spectrum):
     """
     Reimplemented from specutils
     """
@@ -548,19 +627,19 @@ def identify_format(filename, dtype=Spectrum1D):
 
 
 
-def read(file: str) -> Union[Spectrum1D, Spectrum2D]:
+def read(file: str) -> Union[Spectrum, Spectrum2D]:
     sp_formats = identify_format(file)
 
-    spec_class: Union[Spectrum1D, Spectrum2D]
+    spec_class: Union[Spectrum, Spectrum2D]
     for spec_format in sp_formats:
         if spec_format == 'clash-vlt-2d':
             spec_class = Spectrum2D
             break
         elif spec_format == 'clash-vlt-1d':
-            spec_class = Spectrum1D
+            spec_class = Spectrum
             break
     else:
-        spec_class = Spectrum1D
+        spec_class = Spectrum
 
     orig_sp = spec_class.read(file, format=spec_format)
 

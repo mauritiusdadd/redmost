@@ -1,80 +1,81 @@
 {
-  "current_uuid": "b950d9990c5341579957dbe9d7236e27",
+  "current_uuid": "d9b9d10d8e2442f8bccf227b5edc3f24",
   "open_files": [
     {
       "index": 0,
       "uuid": "ee897121174640888b862e441ee6f0f6",
       "text": "spec_95.fits",
-      "path": "./test/data/spec_95.fits",
-      "checked": 2
+      "checked": 2,
+      "path": "spec_95.fits"
     },
     {
       "index": 1,
       "uuid": "637b29cd33ea48a1ad2023e91a60b47f",
       "text": "spec_955.fits",
-      "path": "./test/data/spec_955.fits",
-      "checked": 2
+      "checked": 2,
+      "path": "spec_955.fits"
     },
     {
       "index": 2,
       "uuid": "f22874a92a0645a992fd9a7ca36a9c55",
       "text": "spec_963.fits",
-      "path": "./test/data/spec_963.fits",
-      "checked": 2
+      "checked": 2,
+      "path": "spec_963.fits"
     },
     {
       "index": 3,
       "uuid": "74dee251bbf444cf9d947e00f951fcfc",
       "text": "spec_965.fits",
-      "path": "./test/data/spec_965.fits",
-      "checked": 2
+      "checked": 2,
+      "path": "spec_965.fits"
     },
     {
       "index": 4,
       "uuid": "6614b0a71ccc4fa4b653509b7feb7272",
       "text": "spec_966.fits",
-      "path": "./test/data/spec_966.fits",
-      "checked": 2
+      "checked": 2,
+      "path": "spec_966.fits"
     },
     {
       "index": 5,
       "uuid": "855d157d44f34610a0b35266fe310651",
       "text": "spec_971.fits",
-      "path": "./test/data/spec_971.fits",
-      "checked": 2
+      "checked": 2,
+      "path": "spec_971.fits"
     },
     {
       "index": 6,
       "uuid": "d9b9d10d8e2442f8bccf227b5edc3f24",
       "text": "spec_988.fits",
-      "path": "./test/data/spec_988.fits",
-      "checked": 2
+      "checked": 2,
+      "path": "spec_988.fits"
     },
     {
       "index": 7,
       "uuid": "55cd42374531496294a56ce2bc124b80",
       "text": "spec_991.fits",
-      "path": "./test/data/spec_991.fits",
-      "checked": 2
+      "checked": 2,
+      "path": "spec_991.fits"
     },
     {
       "index": 8,
       "uuid": "04bdfd679d2f41cc8dce28b8ba3d87a4",
       "text": "spec_994.fits",
-      "path": "./test/data/spec_994.fits",
-      "checked": 2
+      "checked": 2,
+      "path": "spec_994.fits"
     },
     {
       "index": 9,
       "uuid": "b950d9990c5341579957dbe9d7236e27",
       "text": "spec_997.fits",
-      "path": "./test/data/spec_997.fits",
-      "checked": 2
+      "checked": 2,
+      "path": "spec_997.fits"
     }
   ],
   "objects_properties": {
     "ee897121174640888b862e441ee6f0f6": {
       "redshift": 0.3998,
+      "comment": "",
       "quality_flag": 3,
       "lines": {
         "list": [],
@@ -83,6 +84,7 @@
     },
     "637b29cd33ea48a1ad2023e91a60b47f": {
       "redshift": 0.3742,
+      "comment": "",
       "quality_flag": 3,
       "lines": {
         "list": [],
@@ -91,6 +93,7 @@
     },
     "f22874a92a0645a992fd9a7ca36a9c55": {
       "redshift": 0.3888,
+      "comment": "",
       "quality_flag": 3,
       "lines": {
         "list": [],
@@ -99,6 +102,7 @@
     },
     "74dee251bbf444cf9d947e00f951fcfc": {
       "redshift": 0.3824,
+      "comment": "",
       "quality_flag": 3,
       "lines": {
         "list": [],
@@ -107,7 +111,11 @@
     },
     "6614b0a71ccc4fa4b653509b7feb7272": {
       "redshift": 0.3763,
-      "quality_flag": 3,
+      "comment": "",
+      "quality_flag": 5,
+      "cmap": "viridis",
+      "vmin": 0.0,
+      "vmax": 1.0,
       "lines": {
         "list": [],
         "redshifts": []
@@ -115,6 +123,7 @@
     },
     "855d157d44f34610a0b35266fe310651": {
       "redshift": 0.3843,
+      "comment": "",
       "quality_flag": 3,
       "lines": {
         "list": [],
@@ -123,7 +132,11 @@
     },
     "d9b9d10d8e2442f8bccf227b5edc3f24": {
       "redshift": 0.3827,
-      "quality_flag": 3,
+      "comment": "",
+      "quality_flag": 9,
+      "cmap": "viridis",
+      "vmin": 0.0,
+      "vmax": 1.0,
       "lines": {
         "list": [],
         "redshifts": []
@@ -131,7 +144,11 @@
     },
     "55cd42374531496294a56ce2bc124b80": {
       "redshift": 0.3855,
+      "comment": "",
       "quality_flag": 3,
+      "cmap": "viridis",
+      "vmin": 0.0,
+      "vmax": 1.0,
       "lines": {
         "list": [],
         "redshifts": []
@@ -139,6 +156,7 @@
     },
     "04bdfd679d2f41cc8dce28b8ba3d87a4": {
       "redshift": 0.3842000000000002,
+      "comment": "",
       "quality_flag": 3,
       "lines": {
         "list": [],
@@ -147,11 +165,16 @@
     },
     "b950d9990c5341579957dbe9d7236e27": {
       "redshift": 0.3786,
+      "comment": "",
       "quality_flag": 3,
+      "cmap": "viridis",
+      "vmin": 0.0,
+      "vmax": 1.0,
       "lines": {
         "list": [],
         "redshifts": []
       }
     }
-  }
+  },
+  "spectral_masks": {}
 }

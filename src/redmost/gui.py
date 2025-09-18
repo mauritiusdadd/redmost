@@ -30,7 +30,11 @@ from astropy import units  # type: ignore
 from astropy.table import Table  # type: ignore
 from scipy.ndimage import gaussian_filter
 
-from specutils import Spectrum1D  # type: ignore
+try:
+    from specutils import Spectrum
+except ImportError:
+    # The Spectrum1D class is deprecated and may be removed in a future version
+    from specutils import Spectrum1D as Spectrum
 
 import redmost
 from redmost import loaders
@@ -1267,7 +1271,7 @@ class QRedrockHandler(qt_api.QtCore.QObject):
                 self.results = None
         self.finished.emit()
 
-    def run(self, spectra: Dict[uuid.UUID, Spectrum1D]) -> None:
+    def run(self, spectra: Dict[uuid.UUID, Spectrum]) -> None:
         self.reset.emit()
         self.maximum.emit(len(spectra))
         self.message.emit(self.qapp.tr("Building targets"))
@@ -1306,7 +1310,7 @@ class QXCorrHandler(qt_api.QtCore.QObject):
     def __init__(self) -> None:
         super().__init__()
         self.qapp = get_qapp()
-        self.templates: Union[None, Dict[str, Spectrum1D]] = None
+        self.templates: Union[None, Dict[str, Spectrum]] = None
         self.use_gpu: Union[str, bool] = False
         self.gpu_device: Union[None, str] = None
         self.z_min: float = 0
@@ -1335,7 +1339,7 @@ class QXCorrHandler(qt_api.QtCore.QObject):
 
     def run(
         self,
-        spectra: Dict[uuid.UUID, Spectrum1D],
+        spectra: Dict[uuid.UUID, Spectrum],
         w_masks: Optional[Dict[uuid.UUID, List[Dict[str, Any]]]] = None
     ) -> None:
         self.reset.emit()
@@ -1675,8 +1679,9 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     obj_prop_table_widget: QtWidgets.QTableWidget
     other_charts_tab_widget: QtWidgets.QTabWidget
     plot_group_box: QtWidgets.QGroupBox
+    plot_templates_check_box: QtWidgets.QCheckBox
     previous_spec_button: QtWidgets.QPushButton
-    qflag_combo_box: QtWidgets.QComboBox
+    qflag_spinbox: QtWidgets.QSpinBox
     redshift_tools_tab: QtWidgets.QGroupBox
     redrock_all_radio: QtWidgets.QRadioButton
     redrock_selected_radio: QtWidgets.QRadioButton
@@ -1686,6 +1691,7 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     redrock_current_radio: QtWidgets.QRadioButton
     remove_selected_button: QtWidgets.QPushButton
     remove_spec_button: QtWidgets.QPushButton
+    show_legend_check_box: QtWidgets.QCheckBox
     show_lines_check_box: QtWidgets.QCheckBox
     show_lines_combo_box: QtWidgets.QComboBox
     single_line_combo_box: QtWidgets.QComboBox
@@ -1768,7 +1774,7 @@ class GuiApp:
 
         self.settings: QtCore.QSettings = qt_api.QtCore.QSettings()
 
-        self.open_spectra: Dict[uuid.UUID, Spectrum1D] = {}
+        self.open_spectra: Dict[uuid.UUID, Spectrum] = {}
         self.open_spectra_2d: Dict[uuid.UUID, loaders.Spectrum2D] = {}
         self.open_spectra_items: Dict[
             uuid.UUID, QtWidgets.QListWidgetItem
@@ -1786,11 +1792,12 @@ class GuiApp:
         self.current_image_open_dir: Union[None, str] = None
         self.current_mask_open_dir: Union[None, str] = None
         self.xcor_tree_leaf_items: List[QtWidgets.QTreeWidgetItem] = []
-        self.xcorr_templates: Dict[str, Spectrum1D] = {}
+        self.xcorr_templates: Dict[str, Spectrum] = {}
         self.cur_xcorr_leaf_item: Optional[QtWidgets.QTreeWidgetItem] = None
         self.use_gpu: Union[str, bool] = False
         self.compute_device: Union[str, None] = None
         self.compute_device_id: int = -1
+        self.templates_to_plot: Dict[str, Any] = {}
 
         self.global_state: Enum = GlobalState.READY
         self._updateXcorrTemplateTreeState_lock = False
@@ -1802,7 +1809,8 @@ class GuiApp:
             1: "#55940a00",
             2: "#55945400",
             3: "#55176601",
-            4: "#55012d66"
+            4: "#55176601",
+            9: "#559100b5"
         }
 
         self.main_wnd: MainWindow = cast(
@@ -2271,6 +2279,10 @@ class GuiApp:
             self.redrawCurrentSpec
         )
 
+        self.main_wnd.plot_templates_check_box.toggled.connect(
+            self.doPlotTemplates
+        )
+
         self.main_wnd.next_spec_button.clicked.connect(
             self._next_spec
         )
@@ -2395,6 +2407,10 @@ class GuiApp:
             self.flux_chart_view.setLinesVisible
         )
 
+        self.main_wnd.show_legend_check_box.toggled.connect(
+            self.redrawCurrentSpec
+        )
+
         self.main_wnd.show_lines_check_box.toggled.connect(
             self.flux_chart_view_2d.setLinesVisible
         )
@@ -2403,7 +2419,7 @@ class GuiApp:
             self.setCurrentObjectRedshift
         )
 
-        self.main_wnd.qflag_combo_box.currentIndexChanged.connect(
+        self.main_wnd.qflag_spinbox.valueChanged.connect(
             self.currentQualityFlagChanged
         )
 
@@ -2439,6 +2455,10 @@ class GuiApp:
             self.plotXcorrFunction
         )
 
+        self.main_wnd.xcorr_templates_tree_widget.itemDoubleClicked.connect(
+            self.doPlotXcorrTemplate
+        )
+
         self.main_wnd.action_mask_copy.triggered.connect(
             self.doCopyMask
         )
@@ -2468,6 +2488,11 @@ class GuiApp:
                 self.main_wnd.restoreGeometry,
                 None
             ),
+            "plot_templates": (
+              self.main_wnd.plot_templates_check_box.checkState,
+              self.main_wnd.plot_templates_check_box.setCheckState,
+              qt_api.QtCore.Qt.CheckState
+            ),
             "smoothing_1d_state": (
                 self.main_wnd.smoothing_1d_check_box.checkState,
                 self.main_wnd.smoothing_1d_check_box.setCheckState,
@@ -2487,6 +2512,11 @@ class GuiApp:
                 self.main_wnd.smoothing_2d_dspinbox.value,
                 self.main_wnd.smoothing_2d_dspinbox.setValue,
                 float,
+            ),
+            "show_legend": (
+                self.main_wnd.show_legend_check_box.checkState,
+                self.main_wnd.show_legend_check_box.setCheckState,
+                qt_api.QtCore.Qt.CheckState
             ),
             "show_lines": (
                 self.main_wnd.show_lines_check_box.checkState,
@@ -2515,7 +2545,7 @@ class GuiApp:
             ),
             "xcorr_wrange_checkbox": (
                 self.main_wnd.xcorr_wrange_checkbox.checkState,
-                self.main_wnd.xcorr_wrange_checkbox.checkState,
+                self.main_wnd.xcorr_wrange_checkbox.setCheckState,
                 qt_api.QtCore.Qt.CheckState
             ),
             "xcorr_wav_min": (
@@ -2637,7 +2667,7 @@ class GuiApp:
         obj_state = {
             'redshift': self.main_wnd.z_dspinbox.value(),
             'comment': str(self.main_wnd.z_comment_textbox.text()),
-            'quality_flag': self.main_wnd.qflag_combo_box.currentIndex(),
+            'quality_flag': int(self.main_wnd.qflag_spinbox.value()),
             'cmap': self.main_wnd.cmap_combo_box.currentData(
                 qt_api.QtCore.Qt.ItemDataRole.UserRole,
             ),
@@ -2924,7 +2954,7 @@ class GuiApp:
         if cmap_name is not None:
             self.main_wnd.cmap_combo_box.setCurrentText(cmap_name)
 
-        self.main_wnd.qflag_combo_box.setCurrentIndex(quality_flag)
+        self.main_wnd.qflag_spinbox.setValue(int(quality_flag))
 
         self._update_spec_item_qf(obj_uuid, quality_flag)
 
@@ -2964,7 +2994,10 @@ class GuiApp:
     def _update_spec_item_qf(self, item_uuid: uuid.UUID, qf: int) -> None:
         item: QtWidgets.QListWidgetItem
         item = self.open_spectra_items[item_uuid]
-        item.setBackground(qt_api.QtGui.QColor(self.qf_color[qf]))
+        try:
+            item.setBackground(qt_api.QtGui.QColor(self.qf_color[qf]))
+        except KeyError:
+            item.setBackground(qt_api.QtGui.QColor("#00000000"))
 
     def _updateMouseLabelFromEvent(self, *args) -> None:
         self._updateMouseLabel(args[0][0])
@@ -3197,7 +3230,7 @@ class GuiApp:
         for ax in sky_chart.axes():
             sky_chart.removeAxis(ax)
 
-        sp: Spectrum1D = self.open_spectra[spec_uuid]
+        sp: Spectrum = self.open_spectra[spec_uuid]
 
         try:
             sp_2d: loaders.Spectrum2D = sp.meta['linked']['2D']
@@ -3475,7 +3508,11 @@ class GuiApp:
 
         flux_chart.setContentsMargins(0, 0, 0, 0)
         flux_chart.setBackgroundRoundness(0)
-        flux_chart.legend().hide()
+
+        if self.main_wnd.show_legend_check_box.isChecked():
+            flux_chart.legend().show()
+        else:
+            flux_chart.legend().hide()
 
         flux_chart_2d.setContentsMargins(0, 0, 0, 0)
         flux_chart_2d.setBackgroundRoundness(0)
@@ -3492,6 +3529,8 @@ class GuiApp:
         sky_chart.setContentsMargins(0, 0, 0, 0)
         sky_chart.setBackgroundRoundness(0)
         sky_chart.legend().hide()
+
+        self.plotTemplates()
 
     def doAddNewLine(self, *args: Any, **kwargs: Any) -> None:
         """Tell the main app to identify a new line."""
@@ -4050,7 +4089,7 @@ class GuiApp:
         if self.current_uuid is None:
             return
 
-        sp: Spectrum1D = self.open_spectra[self.current_uuid]
+        sp: Spectrum = self.open_spectra[self.current_uuid]
 
         wav: np.ndarray = sp.spectral_axis.value
         flux: np.ndarray = sp.flux.value
@@ -4209,7 +4248,7 @@ class GuiApp:
                 item_uuid = uuid.uuid4()
 
             try:
-                sp: Union[Spectrum1D, loaders.Spectrum2D] = loaders.read(file)
+                sp: Union[Spectrum, loaders.Spectrum2D] = loaders.read(file)
             except Exception as exc:
                 exception_tracker.append((file, str(exc)))
                 continue
@@ -4226,9 +4265,9 @@ class GuiApp:
                 sp_header = None
 
             new_item: Union[QtWidgets.QListWidgetItem, None] = None
-            sp_1d: Union[Spectrum1D, None] = None
+            sp_1d: Union[Spectrum, None] = None
 
-            if isinstance(sp, Spectrum1D):
+            if isinstance(sp, Spectrum):
                 item_name = '[1D] ' + os.path.basename(file)
                 sp_1d = sp
                 if sp_header and 'SPEC_2D' in sp_header:
@@ -4270,7 +4309,7 @@ class GuiApp:
                         sp_2d.flux.value,
                         axis=0
                     )
-                    sp_1d = Spectrum1D(
+                    sp_1d = Spectrum(
                         flux=flux_from_2d * sp_2d.flux.unit,
                         spectral_axis=sp_2d.spectral_axis,
                     )
@@ -4558,7 +4597,7 @@ class GuiApp:
         self.main_wnd.redrock_text_edit.clear()
         self.statusbar.showMessage("Running redrock backend...")
 
-        for_rr: Dict[uuid.UUID, Spectrum1D] = {}
+        for_rr: Dict[uuid.UUID, Spectrum] = {}
         if self.main_wnd.redrock_all_radio.isChecked():
             for_rr = self.open_spectra
         elif self.main_wnd.redrock_selected_radio.isChecked():
@@ -4592,7 +4631,7 @@ class GuiApp:
 
         self.statusbar.showMessage("Running xcorr backend...")
 
-        for_xcorr: Dict[uuid.UUID, Spectrum1D] = {}
+        for_xcorr: Dict[uuid.UUID, Spectrum] = {}
 
         if self.main_wnd.xcorr_all_radio.isChecked():
             for_xcorr = self.open_spectra
@@ -4813,7 +4852,7 @@ class GuiApp:
     def getGpuDeviceId(self):
         return self.compute_device_id
 
-    def getXcorrSelectedTemplates(self) -> Dict[str, specutils.Spectrum1D]:
+    def getXcorrSelectedTemplates(self) -> Dict[str, specutils.Spectrum]:
 
         selected_templates = {}
         for item in self.xcor_tree_leaf_items:
@@ -5047,7 +5086,7 @@ class GuiApp:
                     )
                     continue
 
-            sp: Union[Spectrum1D, loaders.Spectrum2D]
+            sp: Union[Spectrum, loaders.Spectrum2D]
             try:
                 sp = loaders.read(file_path)
             except Exception as exc:
@@ -5092,7 +5131,7 @@ class GuiApp:
                             )
                         else:
                             links_dict[key] = linked_sp
-                            if isinstance(sp, Spectrum1D):
+                            if isinstance(sp, Spectrum):
                                 linked_sp.meta['linked'] = {'1D': sp}
                             elif isinstance(sp, loaders.Spectrum2D):
                                 linked_sp.meta['linked'] = {'2D': sp}
@@ -5235,7 +5274,7 @@ class GuiApp:
     ) -> None:
         self.cur_xcorr_leaf_item = item
 
-        xcorr_chart = self.xcorr_chart_view.chart()
+        xcorr_chart: QtCharts.QChart = self.xcorr_chart_view.chart()
         xcorr_chart.removeAllSeries()
         for ax in xcorr_chart.axes():
             xcorr_chart.removeAxis(ax)
@@ -5300,6 +5339,144 @@ class GuiApp:
         xcorr_chart.setContentsMargins(0, 0, 0, 0)
         xcorr_chart.setBackgroundRoundness(0)
         xcorr_chart.legend().hide()
+
+    def doPlotXcorrTemplate(
+            self,
+            item: Optional[QtWidgets.QTreeWidgetItem] = None,
+            col: int = 0,
+            redshift: Optional[float] = None
+    ) -> None:
+        if item is None:
+            return
+        template_id = item.data(
+            0, qt_api.QtCore.Qt.ItemDataRole.UserRole
+        )
+        self.templates_to_plot['xcorr'] = template_id
+        self.plotXcorrTemplate()
+
+    def doPlotTemplates(self, *args, **kwargs) -> None:
+        self.plotTemplates()
+
+    def plotTemplates(self, redshift: Optional[float] = None) -> None:
+        if redshift is None:
+            redshift = self.main_wnd.z_dspinbox.value()
+
+        if not self.main_wnd.plot_templates_check_box.isChecked():
+            # remove templates from flux chart
+            flux_chart: QtCharts.QChart = self.flux_chart_view.chart()
+            for ser in flux_chart.series():
+                if (
+                    ser.name().startswith('xcorr/') or
+                    ser.name().startswith('rrock/')
+                ):
+                    flux_chart.removeSeries(ser)
+            return
+
+        for t_kind, t_id in self.templates_to_plot.items():
+            if t_kind == 'xcorr':
+                self.plotXcorrTemplate(t_id, redshift)
+
+    def plotXcorrTemplate(
+            self,
+            template_id: Optional[str] = None,
+            redshift: Optional[float] = None
+    ) -> None:
+        if not self.main_wnd.plot_templates_check_box.isChecked():
+            return
+
+        if template_id is None:
+            if self.templates_to_plot['xcorr'] is None:
+                return
+
+            template_id = self.templates_to_plot['xcorr']
+
+        template_name = f"xcorr/{os.path.basename(template_id)}"
+
+        try:
+            template_sp = self.xcorr_templates[template_id]
+        except KeyError:
+            # NOTE: this should never happen, unless the program state is
+            #       horribly broken...
+            return
+
+        if redshift is None:
+            try:
+                object_ze = self.xcorr_handler.best_z[self.current_uuid]
+                best_z = object_ze[template_id]
+            except KeyError:
+                redshift = self.main_wnd.z_dspinbox.value()
+            else:
+                redshift = best_z
+
+        template_wav: np.ndarray = template_sp.spectral_axis.value
+        template_wav = template_wav * (1 + redshift)
+
+        template_flux: np.ndarray = template_sp.flux.value
+        mean_template_flux = 10 ** utils.find_exp(np.nanmean(template_flux))
+        template_flux = template_flux / mean_template_flux
+
+        flux_chart: QtCharts.QChart = self.flux_chart_view.chart()
+
+        if not flux_chart.axes():
+            flux_axis_x = qt_api.QtCharts.QValueAxis()
+            flux_axis_y = qt_api.QtCharts.QValueAxis()
+
+            flux_chart.addAxis(
+                flux_axis_x, qt_api.QtCore.Qt.AlignmentFlag.AlignBottom
+            )
+            flux_chart.addAxis(
+                flux_axis_y, qt_api.QtCore.Qt.AlignmentFlag.AlignLeft
+            )
+        else:
+            flux_axis_x = flux_chart.axes()[0]
+            flux_axis_y = flux_chart.axes()[1]
+
+        # min_y and max_y are used to rescale the template to the current
+        # 1D spectrum flux range
+        min_y: Union[float, None] = None
+        max_y: Union[float, None] = None
+
+        ser: QtCharts.QXYSeries
+        for ser in flux_chart.series():
+            if ser.name().startswith('xcorr/'):
+                flux_chart.removeSeries(ser)
+            elif ser.name().lower() == 'flux':
+                ser_points = ser.points()
+                if (ser_points is not None) and (len(ser_points) > 5):
+                    p_y_list = [p.y() for p in ser_points]
+                    p_x_list = [p.x() for p in ser_points]
+                    min_y = np.percentile(p_y_list, 20)
+                    max_y = np.percentile(p_y_list, 80)
+                    min_x = np.min(p_x_list)
+                    max_x = np.max(p_x_list)
+
+        # Rescale the template to match the min/max flux values of the
+        # currently plotted spectrum
+        if (min_y is not None) and (max_y is not None):
+            t_wav_mask = (template_wav >= min_x) & (template_wav <= max_x)
+            if any(t_wav_mask):
+                template_flux -= np.percentile(template_flux[t_wav_mask], 20)
+                template_flux /= np.percentile(template_flux[t_wav_mask], 80)
+            else:
+                template_flux -= np.percentile(template_flux, 20)
+                template_flux /= np.percentile(template_flux, 80)
+
+            template_flux *= (max_y - min_y)
+            template_flux += min_y
+
+        template_series: QtCharts.QLineSeries = values2series(
+            template_wav, template_flux, template_name
+        )
+        
+        flux_chart.addSeries(template_series)
+        template_series.attachAxis(flux_axis_x)
+        template_series.attachAxis(flux_axis_y)
+        pen: QtGui.QPen = template_series.pen()
+        pen.setColor(qt_api.QtGui.QColor("red"))
+        pen.setWidth(2)
+        template_series.setPen(pen)
+        template_series.setOpacity(0.2)
+
 
     def redrawCurrentSpec(self, *args, **kwargs) -> None:
         """Redraw the charts."""
@@ -5507,6 +5684,7 @@ class GuiApp:
 
         self.flux_chart_view.setRedshift(redshift=redshift)
         self.flux_chart_view_2d.setRedshift(redshift=redshift)
+        self.plotTemplates(redshift=redshift)
 
         item_col_0: Union[QtWidgets.QTableWidgetItem, None]
         item_col_1: Union[QtWidgets.QTableWidgetItem, None]
@@ -5619,7 +5797,7 @@ class GuiApp:
             )
 
     def showObjectInfo(self, object_uuid: uuid.UUID) -> None:
-        sp: Spectrum1D = self.open_spectra[object_uuid]
+        sp: Spectrum = self.open_spectra[object_uuid]
 
         self.main_wnd.obj_prop_table_widget.setRowCount(0)
 
@@ -5854,7 +6032,7 @@ def values2series(
     x_values: Union[List[float], np.ndarray],
     y_values: Union[List[float], np.ndarray],
     name: str
-) -> qt_api.QtCharts.QLineSeries:
+) -> QtCharts.QLineSeries:
     """
     Convert point values to a QLineSeries object.
 

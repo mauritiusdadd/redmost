@@ -434,6 +434,20 @@ selected</string>
            <item>
             <layout class="QHBoxLayout" name="horizontal_layout_2">
              <item>
+              <widget class="QCheckBox" name="plot_templates_check_box">
+               <property name="text">
+                <string>Plot templates</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="show_legend_check_box">
+               <property name="text">
+                <string>Show legend</string>
+               </property>
+              </widget>
+             </item>
+             <item>
               <widget class="QCheckBox" name="show_lines_check_box">
                <property name="enabled">
                 <bool>true</bool>
@@ -703,41 +717,6 @@ selected</string>
               </property>
              </widget>
             </item>
-            <item row="2" column="1" colspan="2">
-             <widget class="QComboBox" name="qflag_combo_box">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <item>
-               <property name="text">
-                <string>0 - not estimated</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>1 - unreliable</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>2 - likely</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>3 - secure</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>9 - from one line</string>
-               </property>
-              </item>
-             </widget>
-            </item>
             <item row="1" column="1" colspan="2">
              <widget class="QDoubleSpinBox" name="z_dspinbox">
               <property name="decimals">
@@ -770,6 +749,9 @@ selected</string>
             </item>
             <item row="3" column="1" colspan="2">
              <widget class="QLineEdit" name="z_comment_textbox"/>
+            </item>
+            <item row="2" column="1" colspan="2">
+             <widget class="QSpinBox" name="qflag_spinbox"/>
             </item>
            </layout>
           </widget>
@@ -1347,6 +1329,9 @@ li.checked::marker { content: &quot;\2612&quot;; }
                   </item>
                   <item row="1" column="1">
                    <widget class="QDoubleSpinBox" name="xcorr_z_min_dspinbox">
+                    <property name="minimum">
+                     <double>-0.100000000000000</double>
+                    </property>
                     <property name="maximum">
                      <double>999.000000000000000</double>
                     </property>
