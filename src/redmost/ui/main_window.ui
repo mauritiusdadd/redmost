@@ -773,6 +773,9 @@ selected</string>
            <property name="currentIndex">
             <number>2</number>
            </property>
+           <property name="documentMode">
+            <bool>false</bool>
+           </property>
            <widget class="QWidget" name="tab_lines">
             <attribute name="title">
              <string>Lines</string>
@@ -1258,6 +1261,9 @@ li.checked::marker { content: &quot;\2612&quot;; }
                 </property>
                 <item>
                  <widget class="QTreeWidget" name="xcorr_templates_tree_widget">
+                  <property name="contextMenuPolicy">
+                   <enum>Qt::ContextMenuPolicy::DefaultContextMenu</enum>
+                  </property>
                   <property name="verticalScrollBarPolicy">
                    <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOn</enum>
                   </property>
@@ -1277,128 +1283,227 @@ li.checked::marker { content: &quot;\2612&quot;; }
               </widget>
              </item>
              <item>
-              <widget class="QGroupBox" name="groupBox_2">
-               <property name="title">
-                <string>Redshif scan settings</string>
+              <widget class="QTabWidget" name="xcorr_options_tab_widget">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
                </property>
-               <layout class="QVBoxLayout" name="verticalLayout_13">
-                <item>
-                 <layout class="QGridLayout" name="gridLayout_3">
-                  <item row="1" column="3">
-                   <widget class="QDoubleSpinBox" name="xcorr_z_max_dspinbox">
-                    <property name="value">
-                     <double>6.000000000000000</double>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="1" column="0">
-                   <widget class="QLabel" name="label_7">
-                    <property name="text">
-                     <string>min. z</string>
-                    </property>
-                    <property name="alignment">
-                     <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="1" column="2">
-                   <widget class="QLabel" name="label_8">
-                    <property name="text">
-                     <string>max. z</string>
-                    </property>
-                    <property name="alignment">
-                     <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="2" column="1" colspan="2">
-                   <widget class="QDoubleSpinBox" name="xcorr_z_step_dspinbox">
-                    <property name="decimals">
-                     <number>5</number>
-                    </property>
-                    <property name="maximum">
-                     <double>5.000000000000000</double>
-                    </property>
-                    <property name="singleStep">
-                     <double>0.000100000000000</double>
-                    </property>
-                    <property name="value">
-                     <double>0.001000000000000</double>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="1" column="1">
-                   <widget class="QDoubleSpinBox" name="xcorr_z_min_dspinbox">
-                    <property name="minimum">
-                     <double>-0.100000000000000</double>
-                    </property>
-                    <property name="maximum">
-                     <double>999.000000000000000</double>
-                    </property>
-                    <property name="singleStep">
-                     <double>0.001000000000000</double>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="2" column="0">
-                   <widget class="QLabel" name="label_9">
-                    <property name="text">
-                     <string>z step</string>
-                    </property>
-                    <property name="alignment">
-                     <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="0" column="0">
-                   <widget class="QCheckBox" name="xcorr_wrange_checkbox">
-                    <property name="text">
-                     <string>From</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="0" column="2">
-                   <widget class="QLabel" name="label_11">
-                    <property name="enabled">
-                     <bool>false</bool>
-                    </property>
-                    <property name="text">
-                     <string>to</string>
-                    </property>
-                    <property name="alignment">
-                     <set>Qt::AlignmentFlag::AlignCenter</set>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="0" column="1">
-                   <widget class="QSpinBox" name="xcorr_wav_min_spinbox">
-                    <property name="enabled">
-                     <bool>false</bool>
-                    </property>
-                    <property name="suffix">
-                     <string> A</string>
-                    </property>
-                    <property name="maximum">
-                     <number>999999</number>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="0" column="3">
-                   <widget class="QSpinBox" name="xcorr_wav_max_spinbox">
-                    <property name="enabled">
-                     <bool>false</bool>
-                    </property>
-                    <property name="suffix">
-                     <string> A</string>
-                    </property>
-                    <property name="maximum">
-                     <number>999999</number>
-                    </property>
-                   </widget>
-                  </item>
-                 </layout>
-                </item>
-               </layout>
+               <property name="currentIndex">
+                <number>1</number>
+               </property>
+               <widget class="QWidget" name="xcorr_redshift_scan_tab">
+                <attribute name="title">
+                 <string>Redshift scan settings</string>
+                </attribute>
+                <layout class="QVBoxLayout" name="verticalLayout_13">
+                 <item>
+                  <layout class="QGridLayout" name="gridLayout_3">
+                   <item row="1" column="3">
+                    <widget class="QDoubleSpinBox" name="xcorr_z_max_dspinbox">
+                     <property name="value">
+                      <double>6.000000000000000</double>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="1" column="0">
+                    <widget class="QLabel" name="label_7">
+                     <property name="text">
+                      <string>min. z</string>
+                     </property>
+                     <property name="alignment">
+                      <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="1" column="2">
+                    <widget class="QLabel" name="label_8">
+                     <property name="text">
+                      <string>max. z</string>
+                     </property>
+                     <property name="alignment">
+                      <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="2" column="1" colspan="2">
+                    <widget class="QDoubleSpinBox" name="xcorr_z_step_dspinbox">
+                     <property name="decimals">
+                      <number>5</number>
+                     </property>
+                     <property name="maximum">
+                      <double>5.000000000000000</double>
+                     </property>
+                     <property name="singleStep">
+                      <double>0.000100000000000</double>
+                     </property>
+                     <property name="value">
+                      <double>0.001000000000000</double>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="1" column="1">
+                    <widget class="QDoubleSpinBox" name="xcorr_z_min_dspinbox">
+                     <property name="minimum">
+                      <double>-0.100000000000000</double>
+                     </property>
+                     <property name="maximum">
+                      <double>999.000000000000000</double>
+                     </property>
+                     <property name="singleStep">
+                      <double>0.001000000000000</double>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="2" column="0">
+                    <widget class="QLabel" name="label_9">
+                     <property name="text">
+                      <string>z step</string>
+                     </property>
+                     <property name="alignment">
+                      <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="0" column="0">
+                    <widget class="QCheckBox" name="xcorr_wrange_checkbox">
+                     <property name="text">
+                      <string>From</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="0" column="2">
+                    <widget class="QLabel" name="label_11">
+                     <property name="enabled">
+                      <bool>false</bool>
+                     </property>
+                     <property name="text">
+                      <string>to</string>
+                     </property>
+                     <property name="alignment">
+                      <set>Qt::AlignmentFlag::AlignCenter</set>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="0" column="1">
+                    <widget class="QSpinBox" name="xcorr_wav_min_spinbox">
+                     <property name="enabled">
+                      <bool>false</bool>
+                     </property>
+                     <property name="suffix">
+                      <string> A</string>
+                     </property>
+                     <property name="maximum">
+                      <number>999999</number>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="0" column="3">
+                    <widget class="QSpinBox" name="xcorr_wav_max_spinbox">
+                     <property name="enabled">
+                      <bool>false</bool>
+                     </property>
+                     <property name="suffix">
+                      <string> A</string>
+                     </property>
+                     <property name="maximum">
+                      <number>999999</number>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
+                </layout>
+               </widget>
+               <widget class="QWidget" name="xcorr_continuum_tab">
+                <attribute name="title">
+                 <string>Continuum subtraction</string>
+                </attribute>
+                <layout class="QVBoxLayout" name="verticalLayout_16">
+                 <item>
+                  <layout class="QGridLayout" name="gridLayout_10">
+                   <item row="2" column="3">
+                    <widget class="QDoubleSpinBox" name="xcorr_csub_fft_sigma_dspinbox">
+                     <property name="value">
+                      <double>20.000000000000000</double>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="2" column="2">
+                    <widget class="QLabel" name="label_24">
+                     <property name="text">
+                      <string>FFT sigma</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="2" column="0">
+                    <widget class="QLabel" name="label_23">
+                     <property name="text">
+                      <string>Chebyshev order</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="2" column="1">
+                    <widget class="QSpinBox" name="xcorr_csub_chebyshev_order_spinbox">
+                     <property name="value">
+                      <number>5</number>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="0" column="0">
+                    <widget class="QLabel" name="label_22">
+                     <property name="text">
+                      <string>mode</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="5" column="2" colspan="2">
+                    <widget class="QPushButton" name="xcorr_csub_preview_button">
+                     <property name="text">
+                      <string>Preview</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="0" column="1" colspan="3">
+                    <widget class="QComboBox" name="xcorr_csub_combobox">
+                     <property name="sizePolicy">
+                      <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+                       <horstretch>0</horstretch>
+                       <verstretch>0</verstretch>
+                      </sizepolicy>
+                     </property>
+                     <property name="currentIndex">
+                      <number>1</number>
+                     </property>
+                     <item>
+                      <property name="text">
+                       <string>No</string>
+                      </property>
+                     </item>
+                     <item>
+                      <property name="text">
+                       <string>Chebyshev pylinomial</string>
+                      </property>
+                     </item>
+                     <item>
+                      <property name="text">
+                       <string>FFT smoothing</string>
+                      </property>
+                     </item>
+                    </widget>
+                   </item>
+                   <item row="5" column="0" colspan="2">
+                    <widget class="QCheckBox" name="xcorr_csub_templates_checkbox">
+                     <property name="text">
+                      <string>cont. sub. templates</string>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
+                </layout>
+               </widget>
               </widget>
              </item>
              <item>
@@ -1410,17 +1515,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                  </property>
                  <property name="checked">
                   <bool>false</bool>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QCheckBox" name="xcorr_csub_checkbox">
-                 <property name="text">
-                  <string>subtract
-continuum</string>
-                 </property>
-                 <property name="checked">
-                  <bool>true</bool>
                  </property>
                 </widget>
                </item>

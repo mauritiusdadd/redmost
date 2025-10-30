@@ -1319,19 +1319,30 @@ class QXCorrHandler(qt_api.QtCore.QObject):
         self.w_min_ang: Union[float, None] = None
         self.w_max_ang: Union[float, None] = None
         self.batch_size: int = 32
-        self.subtract_continuum: bool = True
+        self.subtract_continuum: int = 1
+        self.subtract_continuum_templates: bool = False
         self.continuum_smoothing_level: float = 50
+        self.chebyshev_order: int = 5
         self.best_z: Dict[uuid.UUID: Dict[str: float]] = {}
         self.corr_data: Dict[uuid.UUID: Dict[str: np.ndarray]] = {}
 
     def setGpuBackend(self, use_gpu: Union[str, bool]) -> None:
         self.use_gpu = use_gpu
 
-    def setGpuDevice(self, device: Optional[str] = None):
+    def setGpuDevice(self, device: Optional[str] = None) -> None:
         self.gpu_device = device
 
-    def setContinuumSubtracted(self, subtract_continuun: bool):
-        self.subtract_continuum = bool(subtract_continuun)
+    def setContinuumSubtraction(
+        self, index: int, templates: bool = False
+    ) -> None:
+        self.subtract_continuum = index
+        self.subtract_continuum_templates = templates
+
+    def setFFTSmoothing(self, val: float) -> None:
+        self.continuum_smoothing_level = val
+
+    def setChebyshevOrder(self, order: int) -> None:
+        self.chebyshev_order = order
 
     def clear(self) -> None:
         self.best_z = {}
@@ -1358,10 +1369,12 @@ class QXCorrHandler(qt_api.QtCore.QObject):
             self.message.emit(text)
             self.qapp.processEvents()
 
-        if self.subtract_continuum:
-            sub_smooth = self.continuum_smoothing_level
+        if not self.subtract_continuum:
+            sub_mode = None
+        elif self.subtract_continuum == 1:
+            sub_mode = 'chebyshev'
         else:
-            sub_smooth = False
+            sub_mode = 'fft'
 
         results = backends.xcorr.xcorr_2d(
             spectra=spectra,
@@ -1374,9 +1387,12 @@ class QXCorrHandler(qt_api.QtCore.QObject):
             w_masks=w_masks,
             use_gpu=self.use_gpu,
             device=self.gpu_device,
-            continuum_subtracted=sub_smooth,
+            continuum_subtracted=sub_mode,
             batch_size=self.batch_size,
-            progress_callback=progress_callback
+            progress_callback=progress_callback,
+            fft_sigma=self.continuum_smoothing_level,
+            chebyshev_order=self.chebyshev_order,
+            continuum_subtracted_templates=self.subtract_continuum_templates
         )
 
         self.best_z.update(results[0])
@@ -1711,7 +1727,11 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     var_widget_layout: QtWidgets.QHBoxLayout
     wdisp_widget_layout: QtWidgets.QHBoxLayout
     xcorr_all_radio: QtWidgets.QRadioButton
-    xcorr_csub_checkbox: QtWidgets.QCheckBox
+    xcorr_csub_combobox: QtWidgets.QComboBox
+    xcorr_csub_chebyshev_order_spinbox: QtWidgets.QSpinBox
+    xcorr_csub_fft_sigma_dspinbox: QtWidgets.QDoubleSpinBox
+    xcorr_csub_preview_button: QtWidgets.QPushButton
+    xcorr_csub_templates_checkbox: QtWidgets.QCheckBox
     xcorr_current_radio: QtWidgets.QRadioButton
     xcorr_gpu_checkbox: QtWidgets.QCheckBox
     xcorr_run_button: QtWidgets.QPushButton
@@ -2009,6 +2029,10 @@ class GuiApp:
 
             self.main_wnd.xcorr_run_button.clicked.connect(
                 self.doStartXCorr
+            )
+
+            self.main_wnd.xcorr_csub_preview_button.clicked.connect(
+                self.previewXcorrCsub
             )
 
             self.xcorr_handler = QXCorrHandler()
@@ -2533,10 +2557,20 @@ class GuiApp:
                 self.main_wnd.log_y_check_box.setCheckState,
                 qt_api.QtCore.Qt.CheckState
             ),
-            "xcorr_csub_checkbox": (
-                self.main_wnd.xcorr_csub_checkbox.checkState,
-                self.main_wnd.xcorr_csub_checkbox.setCheckState,
-                qt_api.QtCore.Qt.CheckState
+            "xcorr_csub_combobox": (
+                self.main_wnd.xcorr_csub_combobox.currentIndex,
+                self.main_wnd.xcorr_csub_combobox.setCurrentIndex,
+                int
+            ),
+            "xcorr_csub_chebyshev_order_spinbox": (
+                self.main_wnd.xcorr_csub_chebyshev_order_spinbox.value,
+                self.main_wnd.xcorr_csub_chebyshev_order_spinbox.setValue,
+                int
+            ),
+            "xcorr_csub_fft_sigma_dspinbox": (
+                self.main_wnd.xcorr_csub_fft_sigma_dspinbox.value,
+                self.main_wnd.xcorr_csub_fft_sigma_dspinbox.setValue,
+                float
             ),
             "xcorr_gpu_checkbox": (
                 self.main_wnd.xcorr_gpu_checkbox.checkState,
@@ -4660,6 +4694,8 @@ class GuiApp:
         self.xcorr_handler.z_max = self.main_wnd.xcorr_z_max_dspinbox.value()
         self.xcorr_handler.z_step = self.main_wnd.xcorr_z_step_dspinbox.value()
 
+        self.xcorr_handler.templates = self.getXcorrSelectedTemplates()
+
         if self.main_wnd.xcorr_wrange_checkbox.isChecked():
             self.xcorr_handler.w_min_ang = float(
                 self.main_wnd.xcorr_wav_min_spinbox.value()
@@ -4677,9 +4713,23 @@ class GuiApp:
         else:
             self.xcorr_handler.setGpuBackend(False)
             self.xcorr_handler.setGpuDevice(None)
-        self.xcorr_handler.templates = self.getXcorrSelectedTemplates()
-        self.xcorr_handler.setContinuumSubtracted(
-            self.main_wnd.xcorr_csub_checkbox.isChecked()
+
+        if self.main_wnd.xcorr_csub_templates_checkbox.isChecked():
+            csub_templates = True
+        else:
+            csub_templates = False
+
+        self.xcorr_handler.setContinuumSubtraction(
+            self.main_wnd.xcorr_csub_combobox.currentIndex(),
+            templates=csub_templates
+        )
+
+        self.xcorr_handler.setFFTSmoothing(
+            self.main_wnd.xcorr_csub_fft_sigma_dspinbox.value()
+        )
+
+        self.xcorr_handler.setChebyshevOrder(
+            self.main_wnd.xcorr_csub_chebyshev_order_spinbox.value()
         )
 
         w_masks = {}
@@ -4698,7 +4748,6 @@ class GuiApp:
         self.pbar.show()
         self.xcorr_handler.run(for_xcorr, w_masks)
         self.pbar.hide()
-
 
     def doToggleDone(self) -> None:
         check_state = None
@@ -5477,6 +5526,128 @@ class GuiApp:
         template_series.setPen(pen)
         template_series.setOpacity(0.2)
 
+    def previewXcorrCsub(self) -> None:
+        if self.xcorr_handler is None:
+            # Should never happen since we disable the button to start this
+            # action if the xcorr backend is not found
+            return
+
+        sub_cont = self.main_wnd.xcorr_csub_combobox.currentIndex()
+        if sub_cont == 0:
+            return
+        elif sub_cont == 1:
+            continuum_sub = 'chebyshev'
+        else:
+            continuum_sub = 'fft'
+
+        if self.main_wnd.xcorr_gpu_checkbox.isChecked():
+            use_gpu = self.use_gpu
+            device = self.compute_device
+        else:
+            use_gpu = False
+            device = None
+
+        if self.main_wnd.xcorr_wrange_checkbox.isChecked():
+            w_min = float(
+                self.main_wnd.xcorr_wav_min_spinbox.value()
+            )
+            w_max = float(
+                self.main_wnd.xcorr_wav_max_spinbox.value()
+            )
+        else:
+            w_min = None
+            w_max = None
+
+        fft_sigma = self.main_wnd.xcorr_csub_fft_sigma_dspinbox.value()
+
+        cheb_order = self.main_wnd.xcorr_csub_chebyshev_order_spinbox.value()
+
+        curr_sp = self.open_spectra[self.current_uuid]
+
+        spectral_axis_ang = curr_sp.spectral_axis.to(units.angstrom).value
+        mask = ~np.isfinite(curr_sp.flux.value)
+
+        try:
+            mask_dict = self.spectral_masks[self.current_uuid]
+        except KeyError:
+            w_masks= []
+        else:
+            for mask_properties in mask_dict.values():
+                if not mask_properties['enabled']:
+                    continue
+
+                mask[
+                    (spectral_axis_ang >= mask_properties['start']) &
+                    (spectral_axis_ang <= mask_properties['end'])
+                ] = True
+
+        cont, c_sub = utils.separate_continuum(
+            curr_sp.flux.value,
+            fit_mode=continuum_sub,
+            fft_sigma=fft_sigma,
+            chebyshev_order=cheb_order,
+            mask=mask,
+            use_gpu=use_gpu,
+            device=device
+        )
+
+        flux_series: QtCharts.QLineSeries = values2series(
+            spectral_axis_ang,
+            curr_sp.flux.value,
+            'Flux'
+        )
+        pen: QtGui.QPen = flux_series.pen()
+        pen.setColor(qt_api.QtGui.QColor("red"))
+        pen.setWidth(2)
+        flux_series.setPen(pen)
+        flux_series.setOpacity(0.2)
+
+        continuum_series: QtCharts.QLineSeries = values2series(
+            spectral_axis_ang,
+            cont,
+            'Continuum'
+        )
+        pen: QtGui.QPen = flux_series.pen()
+        pen.setColor(qt_api.QtGui.QColor("green"))
+        pen.setWidth(2)
+        continuum_series.setPen(pen)
+        continuum_series.setOpacity(0.2)
+
+        self.previewSeries([flux_series, continuum_series])
+
+
+    def previewSeries(self, series: list[QtCharts.QLineSeries]):
+
+        preview_dialog: QtWidgets.QDialog = qt_api.QtWidgets.QDialog(
+            self.main_wnd
+        )
+        dlg_layout: QtWidgets.QVBoxLayout = qt_api.QtWidgets.QVBoxLayout()
+        preview_dialog.setLayout(dlg_layout)
+
+        temp_sp_view = SpectrumQChartView()
+        dlg_layout.addWidget(temp_sp_view)
+        flux_chart: QtCharts.QChart = temp_sp_view.chart()
+
+        if not flux_chart.axes():
+            flux_axis_x = qt_api.QtCharts.QValueAxis()
+            flux_axis_y = qt_api.QtCharts.QValueAxis()
+
+            flux_chart.addAxis(
+                flux_axis_x, qt_api.QtCore.Qt.AlignmentFlag.AlignBottom
+            )
+            flux_chart.addAxis(
+                flux_axis_y, qt_api.QtCore.Qt.AlignmentFlag.AlignLeft
+            )
+        else:
+            flux_axis_x = flux_chart.axes()[0]
+            flux_axis_y = flux_chart.axes()[1]
+
+        for ser in series:
+            flux_chart.addSeries(ser)
+            ser.attachAxis(flux_axis_x)
+            ser.attachAxis(flux_axis_y)
+
+        preview_dialog.exec()
 
     def redrawCurrentSpec(self, *args, **kwargs) -> None:
         """Redraw the charts."""

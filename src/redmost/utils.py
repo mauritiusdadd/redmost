@@ -246,10 +246,74 @@ def smooth_fft(
         )
 
 
+def continuum_fit_chebyshev_np(
+    data: np.ndarray,
+    mask: Optional[np.ndarray] = None,
+    order: int = 5
+) -> np.ndarray:
+    """
+    Fit the spectrum continuum with a Chebyshev polynomial.
+    """
+    if len(data.shape) == 1:
+        pix_coords = np.arange(data.shape[0])
+        continuum = np.zeros_like(data)
+        if mask is not None:
+            spec_f = data[~mask]
+            spec_x = pix_coords[~mask]
+        else:
+            spec_f = data
+            spec_x = pix_coords
+
+        mu_spectra = np.polynomial.Chebyshev.fit(
+            spec_x,
+            spec_f,
+            order
+        )
+
+        if mask is not None:
+            continuum[~mask] = mu_spectra(spec_x)
+            continuum[mask] = np.nan
+        else:
+            continuum = mu_spectra(spec_x)
+    elif len(data.shape) == 2:
+        continuum = np.zeros_like(data, dtype=np.float32)
+        for j in range(data.shape[0]):
+            continuum[j] = continuum_fit_chebyshev_np(
+                data[j],
+                mask=mask,
+                order=order
+            )
+    else:
+        flattened_data = data.reshape(-1, data.shape[2])
+        flattened_continuum = continuum_fit_chebyshev_np(
+            flattened_data,
+            mask=mask,
+            order=order
+        )
+        continuum = flattened_continuum.reshape(flattened_data)
+
+    return continuum
+
+
+def continuum_fit_chebyshev(
+    data: np.ndarray,
+    mask: Optional[np.ndarray] = None,
+    order: int = 5,
+    use_gpu: Union[str, bool] = False,
+    device: Optional[str] = None
+) -> np.ndarray:
+    if use_gpu == 'torch' and HAS_TORCH:
+        # TODO: implement chebyshev fitting with torch
+        raise NotImplementedError()
+    else:
+        return continuum_fit_chebyshev_np(data, mask, order)
+
 def separate_continuum(
     data: np.ndarray,
-    sigma: float = 10.0,
     mask: Optional[np.ndarray] = None,
+    fit_mode: str = 'chebyshev',
+    fft_sigma: float = 10.0,
+    chebyshev_order: int = 5,
     use_gpu: Union[str, bool] = False,
     device: Optional[str] = None
 ) -> Tuple[np.ndarray, np.ndarray]:
@@ -265,12 +329,35 @@ def separate_continuum(
         An optional array containing a boolean mask of values that should be
         masked during the smoothing process, were a True means that the
         corresponding value in the input array is masked.
-
+    :param fit_mode:
+        Specify which function to use to fit the continuum. It can be either
+        'chebyshev' or 'fft'.
+    :param use_gpu:
+        Whether to use the GPU version of the continuum fitting function.
+    :device:
+        The GPU device to use
     :return continuum: The continuum.
     :return residuals: The continuum subtracted spectrum.
     """
-    continuum = smooth_fft(
-        data, sigma, mask=mask, use_gpu=use_gpu, device=device
-    )
+    if fit_mode not in ['chebyshev', 'fft']:
+        raise ValueError(
+            "'mode' can be either 'chebyshev' or 'fft'"
+        )
+    elif fit_mode == 'chebyshev':
+        continuum = continuum_fit_chebyshev(
+            data,
+            order=chebyshev_order,
+            mask=mask,
+            use_gpu=use_gpu,
+            device=device
+        )
+    else:
+        continuum = smooth_fft(
+            data,
+            fft_sigma,
+            mask=mask,
+            use_gpu=use_gpu,
+            device=device
+        )
     residuals = data - continuum
     return continuum, residuals
