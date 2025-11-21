@@ -1320,7 +1320,6 @@ class QXCorrHandler(qt_api.QtCore.QObject):
         self.w_max_ang: Union[float, None] = None
         self.batch_size: int = 32
         self.subtract_continuum: int = 1
-        self.subtract_continuum_templates: bool = False
         self.continuum_smoothing_level: float = 50
         self.chebyshev_order: int = 5
         self.best_z: Dict[uuid.UUID: Dict[str: float]] = {}
@@ -1332,11 +1331,8 @@ class QXCorrHandler(qt_api.QtCore.QObject):
     def setGpuDevice(self, device: Optional[str] = None) -> None:
         self.gpu_device = device
 
-    def setContinuumSubtraction(
-        self, index: int, templates: bool = False
-    ) -> None:
+    def setContinuumSubtraction(self, index: int) -> None:
         self.subtract_continuum = index
-        self.subtract_continuum_templates = templates
 
     def setFFTSmoothing(self, val: float) -> None:
         self.continuum_smoothing_level = val
@@ -1392,7 +1388,6 @@ class QXCorrHandler(qt_api.QtCore.QObject):
             progress_callback=progress_callback,
             fft_sigma=self.continuum_smoothing_level,
             chebyshev_order=self.chebyshev_order,
-            continuum_subtracted_templates=self.subtract_continuum_templates
         )
 
         self.best_z.update(results[0])
@@ -1730,10 +1725,10 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     xcorr_csub_combobox: QtWidgets.QComboBox
     xcorr_csub_chebyshev_order_spinbox: QtWidgets.QSpinBox
     xcorr_csub_fft_sigma_dspinbox: QtWidgets.QDoubleSpinBox
-    xcorr_csub_preview_button: QtWidgets.QPushButton
-    xcorr_csub_templates_checkbox: QtWidgets.QCheckBox
+    xcorr_csub_preview_checkbox: QtWidgets.QCheckBox
     xcorr_current_radio: QtWidgets.QRadioButton
     xcorr_gpu_checkbox: QtWidgets.QCheckBox
+    xcorr_preview_button: QtWidgets.QPushButton
     xcorr_run_button: QtWidgets.QPushButton
     xcorr_selected_radio: QtWidgets.QRadioButton
     xcorr_templates_deselect_all_button: QtWidgets.QPushButton
@@ -1743,6 +1738,7 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     xcorr_wav_max_spinbox: QtWidgets.QSpinBox
     xcorr_wav_min_spinbox: QtWidgets.QSpinBox
     xcorr_wrange_checkbox: QtWidgets.QCheckBox
+    xcorr_use_z_button: QtWidgets.QPushButton
     xcorr_z_max_dspinbox: QtWidgets.QDoubleSpinBox
     xcorr_z_min_dspinbox: QtWidgets.QDoubleSpinBox
     xcorr_z_step_dspinbox: QtWidgets.QDoubleSpinBox
@@ -2031,8 +2027,20 @@ class GuiApp:
                 self.doStartXCorr
             )
 
-            self.main_wnd.xcorr_csub_preview_button.clicked.connect(
-                self.previewXcorrCsub
+            self.main_wnd.xcorr_csub_preview_checkbox.clicked.connect(
+                self.redrawCurrentSpec
+            )
+
+            self.main_wnd.xcorr_csub_combobox.currentIndexChanged.connect(
+                self.redrawCurrentSpec
+            )
+
+            self.main_wnd.xcorr_csub_chebyshev_order_spinbox.valueChanged.connect(
+                self.redrawCurrentSpec
+            )
+
+            self.main_wnd.xcorr_csub_fft_sigma_dspinbox.valueChanged.connect(
+                self.redrawCurrentSpec
             )
 
             self.xcorr_handler = QXCorrHandler()
@@ -2467,6 +2475,10 @@ class GuiApp:
             self.doExportAsPicture
         )
 
+        self.main_wnd.xcorr_preview_button.clicked.connect(
+            self.doPreviewXcorrTemplate
+        )
+
         self.main_wnd.xcorr_templates_tree_widget.itemChanged.connect(
             self.updateXcorrTemplateTreeState
         )
@@ -2480,7 +2492,31 @@ class GuiApp:
         )
 
         self.main_wnd.xcorr_templates_tree_widget.itemDoubleClicked.connect(
+            self.plotXcorrTemplate
+        )
+
+        self.main_wnd.xcorr_use_z_button.clicked.connect(
+            self.doSetCurrentObjectRedshiftFromXcorr
+        )
+
+        self.main_wnd.xcorr_use_z_button.clicked.connect(
+            self.doPlotXcorrFunction
+        )
+
+        self.main_wnd.xcorr_use_z_button.clicked.connect(
             self.doPlotXcorrTemplate
+        )
+
+        self.main_wnd.xcorr_wav_max_spinbox.valueChanged.connect(
+            self.redrawCurrentSpec
+        )
+
+        self.main_wnd.xcorr_wav_min_spinbox.valueChanged.connect(
+            self.redrawCurrentSpec
+        )
+
+        self.main_wnd.xcorr_wrange_checkbox.checkStateChanged.connect(
+            self.redrawCurrentSpec
         )
 
         self.main_wnd.action_mask_copy.triggered.connect(
@@ -2494,7 +2530,7 @@ class GuiApp:
         # Final steps
 
         # This dictionary contains the global settings that should be saved
-        # upon closing and restored when the application is started again.
+        # upon closing, and restored when the application is started again.
         #
         # Keys are strings containing a unique name for the properties.
         # Values are tuples of three elements, and each element is a callable
@@ -2571,6 +2607,11 @@ class GuiApp:
                 self.main_wnd.xcorr_csub_fft_sigma_dspinbox.value,
                 self.main_wnd.xcorr_csub_fft_sigma_dspinbox.setValue,
                 float
+            ),
+            "xcorr_csub_preview_checkbox": (
+                self.main_wnd.xcorr_csub_preview_checkbox.checkState,
+                self.main_wnd.xcorr_csub_preview_checkbox.setCheckState,
+                qt_api.QtCore.Qt.CheckState
             ),
             "xcorr_gpu_checkbox": (
                 self.main_wnd.xcorr_gpu_checkbox.checkState,
@@ -3299,9 +3340,7 @@ class GuiApp:
         wav_unit: units.Unit = sp.spectral_axis.unit
 
         flux: np.ndarray = sp.flux.value
-        mean_flux = 10**utils.find_exp(np.nanmean(flux))
-        flux = flux / mean_flux
-        flux_unit: units.Unit = sp.flux.unit * mean_flux
+        flux_unit: units.Unit = sp.flux.unit
 
         var: Union[np.ndarray, None] = None
         var_unit: Union[units.Unit, None] = None
@@ -3313,14 +3352,14 @@ class GuiApp:
         sky_unit: Union[units.Unit, None] = None
 
         if isinstance(sp.uncertainty, VarianceUncertainty):
-            var = sp.uncertainty.array / (mean_flux**2)
-            var_unit = sp.uncertainty.unit * (mean_flux**2)
+            var = sp.uncertainty.array
+            var_unit = sp.uncertainty.unit
         elif isinstance(sp.uncertainty, InverseVariance):
-            var = 1 / (sp.uncertainty.array * (mean_flux**2))
-            var_unit = 1 / (sp.uncertainty.unit / (mean_flux**2))
+            var = 1 / sp.uncertainty.array
+            var_unit = 1 / sp.uncertainty.unit
         elif isinstance(sp.uncertainty, StdDevUncertainty):
-            var = (sp.uncertainty.array / mean_flux) ** 2
-            var_unit = (sp.uncertainty.unit * mean_flux) ** 2
+            var = sp.uncertainty.array ** 2
+            var_unit = sp.uncertainty.unit ** 2
 
         try:
             wd_data = sp.wd  # type: ignore
@@ -3564,6 +3603,7 @@ class GuiApp:
         sky_chart.setBackgroundRoundness(0)
         sky_chart.legend().hide()
 
+        self.plotXcorrCsub()
         self.plotTemplates()
 
     def doAddNewLine(self, *args: Any, **kwargs: Any) -> None:
@@ -4714,14 +4754,8 @@ class GuiApp:
             self.xcorr_handler.setGpuBackend(False)
             self.xcorr_handler.setGpuDevice(None)
 
-        if self.main_wnd.xcorr_csub_templates_checkbox.isChecked():
-            csub_templates = True
-        else:
-            csub_templates = False
-
         self.xcorr_handler.setContinuumSubtraction(
-            self.main_wnd.xcorr_csub_combobox.currentIndex(),
-            templates=csub_templates
+            self.main_wnd.xcorr_csub_combobox.currentIndex()
         )
 
         self.xcorr_handler.setFFTSmoothing(
@@ -5316,6 +5350,9 @@ class GuiApp:
         self.saveSettings()
         self.settings_wnd.open()
 
+    def doPlotXcorrFunction(self, *args, **kwargs) -> None:
+        self.plotXcorrFunction()
+
     def plotXcorrFunction(
             self,
             item: Optional[QtWidgets.QTreeWidgetItem] = None,
@@ -5329,7 +5366,15 @@ class GuiApp:
             xcorr_chart.removeAxis(ax)
 
         if item is None:
-            return
+            sel = self.main_wnd.xcorr_templates_tree_widget.selectedItems()
+
+            if not sel:
+                return
+
+            try:
+                item = sel[0]
+            except IndexError:
+                return
 
         try:
             object_corr = self.xcorr_handler.corr_data[self.current_uuid]
@@ -5389,19 +5434,31 @@ class GuiApp:
         xcorr_chart.setBackgroundRoundness(0)
         xcorr_chart.legend().hide()
 
-    def doPlotXcorrTemplate(
+    def doPlotXcorrTemplate(self, *args, **kwargs) -> None:
+        self.plotXcorrTemplate()
+
+    def plotXcorrTemplate(
             self,
             item: Optional[QtWidgets.QTreeWidgetItem] = None,
             col: int = 0,
             redshift: Optional[float] = None
     ) -> None:
         if item is None:
-            return
+            sel = self.main_wnd.xcorr_templates_tree_widget.selectedItems()
+
+            if not sel:
+                return
+
+            try:
+                item = sel[0]
+            except IndexError:
+                return
+
         template_id = item.data(
             0, qt_api.QtCore.Qt.ItemDataRole.UserRole
         )
         self.templates_to_plot['xcorr'] = template_id
-        self.plotXcorrTemplate()
+        self.drawXcorrTemplate()
 
     def doPlotTemplates(self, *args, **kwargs) -> None:
         self.plotTemplates()
@@ -5423,9 +5480,9 @@ class GuiApp:
 
         for t_kind, t_id in self.templates_to_plot.items():
             if t_kind == 'xcorr':
-                self.plotXcorrTemplate(t_id, redshift)
+                self.drawXcorrTemplate(t_id, redshift)
 
-    def plotXcorrTemplate(
+    def drawXcorrTemplate(
             self,
             template_id: Optional[str] = None,
             redshift: Optional[float] = None
@@ -5526,10 +5583,18 @@ class GuiApp:
         template_series.setPen(pen)
         template_series.setOpacity(0.2)
 
-    def previewXcorrCsub(self) -> None:
+    def plotXcorrCsub(self) -> None:
         if self.xcorr_handler is None:
             # Should never happen since we disable the button to start this
             # action if the xcorr backend is not found
+            return
+
+        flux_chart: QtCharts.QChart = self.flux_chart_view.chart()
+        for ser in flux_chart.series():
+            if ser.name().startswith('continuum/'):
+                flux_chart.removeSeries(ser)
+
+        if not self.main_wnd.xcorr_csub_preview_checkbox.isChecked():
             return
 
         sub_cont = self.main_wnd.xcorr_csub_combobox.currentIndex()
@@ -5547,17 +5612,6 @@ class GuiApp:
             use_gpu = False
             device = None
 
-        if self.main_wnd.xcorr_wrange_checkbox.isChecked():
-            w_min = float(
-                self.main_wnd.xcorr_wav_min_spinbox.value()
-            )
-            w_max = float(
-                self.main_wnd.xcorr_wav_max_spinbox.value()
-            )
-        else:
-            w_min = None
-            w_max = None
-
         fft_sigma = self.main_wnd.xcorr_csub_fft_sigma_dspinbox.value()
 
         cheb_order = self.main_wnd.xcorr_csub_chebyshev_order_spinbox.value()
@@ -5570,7 +5624,7 @@ class GuiApp:
         try:
             mask_dict = self.spectral_masks[self.current_uuid]
         except KeyError:
-            w_masks= []
+            pass
         else:
             for mask_properties in mask_dict.values():
                 if not mask_properties['enabled']:
@@ -5580,6 +5634,12 @@ class GuiApp:
                     (spectral_axis_ang >= mask_properties['start']) &
                     (spectral_axis_ang <= mask_properties['end'])
                 ] = True
+
+        if self.main_wnd.xcorr_wrange_checkbox.isChecked():
+            w_min = float(self.main_wnd.xcorr_wav_min_spinbox.value())
+            w_max = float(self.main_wnd.xcorr_wav_max_spinbox.value())
+            mask[spectral_axis_ang <= w_min] = True
+            mask[spectral_axis_ang >= w_max] = True
 
         cont, c_sub = utils.separate_continuum(
             curr_sp.flux.value,
@@ -5591,36 +5651,44 @@ class GuiApp:
             device=device
         )
 
-        flux_series: QtCharts.QLineSeries = values2series(
-            spectral_axis_ang,
-            curr_sp.flux.value,
-            'Flux'
-        )
-        pen: QtGui.QPen = flux_series.pen()
-        pen.setColor(qt_api.QtGui.QColor("red"))
-        pen.setWidth(2)
-        flux_series.setPen(pen)
-        flux_series.setOpacity(0.2)
-
         continuum_series: QtCharts.QLineSeries = values2series(
             spectral_axis_ang,
             cont,
-            'Continuum'
+            name=f'continuum/{continuum_sub}'
         )
-        pen: QtGui.QPen = flux_series.pen()
+
+        pen: QtGui.QPen = continuum_series.pen()
         pen.setColor(qt_api.QtGui.QColor("green"))
         pen.setWidth(2)
         continuum_series.setPen(pen)
-        continuum_series.setOpacity(0.2)
+        continuum_series.setOpacity(0.5)
 
-        self.previewSeries([flux_series, continuum_series])
+        if not flux_chart.axes():
+            flux_axis_x = qt_api.QtCharts.QValueAxis()
+            flux_axis_y = qt_api.QtCharts.QValueAxis()
 
+            flux_chart.addAxis(
+                flux_axis_x, qt_api.QtCore.Qt.AlignmentFlag.AlignBottom
+            )
+            flux_chart.addAxis(
+                flux_axis_y, qt_api.QtCore.Qt.AlignmentFlag.AlignLeft
+            )
+        else:
+            flux_axis_x = flux_chart.axes()[0]
+            flux_axis_y = flux_chart.axes()[1]
+
+        flux_chart.addSeries(continuum_series)
+        continuum_series.attachAxis(flux_axis_x)
+        continuum_series.attachAxis(flux_axis_y)
 
     def previewSeries(self, series: list[QtCharts.QLineSeries]):
 
         preview_dialog: QtWidgets.QDialog = qt_api.QtWidgets.QDialog(
             self.main_wnd
         )
+        preview_dialog.setMinimumWidth(800)
+        preview_dialog.setMinimumHeight(400)
+
         dlg_layout: QtWidgets.QVBoxLayout = qt_api.QtWidgets.QVBoxLayout()
         preview_dialog.setLayout(dlg_layout)
 
@@ -5642,12 +5710,65 @@ class GuiApp:
             flux_axis_x = flux_chart.axes()[0]
             flux_axis_y = flux_chart.axes()[1]
 
+        flux_axis_y.setTitleText("Flux [arbitrary units]")
+        flux_axis_x.setTitleText("Wavelength [Angstrom]")
+
         for ser in series:
             flux_chart.addSeries(ser)
             ser.attachAxis(flux_axis_x)
             ser.attachAxis(flux_axis_y)
 
         preview_dialog.exec()
+
+    def doPreviewXcorrTemplate(self, *args, **kwargs):
+        self.previewXcorrTemplate()
+
+    def previewXcorrTemplate(
+            self,
+            item: Optional[QtWidgets.QTreeWidgetItem] = None,
+            col: int = 0
+    ):
+        """
+        Preview a xcorr template in a new dialog window.
+        """
+        if item is None:
+            sel = self.main_wnd.xcorr_templates_tree_widget.selectedItems()
+
+            if not sel:
+                return
+
+            try:
+                item = sel[0]
+            except IndexError:
+                return
+
+        template_id = item.data(
+            0, qt_api.QtCore.Qt.ItemDataRole.UserRole
+        )
+
+        try:
+            template_sp = self.xcorr_templates[template_id]
+        except KeyError:
+            # NOTE: this should never happen, unless the program state is
+            #       horribly broken...
+            return
+
+        template_wav_ang: np.ndarray = template_sp.spectral_axis.to("AA").value
+        template_flux: np.ndarray = template_sp.flux.value
+
+        template_series: QtCharts.QLineSeries = values2series(
+            template_wav_ang,
+            template_flux,
+            name=str(template_id)
+        )
+
+        pen: QtGui.QPen = template_series.pen()
+        pen.setColor(qt_api.QtGui.QColor("black"))
+        pen.setWidth(2)
+        template_series.setPen(pen)
+        template_series.setOpacity(0.5)
+
+        self.previewSeries([template_series, ])
 
     def redrawCurrentSpec(self, *args, **kwargs) -> None:
         """Redraw the charts."""
@@ -5881,14 +6002,24 @@ class GuiApp:
 
             item_col_2.setText('; '.join(best_matches))
 
+    def doSetCurrentObjectRedshiftFromXcorr(self, *args, **kwargs) -> None:
+        self.setCurrentObjectRedshiftFromXcorr()
 
     def setCurrentObjectRedshiftFromXcorr(
             self,
-            item: QtWidgets.QTreeWidgetItem,
-            col: int
+            item: Optional[QtWidgets.QTreeWidgetItem] = None,
+            col: int = 0
     ) -> None:
         if item is None:
-            return
+            sel = self.main_wnd.xcorr_templates_tree_widget.selectedItems()
+
+            if not sel:
+                return
+
+            try:
+                item = sel[0]
+            except IndexError:
+                return
 
         try:
             object_ze = self.xcorr_handler.best_z[self.current_uuid]
@@ -6160,7 +6291,9 @@ class GuiApp:
             return _build_folder_tree(parts[1:], child)
 
         self.main_wnd.xcorr_templates_tree_widget.clear()
-
+        self.main_wnd.xcorr_templates_tree_widget.setStyleSheet(
+            "QTreeView::item:!has-children:hover{background-color:#8cc2ff;}"
+        )
         self.xcor_tree_leaf_items = []
         self.xcorr_templates = {}
 

@@ -438,12 +438,18 @@ selected</string>
                <property name="text">
                 <string>Plot templates</string>
                </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
               </widget>
              </item>
              <item>
               <widget class="QCheckBox" name="show_legend_check_box">
                <property name="text">
                 <string>Show legend</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
                </property>
               </widget>
              </item>
@@ -454,6 +460,9 @@ selected</string>
                </property>
                <property name="text">
                 <string>Show lines</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
                </property>
               </widget>
              </item>
@@ -511,6 +520,9 @@ selected</string>
                <property name="text">
                 <string>1D smoothing</string>
                </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
               </widget>
              </item>
              <item>
@@ -522,7 +534,7 @@ selected</string>
                 <double>10.000000000000000</double>
                </property>
                <property name="value">
-                <double>3.000000000000000</double>
+                <double>1.000000000000000</double>
                </property>
               </widget>
              </item>
@@ -1261,11 +1273,17 @@ li.checked::marker { content: &quot;\2612&quot;; }
                 </property>
                 <item>
                  <widget class="QTreeWidget" name="xcorr_templates_tree_widget">
+                  <property name="mouseTracking">
+                   <bool>true</bool>
+                  </property>
                   <property name="contextMenuPolicy">
                    <enum>Qt::ContextMenuPolicy::DefaultContextMenu</enum>
                   </property>
                   <property name="verticalScrollBarPolicy">
                    <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOn</enum>
+                  </property>
+                  <property name="sortingEnabled">
+                   <bool>true</bool>
                   </property>
                   <column>
                    <property name="text">
@@ -1279,6 +1297,24 @@ li.checked::marker { content: &quot;\2612&quot;; }
                   </column>
                  </widget>
                 </item>
+                <item>
+                 <layout class="QHBoxLayout" name="horizontalLayout_3">
+                  <item>
+                   <widget class="QPushButton" name="xcorr_preview_button">
+                    <property name="text">
+                     <string>Preview selected template</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QPushButton" name="xcorr_use_z_button">
+                    <property name="text">
+                     <string>Use selected redshift</string>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </item>
                </layout>
               </widget>
              </item>
@@ -1291,7 +1327,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                 </sizepolicy>
                </property>
                <property name="currentIndex">
-                <number>1</number>
+                <number>0</number>
                </property>
                <widget class="QWidget" name="xcorr_redshift_scan_tab">
                 <attribute name="title">
@@ -1426,7 +1462,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                    <item row="2" column="3">
                     <widget class="QDoubleSpinBox" name="xcorr_csub_fft_sigma_dspinbox">
                      <property name="value">
-                      <double>20.000000000000000</double>
+                      <double>2.000000000000000</double>
                      </property>
                     </widget>
                    </item>
@@ -1458,13 +1494,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                      </property>
                     </widget>
                    </item>
-                   <item row="5" column="2" colspan="2">
-                    <widget class="QPushButton" name="xcorr_csub_preview_button">
-                     <property name="text">
-                      <string>Preview</string>
-                     </property>
-                    </widget>
-                   </item>
                    <item row="0" column="1" colspan="3">
                     <widget class="QComboBox" name="xcorr_csub_combobox">
                      <property name="sizePolicy">
@@ -1493,10 +1522,13 @@ li.checked::marker { content: &quot;\2612&quot;; }
                      </item>
                     </widget>
                    </item>
-                   <item row="5" column="0" colspan="2">
-                    <widget class="QCheckBox" name="xcorr_csub_templates_checkbox">
+                   <item row="5" column="2" colspan="2">
+                    <widget class="QCheckBox" name="xcorr_csub_preview_checkbox">
                      <property name="text">
-                      <string>cont. sub. templates</string>
+                      <string>Preview on current spec.</string>
+                     </property>
+                     <property name="checked">
+                      <bool>true</bool>
                      </property>
                     </widget>
                    </item>
