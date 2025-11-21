@@ -1382,6 +1382,8 @@ class QXCorrHandler(qt_api.QtCore.QObject):
             self.message.emit(f"{msg_header}: {text}")
             self.qapp.processEvents()
 
+        # NOTE: xcorr_2d if faster xcorr_1d when run on multiple objects
+        #       even when run on CPU, so we stick with it.
         results = backends.xcorr.xcorr_2d(
             spectra=spectra,
             templates=self.templates,
