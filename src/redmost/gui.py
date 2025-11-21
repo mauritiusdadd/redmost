@@ -1353,7 +1353,24 @@ class QXCorrHandler(qt_api.QtCore.QObject):
         self.maximum.emit(0)
         self.maximum.emit(100)
 
-        self.message.emit(self.qapp.tr("Running X-Corr backend"))
+        if self.use_gpu:
+            msg_header = (
+                self.qapp.tr("Running X-Corr backend on GPU")
+                + f" [{self.gpu_device}]"
+            )
+        else:
+            msg_header = self.qapp.tr("Running X-Corr backend on CPU")
+
+        if not self.subtract_continuum:
+            sub_mode = None
+        elif self.subtract_continuum == 1:
+            sub_mode = 'chebyshev'
+        else:
+            sub_mode = 'fft'
+
+        msg_header += f" [c.sub.={sub_mode}]"
+
+        self.message.emit(msg_header)
 
         def progress_callback(prog, total, text: str):
             if total == 0:
@@ -1362,15 +1379,8 @@ class QXCorrHandler(qt_api.QtCore.QObject):
             else:
                 self.maximum.emit(total)
                 self.progress.emit(prog)
-            self.message.emit(text)
+            self.message.emit(f"{msg_header}: {text}")
             self.qapp.processEvents()
-
-        if not self.subtract_continuum:
-            sub_mode = None
-        elif self.subtract_continuum == 1:
-            sub_mode = 'chebyshev'
-        else:
-            sub_mode = 'fft'
 
         results = backends.xcorr.xcorr_2d(
             spectra=spectra,
