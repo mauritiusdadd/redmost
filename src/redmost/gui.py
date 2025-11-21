@@ -3276,10 +3276,10 @@ class GuiApp:
 
         self.showObjectInfo(spec_uuid)
 
-        flux_chart = self.flux_chart_view.chart()
+        flux_chart: QtCharts.QChart = self.flux_chart_view.chart()
         flux_chart.removeAllSeries()
 
-        flux_chart_2d = self.flux_chart_view_2d.chart()
+        flux_chart_2d: QtCharts.QChart = self.flux_chart_view_2d.chart()
         flux_chart_2d.removeAllSeries()
 
         var_chart = self.var_chart_view.chart()
@@ -3352,7 +3352,12 @@ class GuiApp:
         wav_unit: units.Unit = sp.spectral_axis.unit
 
         flux: np.ndarray = sp.flux.value
-        flux_unit: units.Unit = sp.flux.unit
+
+        # NOTE: We need this because QChart refuses to handle correctly ticks
+        #       placement when the axis range is very small
+        mean_flux = 10 ** utils.find_exp(np.nanmean(flux))
+        flux = flux / mean_flux
+        flux_unit: units.Unit = units.Unit(sp.flux.unit * mean_flux)
 
         var: Union[np.ndarray, None] = None
         var_unit: Union[units.Unit, None] = None
@@ -3364,14 +3369,14 @@ class GuiApp:
         sky_unit: Union[units.Unit, None] = None
 
         if isinstance(sp.uncertainty, VarianceUncertainty):
-            var = sp.uncertainty.array
-            var_unit = sp.uncertainty.unit
+            var = sp.uncertainty.array / (mean_flux ** 2)
+            var_unit = units.Unit(sp.uncertainty.unit * (mean_flux ** 2))
         elif isinstance(sp.uncertainty, InverseVariance):
-            var = 1 / sp.uncertainty.array
-            var_unit = 1 / sp.uncertainty.unit
+            var = 1 / (sp.uncertainty.array * (mean_flux ** 2))
+            var_unit = units.Unit(1 / (sp.uncertainty.unit / (mean_flux ** 2)))
         elif isinstance(sp.uncertainty, StdDevUncertainty):
-            var = sp.uncertainty.array ** 2
-            var_unit = sp.uncertainty.unit ** 2
+            var = (sp.uncertainty.array / mean_flux) ** 2
+            var_unit = units.Unit((sp.uncertainty.unit * mean_flux) ** 2)
 
         try:
             wd_data = sp.wd  # type: ignore
@@ -3407,6 +3412,7 @@ class GuiApp:
         else:
             flux_axis_x = flux_chart.axes()[0]
             flux_axis_y = flux_chart.axes()[1]
+
 
         flux_2d_series = values2series(
             wav, flux, self.qapp.tr("Flux")
@@ -3483,17 +3489,17 @@ class GuiApp:
 
         flux_axis_x.setTickInterval(500)
         flux_axis_x.setLabelFormat("%.2f")
-        flux_axis_x.setTitleText(str(wav_unit))
+        flux_axis_x.setTitleText(wav_unit.to_string())
 
         flux_axis_y.setLabelFormat("%.2f")
-        flux_axis_y.setTitleText(str(flux_unit))
+        flux_axis_y.setTitleText(flux_unit.to_string())
 
         flux_series.attachAxis(flux_axis_x)
         flux_series.attachAxis(flux_axis_y)
 
         flux_2d_axis_x.setTickInterval(500)
         flux_2d_axis_x.setLabelFormat("%.2f")
-        flux_2d_axis_x.setTitleText(str(wav_unit))
+        flux_2d_axis_x.setTitleText(wav_unit.to_string())
 
         flux_2d_axis_y.setLabelFormat("%.2f")
         flux_2d_axis_y.setTitleText('pixels')
@@ -3615,7 +3621,7 @@ class GuiApp:
         sky_chart.setBackgroundRoundness(0)
         sky_chart.legend().hide()
 
-        self.plotXcorrCsub()
+        self.plotXcorrCsub(flux_scale=mean_flux)
         self.plotTemplates()
 
     def doAddNewLine(self, *args: Any, **kwargs: Any) -> None:
@@ -5595,7 +5601,7 @@ class GuiApp:
         template_series.setPen(pen)
         template_series.setOpacity(0.2)
 
-    def plotXcorrCsub(self) -> None:
+    def plotXcorrCsub(self, flux_scale: float = 1.0) -> None:
         if self.xcorr_handler is None:
             # Should never happen since we disable the button to start this
             # action if the xcorr backend is not found
@@ -5654,7 +5660,7 @@ class GuiApp:
             mask[spectral_axis_ang >= w_max] = True
 
         cont, c_sub = utils.separate_continuum(
-            curr_sp.flux.value,
+            curr_sp.flux.value / flux_scale,
             fit_mode=continuum_sub,
             fft_sigma=fft_sigma,
             chebyshev_order=cheb_order,

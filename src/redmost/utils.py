@@ -115,9 +115,9 @@ def static_vars(**kwargs):
     return decorate
 
 
-def find_exp(number) -> int:
+def find_exp(number: float) -> int:
     base10 = np.log10(abs(number))
-    return np.floor(base10)
+    return int(np.floor(base10))
 
 def check_updates() -> Tuple[bool, str]:
     """Check for new a version on pypi.python.org."""
