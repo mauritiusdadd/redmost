@@ -1868,6 +1868,114 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     z_comment_textbox: QtWidgets.QLineEdit
 
 
+class MaskListWidgetItem(qt_api.QtWidgets.QWidget):
+
+    def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
+        super().__init__(parent)
+
+        self.label_name: QtWidgets.QLabel = qt_api.QtWidgets.QLabel()
+        self.label_flags: QtWidgets.QLabel = qt_api.QtWidgets.QLabel()
+        self.mask_preview: MaskPreviewWidget = MaskPreviewWidget()
+
+        self.mask_preview.setMinimumWidth(30)
+        self.mask_preview.setSizePolicy(
+            qt_api.QtWidgets.QSizePolicy.Policy.Minimum,
+            qt_api.QtWidgets.QSizePolicy.Policy.Minimum,
+        )
+
+        self.label_flags.setMinimumWidth(30)
+        self.label_flags.setSizePolicy(
+            qt_api.QtWidgets.QSizePolicy.Policy.Minimum,
+            qt_api.QtWidgets.QSizePolicy.Policy.Minimum,
+        )
+
+        self.label_name.setSizePolicy(
+            qt_api.QtWidgets.QSizePolicy.Policy.Expanding,
+            qt_api.QtWidgets.QSizePolicy.Policy.Minimum,
+        )
+
+        main_layout = qt_api.QtWidgets.QHBoxLayout()
+        main_layout.addWidget(self.mask_preview)
+        main_layout.addWidget(self.label_flags)
+        main_layout.addWidget(self.label_name)
+
+        self.setLayout(main_layout)
+
+    def setName(self, text: str) -> None:
+        self.label_name.setText(text)
+        self.label_flags.adjustSize()
+        self.label_name.adjustSize()
+
+    def setFlagText(self, text: str) -> None:
+        self.label_flags.setText(text)
+        self.label_flags.adjustSize()
+        self.label_name.adjustSize()
+
+    def setPreviewMask(self, mask: Dict[str, Any]) -> None:
+        self.mask_preview.setMask(mask)
+
+    def clearPreviewMask(self) -> None:
+        self.mask_preview.clearMask()
+
+
+class MaskPreviewWidget(qt_api.QtWidgets.QWidget):
+
+    def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
+        super().__init__(parent)
+        self.mask: Union[None, Dict[str, Any]] = None
+
+    def setMask(self: QtWidgets.QWidget, mask: Dict[str, Any]) -> None:
+        self.mask = mask
+        self.repaint()
+
+    def clearMask(self: QtWidgets.QWidget) -> None:
+        self.mask = None
+        self.repaint()
+
+    def paintEvent(self: QtWidgets.QWidget, event: QtGui.QPaintEvent) -> None:
+        super().paintEvent(event)
+
+        if self.mask is None:
+            return
+
+        painter: QtGui.QPainter = qt_api.QtGui.QPainter(self)
+        painter.save()
+
+        plot_area: QtCore.QRectF = qt_api.QtCore.QRectF(
+            0, 0, self.width(), self.height()
+        )
+        pen: QtGui.QPen = qt_api.QtGui.QPen()
+        brush: QtGui.QBrush = qt_api.QtGui.QBrush()
+
+        try:
+            mask_color = qt_api.QtGui.QColor(self.mask['color'])
+        except Exception:
+            mask_color = qt_api.QtGui.QColor("#aa333333")
+
+        try:
+            mask_color.setAlphaF(self.mask['alpha'])
+        except KeyError:
+            mask_color.setAlphaF(0.5)
+
+        pen.setColor(mask_color)
+        pen.setWidthF(1)
+        brush.setColor(mask_color)
+
+        try:
+            brush.setStyle(qt_api.QtCore.Qt.BrushStyle[self.mask['pattern']])
+        except KeyError:
+            brush.setStyle(qt_api.QtCore.Qt.BrushStyle.BDiagPattern)
+
+        painter.setPen(pen)
+        painter.setBrush(brush)
+
+        path: QtGui.QPainterPath = qt_api.QtGui.QPainterPath()
+        path.addRect(plot_area)
+        painter.fillPath(path, brush)
+
+        painter.restore()
+
+
 class GuiApp:
     """General class for the main GUI."""
 
@@ -3817,7 +3925,14 @@ class GuiApp:
 
         mask_properties = copy.deepcopy(self.DEFAULT_MASK_PROPERTIES)
 
-        new_item = qt_api.QtWidgets.QListWidgetItem(mask_properties['name'])
+
+        custom_widget: MaskListWidgetItem = MaskListWidgetItem(
+            self.main_wnd.mask_list_widget
+        )
+        custom_widget.setName(mask_properties['name'])
+
+        new_item = qt_api.QtWidgets.QListWidgetItem()
+        new_item.setSizeHint(custom_widget.sizeHint())
         new_item.setCheckState(qt_api.QtCore.Qt.CheckState.Checked)
         new_item.setData(
             qt_api.QtCore.Qt.ItemDataRole.UserRole,
@@ -3825,6 +3940,7 @@ class GuiApp:
         )
 
         self.main_wnd.mask_list_widget.addItem(new_item)
+        self.main_wnd.mask_list_widget.setItemWidget(new_item, custom_widget)
         self.main_wnd.mask_list_widget.setCurrentItem(new_item)
         self.currentMaskChanged(new_item)
         # self.redrawCurrentSpec()
@@ -4030,27 +4146,43 @@ class GuiApp:
                 self.main_wnd.mask_save_button.setEnabled(True)
 
         for mask_uuid, mask_properties in masks.items():
-            if mask_properties['global']:
-                mask_title = "[ALL] " + mask_properties['name']
-            else:
-                mask_title = mask_properties['name']
-
             try:
                 mask_enabled = mask_properties["enabled"]
             except KeyError:
                 mask_enabled = True
 
-            new_item = qt_api.QtWidgets.QListWidgetItem(mask_title)
+            new_item = qt_api.QtWidgets.QListWidgetItem()
 
             if mask_enabled:
                 new_item.setCheckState(qt_api.QtCore.Qt.CheckState.Checked)
             else:
                 new_item.setCheckState(qt_api.QtCore.Qt.CheckState.Unchecked)
             new_item.setData(qt_api.QtCore.Qt.ItemDataRole.UserRole, mask_uuid)
+
+            custom_widget: MaskListWidgetItem = MaskListWidgetItem()
+            custom_widget.setName(mask_properties["name"])
+            custom_widget.setPreviewMask(mask_properties)
+
+            if mask_properties['global']:
+                custom_widget.setFlagText('[ALL]')
+            else:
+                custom_widget.setFlagText('')
+
+            new_item.setSizeHint(custom_widget.sizeHint())
+
             self.main_wnd.mask_list_widget.addItem(new_item)
+            self.main_wnd.mask_list_widget.setItemWidget(
+                new_item, custom_widget
+            )
 
     def updateCurrentMask(self) -> None:
-        mask_uuid, mask_item = self.currentMaskItem()
+        mask = self.currentMaskItem()
+        if mask is None:
+            return
+
+        mask_uuid = mask[0]
+        mask_item = mask[1]
+
         try:
             mask_properties = self.spectral_masks[self.current_uuid][mask_uuid]
         except KeyError:
@@ -4072,15 +4204,19 @@ class GuiApp:
         else:
             mask_item.setCheckState(qt_api.QtCore.Qt.CheckState.Unchecked)
 
+        item_widget: MaskListWidgetItem = self.main_wnd.mask_list_widget.itemWidget(mask_item)
+        item_widget.setName(mask_properties['name'])
+        item_widget.setPreviewMask(mask_properties)
+
         if mask_properties['global']:
-            mask_item.setText("[ALL] " + mask_properties['name'])
+            item_widget.setFlagText('[ALL]')
             mask_properties['linked'] = self.current_uuid
             for spec_uuid in self.open_spectra.keys():
                 if spec_uuid == self.current_uuid:
                     continue
                 self.addMask(spec_uuid, mask_properties, mask_uuid)
         else:
-            mask_item.setText(mask_properties['name'])
+            item_widget.setFlagText('')
             if mask_properties['linked']:
                 for spec_uuid in self.open_spectra.keys():
                     if spec_uuid == mask_properties['linked']:
@@ -4186,7 +4322,7 @@ class GuiApp:
         )
         self.redrawCurrentSpec()
 
-    def maskPropChanged(self):
+    def maskPropChanged(self) -> None:
         self.main_wnd.mask_apply_button.setEnabled(True)
         self.main_wnd.mask_cancel_button.setEnabled(True)
 
