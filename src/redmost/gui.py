@@ -75,6 +75,10 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
     onMouseReleaseSeries = qt_api.Signal(object)
     onMouseDoubleClickSeries = qt_api.Signal(object)
     onMouseWheelEvent = qt_api.Signal(object)
+    maskSelected = qt_api.Signal(object)
+    maskSelectedIndexChanged = qt_api.Signal(int)
+    maskHighlighted = qt_api.Signal(object)
+    maskHighlightedIndex = qt_api.Signal(int)
 
     def __init__(self, *args: Any) -> None:
         super().__init__(*args)
@@ -103,7 +107,7 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         self.sync_width: bool = False
         self.redshift: float = 0
         self.vertical_lock: bool = False
-        self.masks: List[Dict[str: Any]] = []
+        self.masks: List[Dict[str, Any]] = []
         self.allow_empty: bool = False
 
         self.setDragMode(qt_api.QtCharts.QChartView.DragMode.NoDrag)
@@ -192,6 +196,7 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         if (not self.allow_empty) and (len(self.chart().series()) == 0):
             return
 
+        palette: QtGui.QPalette = self.palette()
         painter.save()
         plot_area: QtCore.QRectF = self.chart().plotArea()
         pen: QtGui.QPen = qt_api.QtGui.QPen()
@@ -222,6 +227,12 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
                 painter.drawLine(p_line_bottom, p_line_top)
 
         for mask in self.masks:
+            try:
+                if not mask['enabled']:
+                    continue
+            except KeyError:
+                pass
+
             try:
                 mask_color = qt_api.QtGui.QColor(mask['color'])
             except Exception:
@@ -275,6 +286,22 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
             path.addRect(mask_rect)
             painter.fillPath(path, brush)
 
+            try:
+                if mask["selected"]:
+                    pen.setDashPattern((1,))
+                    pen.setWidthF(2)
+                    pen.setColor(palette.highlight().color())
+                    painter.setPen(pen)
+                    painter.drawRect(mask_rect)
+                elif mask["highlighted"]:
+                    pen.setDashPattern((6, 6, 6, 6))
+                    pen.setColor(palette.highlight().color())
+                    pen.setWidthF(2)
+                    painter.setPen(pen)
+                    painter.drawRect(mask_rect)
+            except KeyError:
+                pass
+
         if not self.show_lines:
             painter.restore()
             return
@@ -313,6 +340,60 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
                 painter.drawText(p_text_top, line_name)
 
         painter.restore()
+
+    def isMouseOnMask(
+        self, mask: Dict[str, Any], mouse_pos: QtCore.QPointF,
+        plot_area: Optional[QtCore.QRectF] = None
+    ) -> bool:
+
+        if plot_area is None:
+            plot_area: QtCore.QRectF = self.chart().plotArea()
+
+        try:
+            if not mask['enabled']:
+                return False
+        except KeyError:
+            pass
+
+        mask_x_start = self.chart().mapToPosition(
+            qt_api.QtCore.QPointF(mask['start'], 0)
+        ).x()
+
+        mask_x_end = self.chart().mapToPosition(
+            qt_api.QtCore.QPointF(mask['end'], 0)
+        ).x()
+
+        if (
+                (mask_x_end < plot_area.left()) or
+                (mask_x_start > plot_area.right())
+        ):
+            return False
+
+        if mask_x_end >= plot_area.right():
+            mask_x_end = plot_area.right()
+
+        if mask_x_start <= plot_area.left():
+            mask_x_start = plot_area.left()
+
+        if mask_x_start <= mouse_pos.x() <= mask_x_end:
+            return True
+
+        return False
+
+    def getMasksUnderCursor(self, mouse_pos: QtCore.QPointF) -> list[int]:
+        """
+        Get a list ov masks under the mouse pointer.
+
+        :param mouse_pos: The mouse position
+        :returns: A list of mask indices
+        """
+
+        mask_indices: list[int] = []
+        plot_area: QtCore.QRectF = self.chart().plotArea()
+        for mask_idx, mask in enumerate(self.masks):
+            if self.isMouseOnMask(mask, mouse_pos, plot_area=plot_area):
+                mask_indices.append(mask_idx)
+        return  mask_indices
 
     def setMasks(self, masks: List[Dict[str, Any]]) -> None:
         self.masks = masks
@@ -355,17 +436,25 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         except AttributeError:
             mouse_pos = event.pos()
 
-        if event.buttons() & qt_api.QtCore.Qt.MouseButton.MiddleButton:
-            if self._last_mouse_pos is None:
-                return
+        if event.buttons():
+            if qt_api.QtCore.Qt.MouseButton.MiddleButton:
+                if self._last_mouse_pos is None:
+                    return
 
-            delta = mouse_pos - self._last_mouse_pos
-            self._last_mouse_pos = mouse_pos
+                delta = mouse_pos - self._last_mouse_pos
+                self._last_mouse_pos = mouse_pos
 
-            self.scroll(-delta.x(), delta.y())
+                self.scroll(-delta.x(), delta.y())
+        else:
+            for mask_index, mask in enumerate(self.masks):
+                if self.isMouseOnMask(mask, mouse_pos):
+                    mask["highlighted"] = True
+                    self.maskHighlighted.emit(mask)
+                    self.maskHighlightedIndex.emit(mask_index)
+                else:
+                    mask["highlighted"] = False
 
-            event.accept()
-
+        event.accept()
         data_pos = self.toSeriesPos(event)
 
         self._mouse_lambda = data_pos.x()
@@ -396,20 +485,39 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         if self._sibling_locked:
             return
 
+        try:
+            event_position = event.position()
+        except AttributeError:
+            event_position = event.pos()
+
         if event.button() == qt_api.QtCore.Qt.MouseButton.MiddleButton:
             get_qapp().setOverrideCursor(
                 qt_api.QtCore.Qt.CursorShape.SizeAllCursor
             )
+            self._last_mouse_pos = event_position
+            event.accept()
+        elif event.button() == qt_api.QtCore.Qt.MouseButton.LeftButton:
+            for mask in self.masks:
+                mask["selected"] = False
 
-            try:
-                self._last_mouse_pos = event.position()
-            except AttributeError:
-                self._last_mouse_pos = event.pos()
+            for mask_index, mask in enumerate(self.masks):
+                if self.isMouseOnMask(mask, event_position):
+                    mask["selected"] = True
+                    self.maskSelected.emit(mask)
+                    self.maskSelectedIndexChanged.emit(mask_index)
+                    break
 
             event.accept()
 
         super().mousePressEvent(event)
         self.onMousePressSeries.emit((self.toSeriesPos(event), event))
+        self.chart().update()
+        self.update()
+        self._sibling_locked = True
+        for sibling in self.siblings:
+            sibling.chart().update()
+            sibling.update()
+        self._sibling_locked = False
 
     def mouseReleaseEvent(
         self,
@@ -1773,16 +1881,18 @@ class GuiApp:
         "alpha": 0.2,
         "enabled": True,
         "global": False,
-        'linked': None
+        "linked": None,
+        "selected": False,
+        "highlighted": False
     }
 
     DEFAULT_SPEC_INFO = {
-        'redshift': 0,
-        'quality_flag': 0,
-        'cmap': 'viridis',
-        'vmin': None,
-        'vmax': None,
-        'lines': {
+        "redshift": 0,
+        "quality_flag": 0,
+        "cmap": "viridis",
+        "vmin": None,
+        "vmax": None,
+        "lines": {
             'list': [],
             'redshifts': []
         }
@@ -2400,9 +2510,19 @@ class GuiApp:
             self._updateMouseLabelFromEvent
         )
         self.flux_chart_view.onMousePressSeries.connect(self.mousePressedFlux)
+        self.flux_chart_view.maskSelectedIndexChanged.connect(
+            self.main_wnd.mask_list_widget.setCurrentRow
+        )
+
+        self.flux_chart_view_2d.maskSelectedIndexChanged.connect(
+            self.main_wnd.mask_list_widget.setCurrentRow
+        )
 
         self.var_chart_view.onMouseMoveSeries.connect(
             self._updateMouseLabelFromEvent
+        )
+        self.var_chart_view.maskSelectedIndexChanged.connect(
+            self.main_wnd.mask_list_widget.setCurrentRow
         )
 
         self.xcorr_chart_view.onMouseMoveSeries.connect(
@@ -3914,8 +4034,18 @@ class GuiApp:
                 mask_title = "[ALL] " + mask_properties['name']
             else:
                 mask_title = mask_properties['name']
+
+            try:
+                mask_enabled = mask_properties["enabled"]
+            except KeyError:
+                mask_enabled = True
+
             new_item = qt_api.QtWidgets.QListWidgetItem(mask_title)
-            new_item.setCheckState(qt_api.QtCore.Qt.CheckState.Checked)
+
+            if mask_enabled:
+                new_item.setCheckState(qt_api.QtCore.Qt.CheckState.Checked)
+            else:
+                new_item.setCheckState(qt_api.QtCore.Qt.CheckState.Unchecked)
             new_item.setData(qt_api.QtCore.Qt.ItemDataRole.UserRole, mask_uuid)
             self.main_wnd.mask_list_widget.addItem(new_item)
 
@@ -4008,13 +4138,19 @@ class GuiApp:
         *args: Any,
         **kwargs: Any
     ) -> None:
+
         if (self.current_uuid is None) or (new_item is None):
             self.main_wnd.mask_properties_groupbox.setEnabled(False)
             self.main_wnd.mask_delete_button.setEnabled(False)
             return
 
+        for mask in self.spectral_masks[self.current_uuid].values():
+            mask["highlighted"] = False
+            mask["selected"] = False
+
         mask_uuid = new_item.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
         mask_properties = self.spectral_masks[self.current_uuid][mask_uuid]
+        mask_properties["selected"] = True
 
         for key, val in self.DEFAULT_MASK_PROPERTIES.items():
             if key not in mask_properties:
@@ -4048,6 +4184,7 @@ class GuiApp:
         self.main_wnd.mask_deleteall_button.setEnabled(
             not mask_properties['global']
         )
+        self.redrawCurrentSpec()
 
     def maskPropChanged(self):
         self.main_wnd.mask_apply_button.setEnabled(True)

@@ -1,5 +1,5 @@
 {
-  "current_uuid": "d9b9d10d8e2442f8bccf227b5edc3f24",
+  "current_uuid": "855d157d44f34610a0b35266fe310651",
   "open_files": [
     {
       "index": 0,
@@ -113,9 +113,6 @@
       "redshift": 0.3763,
       "comment": "",
       "quality_flag": 5,
-      "cmap": "viridis",
-      "vmin": 0.0,
-      "vmax": 1.0,
       "lines": {
         "list": [],
         "redshifts": []
@@ -125,6 +122,9 @@
       "redshift": 0.3843,
       "comment": "",
       "quality_flag": 3,
+      "cmap": "viridis",
+      "vmin": 0.0,
+      "vmax": 1.0,
       "lines": {
         "list": [],
         "redshifts": []
@@ -134,9 +134,6 @@
       "redshift": 0.3827,
       "comment": "",
       "quality_flag": 9,
-      "cmap": "viridis",
-      "vmin": 0.0,
-      "vmax": 1.0,
       "lines": {
         "list": [],
         "redshifts": []
@@ -146,9 +143,6 @@
       "redshift": 0.3855,
       "comment": "",
       "quality_flag": 3,
-      "cmap": "viridis",
-      "vmin": 0.0,
-      "vmax": 1.0,
       "lines": {
         "list": [],
         "redshifts": []
@@ -167,14 +161,326 @@
       "redshift": 0.3786,
       "comment": "",
       "quality_flag": 3,
-      "cmap": "viridis",
-      "vmin": 0.0,
-      "vmax": 1.0,
       "lines": {
         "list": [],
         "redshifts": []
       }
     }
   },
-  "spectral_masks": {}
+  "spectral_masks": {
+    "ee897121174640888b862e441ee6f0f6": {
+      "9c129d1b5c1d46929b1de45c81c1ad1b": {
+        "name": "Mask",
+        "description": "",
+        "start": 7000,
+        "end": 7050,
+        "color": "darkgreen",
+        "pattern": "SolidPattern",
+        "alpha": 0.19999999999999996,
+        "enabled": true,
+        "global": true,
+        "linked": "855d157d44f34610a0b35266fe310651",
+        "selected": false,
+        "highlighted": false
+      },
+      "8fe9ccea1e2741d6ad7b4dc35c4c1a12": {
+        "name": "Mask",
+        "description": "",
+        "start": 5700,
+        "end": 6100,
+        "color": "magenta",
+        "pattern": "FDiagPattern",
+        "alpha": 1.0,
+        "enabled": true,
+        "global": true,
+        "linked": "855d157d44f34610a0b35266fe310651",
+        "selected": false,
+        "highlighted": false
+      }
+    },
+    "637b29cd33ea48a1ad2023e91a60b47f": {
+      "9c129d1b5c1d46929b1de45c81c1ad1b": {
+        "name": "Mask",
+        "description": "",
+        "start": 7000,
+        "end": 7050,
+        "color": "darkgreen",
+        "pattern": "SolidPattern",
+        "alpha": 0.19999999999999996,
+        "enabled": true,
+        "global": true,
+        "linked": "855d157d44f34610a0b35266fe310651",
+        "selected": false,
+        "highlighted": false
+      },
+      "8fe9ccea1e2741d6ad7b4dc35c4c1a12": {
+        "name": "Mask",
+        "description": "",
+        "start": 5700,
+        "end": 6100,
+        "color": "magenta",
+        "pattern": "FDiagPattern",
+        "alpha": 1.0,
+        "enabled": true,
+        "global": true,
+        "linked": "855d157d44f34610a0b35266fe310651",
+        "selected": false,
+        "highlighted": false
+      }
+    },
+    "f22874a92a0645a992fd9a7ca36a9c55": {
+      "8fe9ccea1e2741d6ad7b4dc35c4c1a12": {
+        "name": "Mask",
+        "description": "",
+        "start": 5700,
+        "end": 6100,
+        "color": "magenta",
+        "pattern": "FDiagPattern",
+        "alpha": 1.0,
+        "enabled": true,
+        "global": true,
+        "linked": "855d157d44f34610a0b35266fe310651",
+        "selected": false,
+        "highlighted": false
+      },
+      "9c129d1b5c1d46929b1de45c81c1ad1b": {
+        "name": "Mask",
+        "description": "",
+        "start": 7000,
+        "end": 7050,
+        "color": "darkgreen",
+        "pattern": "SolidPattern",
+        "alpha": 0.19999999999999996,
+        "enabled": true,
+        "global": true,
+        "linked": "855d157d44f34610a0b35266fe310651",
+        "selected": false,
+        "highlighted": false
+      }
+    },
+    "74dee251bbf444cf9d947e00f951fcfc": {
+      "9c129d1b5c1d46929b1de45c81c1ad1b": {
+        "name": "Mask",
+        "description": "",
+        "start": 7000,
+        "end": 7050,
+        "color": "darkgreen",
+        "pattern": "SolidPattern",
+        "alpha": 0.19999999999999996,
+        "enabled": true,
+        "global": true,
+        "linked": "855d157d44f34610a0b35266fe310651",
+        "selected": false,
+        "highlighted": false
+      },
+      "8fe9ccea1e2741d6ad7b4dc35c4c1a12": {
+        "name": "Mask",
+        "description": "",
+        "start": 5700,
+        "end": 6100,
+        "color": "magenta",
+        "pattern": "FDiagPattern",
+        "alpha": 1.0,
+        "enabled": true,
+        "global": true,
+        "linked": "855d157d44f34610a0b35266fe310651",
+        "selected": false,
+        "highlighted": false
+      }
+    },
+    "6614b0a71ccc4fa4b653509b7feb7272": {
+      "9c129d1b5c1d46929b1de45c81c1ad1b": {
+        "name": "Mask",
+        "description": "",
+        "start": 7000,
+        "end": 7050,
+        "color": "darkgreen",
+        "pattern": "SolidPattern",
+        "alpha": 0.19999999999999996,
+        "enabled": true,
+        "global": true,
+        "linked": "855d157d44f34610a0b35266fe310651",
+        "selected": false,
+        "highlighted": false
+      },
+      "8fe9ccea1e2741d6ad7b4dc35c4c1a12": {
+        "name": "Mask",
+        "description": "",
+        "start": 5700,
+        "end": 6100,
+        "color": "magenta",
+        "pattern": "FDiagPattern",
+        "alpha": 1.0,
+        "enabled": true,
+        "global": true,
+        "linked": "855d157d44f34610a0b35266fe310651",
+        "selected": false,
+        "highlighted": false
+      }
+    },
+    "855d157d44f34610a0b35266fe310651": {
+      "9c129d1b5c1d46929b1de45c81c1ad1b": {
+        "name": "Mask",
+        "description": "",
+        "start": 7000,
+        "end": 7050,
+        "color": "darkgreen",
+        "pattern": "SolidPattern",
+        "alpha": 0.19999999999999996,
+        "enabled": true,
+        "global": true,
+        "linked": "855d157d44f34610a0b35266fe310651",
+        "selected": false,
+        "highlighted": false
+      },
+      "8fe9ccea1e2741d6ad7b4dc35c4c1a12": {
+        "name": "Mask",
+        "description": "",
+        "start": 5700,
+        "end": 6100,
+        "color": "magenta",
+        "pattern": "FDiagPattern",
+        "alpha": 1.0,
+        "enabled": true,
+        "global": true,
+        "linked": "855d157d44f34610a0b35266fe310651",
+        "selected": false,
+        "highlighted": false
+      },
+      "76acedf756e1434eab0ba8ba0f1cdb3f": {
+        "name": "Mask",
+        "description": "",
+        "start": 5750,
+        "end": 6020,
+        "color": "blue",
+        "pattern": "SolidPattern",
+        "alpha": 0.19999999999999996,
+        "enabled": true,
+        "global": false,
+        "linked": null,
+        "selected": false,
+        "highlighted": false
+      }
+    },
+    "d9b9d10d8e2442f8bccf227b5edc3f24": {
+      "9c129d1b5c1d46929b1de45c81c1ad1b": {
+        "name": "Mask",
+        "description": "",
+        "start": 7000,
+        "end": 7050,
+        "color": "darkgreen",
+        "pattern": "SolidPattern",
+        "alpha": 0.19999999999999996,
+        "enabled": true,
+        "global": true,
+        "linked": "855d157d44f34610a0b35266fe310651",
+        "selected": false,
+        "highlighted": false
+      },
+      "8fe9ccea1e2741d6ad7b4dc35c4c1a12": {
+        "name": "Mask",
+        "description": "",
+        "start": 5700,
+        "end": 6100,
+        "color": "magenta",
+        "pattern": "FDiagPattern",
+        "alpha": 1.0,
+        "enabled": true,
+        "global": true,
+        "linked": "855d157d44f34610a0b35266fe310651",
+        "selected": false,
+        "highlighted": false
+      }
+    },
+    "55cd42374531496294a56ce2bc124b80": {
+      "9c129d1b5c1d46929b1de45c81c1ad1b": {
+        "name": "Mask",
+        "description": "",
+        "start": 7000,
+        "end": 7050,
+        "color": "darkgreen",
+        "pattern": "SolidPattern",
+        "alpha": 0.19999999999999996,
+        "enabled": true,
+        "global": true,
+        "linked": "855d157d44f34610a0b35266fe310651",
+        "selected": false,
+        "highlighted": false
+      },
+      "8fe9ccea1e2741d6ad7b4dc35c4c1a12": {
+        "name": "Mask",
+        "description": "",
+        "start": 5700,
+        "end": 6100,
+        "color": "magenta",
+        "pattern": "FDiagPattern",
+        "alpha": 1.0,
+        "enabled": true,
+        "global": true,
+        "linked": "855d157d44f34610a0b35266fe310651",
+        "selected": false,
+        "highlighted": false
+      }
+    },
+    "04bdfd679d2f41cc8dce28b8ba3d87a4": {
+      "9c129d1b5c1d46929b1de45c81c1ad1b": {
+        "name": "Mask",
+        "description": "",
+        "start": 7000,
+        "end": 7050,
+        "color": "darkgreen",
+        "pattern": "SolidPattern",
+        "alpha": 0.19999999999999996,
+        "enabled": true,
+        "global": true,
+        "linked": "855d157d44f34610a0b35266fe310651",
+        "selected": false,
+        "highlighted": false
+      },
+      "8fe9ccea1e2741d6ad7b4dc35c4c1a12": {
+        "name": "Mask",
+        "description": "",
+        "start": 5700,
+        "end": 6100,
+        "color": "magenta",
+        "pattern": "FDiagPattern",
+        "alpha": 1.0,
+        "enabled": true,
+        "global": true,
+        "linked": "855d157d44f34610a0b35266fe310651",
+        "selected": false,
+        "highlighted": false
+      }
+    },
+    "b950d9990c5341579957dbe9d7236e27": {
+      "9c129d1b5c1d46929b1de45c81c1ad1b": {
+        "name": "Mask",
+        "description": "",
+        "start": 7000,
+        "end": 7050,
+        "color": "darkgreen",
+        "pattern": "SolidPattern",
+        "alpha": 0.19999999999999996,
+        "enabled": true,
+        "global": true,
+        "linked": "855d157d44f34610a0b35266fe310651",
+        "selected": false,
+        "highlighted": false
+      },
+      "8fe9ccea1e2741d6ad7b4dc35c4c1a12": {
+        "name": "Mask",
+        "description": "",
+        "start": 5700,
+        "end": 6100,
+        "color": "magenta",
+        "pattern": "FDiagPattern",
+        "alpha": 1.0,
+        "enabled": true,
+        "global": true,
+        "linked": "855d157d44f34610a0b35266fe310651",
+        "selected": false,
+        "highlighted": false
+      }
+    }
+  }
 }
