@@ -264,11 +264,15 @@ def continuum_fit_chebyshev_np(
             spec_f = data
             spec_x = pix_coords
 
-        mu_spectra = np.polynomial.Chebyshev.fit(
-            spec_x,
-            spec_f,
-            order
-        )
+        try:
+            mu_spectra = np.polynomial.Chebyshev.fit(
+                spec_x,
+                spec_f,
+                order
+            )
+        except ValueError:
+            continuum[...] = np.nan
+            return continuum
 
         if mask is not None:
             continuum[~mask] = mu_spectra(spec_x)
