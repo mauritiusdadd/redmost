@@ -151,6 +151,9 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         y_min = None
         y_max = None
         for series in self.chart().series():
+            if not series.name().lower().startswith('flux'):
+                continue
+
             data: np.ndarray = np.array(
                 [(p.x(), p.y()) for p in series.points()]
             )
@@ -6505,6 +6508,9 @@ class GuiApp:
             item: QtWidgets.QTreeWidgetItem,
             state: QtCore.Qt.CheckState
         ) -> None:
+            if item is None:
+                return
+
             n_children = item.childCount()
 
             item.setCheckState(0, state)
@@ -6513,6 +6519,9 @@ class GuiApp:
                     _set_children_state(item.child(j), state)
 
         def _set_parents_state(item: QtWidgets.QTreeWidgetItem):
+            if item is None:
+                return
+
             parent = item.parent()
 
             if parent is None:
@@ -6527,7 +6536,7 @@ class GuiApp:
                 check_state = parent.child(j).checkState(0)
                 if check_state == qt_api.QtCore.Qt.CheckState.Checked:
                     checked_count += 1
-                elif check_state == qt_api.QtCore.Qt.CheckState.Checked:
+                elif check_state == qt_api.QtCore.Qt.CheckState.Unchecked:
                     unchecked_count += 1
 
             if checked_count == sibling_count:
