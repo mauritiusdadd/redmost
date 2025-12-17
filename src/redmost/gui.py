@@ -3852,7 +3852,7 @@ class GuiApp:
         sky_chart.setBackgroundRoundness(0)
         sky_chart.legend().hide()
 
-        self.plotXcorrCsub(flux_scale=mean_flux)
+        self.plotXcorrCsub(wav, flux)
         self.plotTemplates()
 
     def doAddNewLine(self, *args: Any, **kwargs: Any) -> None:
@@ -5229,6 +5229,34 @@ class GuiApp:
     def getGpuDeviceId(self):
         return self.compute_device_id
 
+    def getXcorrCsubOptions(self) -> Dict[str, Any]:
+        """
+        Read the X-Corr continuum subtraction options.
+        """
+        xcorr_csub_options: Dict[str, Any] = {}
+        sub_cont = self.main_wnd.xcorr_csub_combobox.currentIndex()
+        if sub_cont == 0:
+            xcorr_csub_options['mode'] = None
+        elif sub_cont == 1:
+            xcorr_csub_options['mode'] = 'chebyshev'
+        else:
+            xcorr_csub_options['mode'] = 'fft'
+
+        if self.main_wnd.xcorr_gpu_checkbox.isChecked():
+            xcorr_csub_options['use_gpu'] = self.use_gpu
+            xcorr_csub_options['device'] = self.compute_device
+        else:
+            xcorr_csub_options['use_gpu'] = False
+            xcorr_csub_options['device'] = None
+
+        fft_sigma = self.main_wnd.xcorr_csub_fft_sigma_dspinbox.value()
+        cheb_order = self.main_wnd.xcorr_csub_chebyshev_order_spinbox.value()
+
+        xcorr_csub_options['fft_sigma'] = fft_sigma
+        xcorr_csub_options['cheb_order'] = cheb_order
+        return xcorr_csub_options
+
+
     def getXcorrSelectedTemplates(self) -> Dict[str, specutils.Spectrum]:
 
         selected_templates = {}
@@ -5877,7 +5905,9 @@ class GuiApp:
         template_series.setPen(pen)
         template_series.setOpacity(0.2)
 
-    def plotXcorrCsub(self, flux_scale: float = 1.0) -> None:
+    def plotXcorrCsub(
+        self, spectral_axis_ang: np.ndarray, flux: np.ndarray
+    ) -> None:
         if self.xcorr_handler is None:
             # Should never happen since we disable the button to start this
             # action if the xcorr backend is not found
@@ -5891,29 +5921,9 @@ class GuiApp:
         if not self.main_wnd.xcorr_csub_preview_checkbox.isChecked():
             return
 
-        sub_cont = self.main_wnd.xcorr_csub_combobox.currentIndex()
-        if sub_cont == 0:
-            return
-        elif sub_cont == 1:
-            continuum_sub = 'chebyshev'
-        else:
-            continuum_sub = 'fft'
+        csub_options: Dict[str, Any] = self.getXcorrCsubOptions()
 
-        if self.main_wnd.xcorr_gpu_checkbox.isChecked():
-            use_gpu = self.use_gpu
-            device = self.compute_device
-        else:
-            use_gpu = False
-            device = None
-
-        fft_sigma = self.main_wnd.xcorr_csub_fft_sigma_dspinbox.value()
-
-        cheb_order = self.main_wnd.xcorr_csub_chebyshev_order_spinbox.value()
-
-        curr_sp = self.open_spectra[self.current_uuid]
-
-        spectral_axis_ang = curr_sp.spectral_axis.to(units.angstrom).value
-        mask = ~np.isfinite(curr_sp.flux.value)
+        mask = ~np.isfinite(flux)
 
         try:
             mask_dict = self.spectral_masks[self.current_uuid]
@@ -5936,19 +5946,19 @@ class GuiApp:
             mask[spectral_axis_ang >= w_max] = True
 
         cont, c_sub = utils.separate_continuum(
-            curr_sp.flux.value / flux_scale,
-            fit_mode=continuum_sub,
-            fft_sigma=fft_sigma,
-            chebyshev_order=cheb_order,
+            flux,
+            fit_mode=csub_options['mode'],
+            fft_sigma=csub_options['fft_sigma'],
+            chebyshev_order=csub_options['cheb_order'],
             mask=mask,
-            use_gpu=use_gpu,
-            device=device
+            use_gpu=csub_options['use_gpu'],
+            device=csub_options['device']
         )
 
         continuum_series: QtCharts.QLineSeries = values2series(
             spectral_axis_ang,
             cont,
-            name=f'continuum/{continuum_sub}'
+            name=f"continuum/{csub_options['mode']}"
         )
 
         pen: QtGui.QPen = continuum_series.pen()

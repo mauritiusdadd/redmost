@@ -9,6 +9,7 @@ import os
 from typing import Optional, Tuple, Union
 from urllib import request
 import json
+from multiprocessing.pool import Pool
 
 import numpy as np
 
@@ -253,6 +254,10 @@ def continuum_fit_chebyshev_np(
 ) -> np.ndarray:
     """
     Fit the spectrum continuum with a Chebyshev polynomial.
+
+    :param data: numpy.ndarray
+        It can be a 1D, 2D or 3D array. The first dimension is treated as the
+        spectral axis (i.e. wavelengths)
     """
     if len(data.shape) == 1:
         pix_coords = np.arange(data.shape[0])
@@ -281,17 +286,18 @@ def continuum_fit_chebyshev_np(
             continuum = mu_spectra(spec_x)
     elif len(data.shape) == 2:
         continuum = np.zeros_like(data, dtype=np.float32)
-        for j in range(data.shape[0]):
-            continuum[j] = continuum_fit_chebyshev_np(
-                data[j],
-                mask=mask,
+        for j in range(data.shape[1]):
+            continuum[:, j] = continuum_fit_chebyshev_np(
+                data[:, j],
+                mask=mask[:, j],
                 order=order
             )
     else:
-        flattened_data = data.reshape(-1, data.shape[2])
+        flattened_data = data.reshape(data.shape[0], -1)
+        flattened_mask = mask.reshape(mask.shape[0], -1)
         flattened_continuum = continuum_fit_chebyshev_np(
             flattened_data,
-            mask=mask,
+            mask=flattened_mask,
             order=order
         )
         continuum = flattened_continuum.reshape(flattened_data)
