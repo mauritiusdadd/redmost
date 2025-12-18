@@ -330,8 +330,9 @@ def separate_continuum(
     """
     Split a numpy array in a smoothed continuum and a residual.
 
-    :param data:
-        The input array to be smoothed.
+    :param data: numpy.ndarray
+        It can be a 1D, 2D or 3D array. The first dimension is treated as the
+        spectral axis (i.e. wavelengths)
     :param sigma:
         Parameter to be passed to the function general_gaussian().
         The default value is 25.0.
