@@ -286,6 +286,10 @@ def continuum_fit_chebyshev_np(
             continuum = mu_spectra(spec_x)
     elif len(data.shape) == 2:
         continuum = np.zeros_like(data, dtype=np.float32)
+        # NOTE: for some reason, np.polynomial.Chebyshev.fit and
+        # np.polynomial.chebyshev.chebfit cause a segmentation fault when
+        # called inside a multiprocessing.Pool worker function. Therefore,
+        # this for loop cannot be parallelized at the moment
         for j in range(data.shape[1]):
             continuum[:, j] = continuum_fit_chebyshev_np(
                 data[:, j],
@@ -314,7 +318,7 @@ def continuum_fit_chebyshev(
 ) -> np.ndarray:
     if use_gpu == 'torch' and HAS_TORCH:
         # TODO: implement chebyshev fitting with torch
-        raise NotImplementedError()
+        return continuum_fit_chebyshev_np(data, mask, order)
     else:
         return continuum_fit_chebyshev_np(data, mask, order)
 

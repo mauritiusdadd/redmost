@@ -33,7 +33,8 @@ from scipy.ndimage import gaussian_filter
 try:
     from specutils import Spectrum
 except ImportError:
-    # The Spectrum1D class is deprecated and may be removed in a future version
+    # The Spectrum1D class is deprecated and it is only present in older
+    # version of specutils. We keep this for backward compatibility.
     from specutils import Spectrum1D as Spectrum
 
 import redmost
@@ -439,15 +440,19 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         except AttributeError:
             mouse_pos = event.pos()
 
-        if event.buttons():
-            if qt_api.QtCore.Qt.MouseButton.MiddleButton:
-                if self._last_mouse_pos is None:
-                    return
+        if event.buttons() == qt_api.QtCore.Qt.MouseButton.MiddleButton:
+            if self._last_mouse_pos is None:
+                return
 
-                delta = mouse_pos - self._last_mouse_pos
-                self._last_mouse_pos = mouse_pos
+            delta = mouse_pos - self._last_mouse_pos
+            self._last_mouse_pos = mouse_pos
 
-                self.scroll(-delta.x(), delta.y())
+            self.scroll(-delta.x(), delta.y())
+            event.accept()
+        elif event.buttons() == qt_api.QtCore.Qt.MouseButton.RightButton:
+            pass
+        elif event.buttons() == qt_api.QtCore.Qt.MouseButton.LeftButton:
+            pass
         else:
             for mask_index, mask in enumerate(self.masks):
                 if self.isMouseOnMask(mask, mouse_pos):
@@ -457,7 +462,6 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
                 else:
                     mask["highlighted"] = False
 
-        event.accept()
         data_pos = self.toSeriesPos(event)
 
         self._mouse_lambda = data_pos.x()
@@ -2627,6 +2631,9 @@ class GuiApp:
 
         self.flux_chart_view_2d.maskSelectedIndexChanged.connect(
             self.main_wnd.mask_list_widget.setCurrentRow
+        )
+        self.flux_chart_view_2d.onMouseMoveSeries.connect(
+            self._updateMouseLabelFromEvent
         )
 
         self.var_chart_view.onMouseMoveSeries.connect(
@@ -5882,12 +5889,13 @@ class GuiApp:
         # currently plotted spectrum
         if (min_y is not None) and (max_y is not None):
             t_wav_mask = (template_wav >= min_x) & (template_wav <= max_x)
+            t_wav_mask &= np.isfinite(t_wav_mask)
             if any(t_wav_mask):
-                template_flux -= np.percentile(template_flux[t_wav_mask], 20)
-                template_flux /= np.percentile(template_flux[t_wav_mask], 80)
+                template_flux -= np.nanpercentile(template_flux[t_wav_mask], 20)
+                template_flux /= np.nanpercentile(template_flux[t_wav_mask], 80)
             else:
-                template_flux -= np.percentile(template_flux, 20)
-                template_flux /= np.percentile(template_flux, 80)
+                template_flux -= np.nanpercentile(template_flux, 20)
+                template_flux /= np.nanpercentile(template_flux, 80)
 
             template_flux *= (max_y - min_y)
             template_flux += min_y
