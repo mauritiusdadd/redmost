@@ -1,6 +1,6 @@
-import copy
 import os
-import pathlib
+import copy
+from pathlib import Path
 from typing import Optional, Union, List, Tuple, Dict, Any
 
 import numpy as np
@@ -24,8 +24,15 @@ except ImportError:
 from redmost import utils
 
 KNOWN_SPEC_EXT_NAMES = ['spec', 'spectrum', 'flux', 'data', 'sci', 'science']
-KNOWN_VARIANCE_EXT_NAMES = ['stat', 'stats', 'var', 'variance', 'noise', 'err']
-KNOWN_INVAR_EXT_NAMES = ['ivar', 'ivariance']
+KNOWN_VARIANCE_EXT_NAMES = [
+    'stat', 'stats', 'var', 'variance', 'noise', 'err', 'spec_var',
+    'spectrum_var', 'spec_variance', 'spectrum_variance',
+    'variance_spec', 'variance_spectrum'
+]
+KNOWN_INVAR_EXT_NAMES = [
+    'ivar', 'ivariance', 'spec_ivar', 'spectrum_ivariance', 'spec_ivariance',
+    'inverse_variance'
+]
 KNOWN_MASK_EXT_NAMES = ['mask', 'platemask', 'footprint', 'dq', 'nan_mask']
 KNOWN_WAVE_EXT_NAMES = ['wave', 'wavelenght', 'lambda', 'lam']
 KNOWN_RCURVE_EXT_NAMES = ['r', 'reso', 'resolution', 'rcurve', 'wd']
@@ -47,12 +54,30 @@ def getHDU(
         return hdul[index]
 
 
+def isFits(filename: Union[str, os.PathLike[str]]) -> bool:
+    """
+    Check if the file is a valid FITS file.
+
+    Parameters
+    ----------
+    filename: str or os.PathLike
+        The path of the file to check.
+
+    Returns
+    -------
+    bool:
+        True if the file is a valid FITS file, False otherwise.
+    """
+    try:
+        _ = fits.getheader(filename)
+    except (OSError, FileNotFoundError):
+        return False
+    return True
+
+
 def identifySpecexFits(origin, *args, **kwargs) -> bool:
     """Identify spectra extracted with python-specex."""
-    if not (
-        isinstance(args[0], str) and
-        os.path.splitext(args[0].lower())[1] == '.fits'
-    ):
+    if not isFits(args[0]):
         return False
 
     valid_id_keys = [
@@ -85,11 +110,9 @@ def identifySpecexFits(origin, *args, **kwargs) -> bool:
 
 def identifyClashVlt1dFits(origin, *args, **kwargs) -> bool:
     """Identify spectra extracted with python-specex."""
-    if not (
-        isinstance(args[0], str) and
-        os.path.splitext(args[0].lower())[1] == '.fits'
-    ):
+    if not isFits(args[0]):
         return False
+
     with fits.open(args[0]) as hdul:
         if hdul[0].header.get('NAXIS') != 1:
             return False
@@ -383,10 +406,7 @@ def clashVlt1DFitsLoader(
 
 def identifyJWSTStacked(origin, *args, **kwargs) -> bool:
     """Identify spectra extracted with python-specex."""
-    if not (
-        isinstance(args[0], str) and
-        os.path.splitext(args[0].lower())[1] == '.fits'
-    ):
+    if not isFits(args[0]):
         return False
 
     with fits.open(args[0]) as hdul:
@@ -412,12 +432,14 @@ def identifyJWSTStacked(origin, *args, **kwargs) -> bool:
     identifier=identifyJWSTStacked,
     extensions=['fits']
 )
-def JWSTStackedLoader(file_name: str, *args, **kwargs) -> Spectrum:
+def JWSTStackedLoader(
+    file_name: Union[str, os.PathLike[str]], *args, **kwargs
+) -> Spectrum:
     chunks = []
 
-    rms_file: Union[None, str] = file_name.replace('.fits', '_rms.fits')
-    if not os.path.isfile(rms_file):
-        rms_file = None
+    rms_file: Path = Path(
+        str(file_name).replace('.fits', '_rms.fits')
+    )
 
     with fits.open(file_name) as hdul:
         for j, hdu in enumerate(hdul):
@@ -425,10 +447,12 @@ def JWSTStackedLoader(file_name: str, *args, **kwargs) -> Spectrum:
                 continue
 
             flux = hdu.data * units.dimensionless_unscaled
-            if rms_file:
+
+            try:
                 rms = StdDevUncertainty(fits.getdata(rms_file, ext=j))
-            else:
+            except (OSError, FileNotFoundError):
                 rms = None
+
             header = hdu.header.copy()
             w_min = header['WMIN']
             w_max = header['WMAX']
@@ -500,9 +524,12 @@ class Spectrum2D:
 
     @classmethod
     def read(
-        cls, file_path: str, ext: Union[int, str] = 0,
+        cls, file_path: str, ext: Optional[Union[int, str]] = None,
         format: Optional[str] = None
     ) -> "Spectrum2D":
+        if ext is None:
+            ext = 0
+
         data, header = fits.getdata(filename=file_path, ext=ext, header=True)
 
         try:
@@ -556,6 +583,7 @@ class Spectrum2D:
                 sp_2d.spectral_axis = lam * units.angstrom
             sp_2d.meta['header'] = copy.deepcopy(header)
         return sp_2d
+
 
 def identifyClashVlt2dFits(origin, *args, **kwargs) -> bool:
     """Identify VIMOS 2D spectra."""
@@ -613,7 +641,7 @@ def identify_format(filename, dtype=Spectrum):
     """
     # check for valid string input
     if (
-        not isinstance(filename, (str, pathlib.Path)) or
+        not isinstance(filename, (str, Path)) or
         not os.path.isfile(filename)
     ):
         raise ValueError(f'{filename} is not a valid string path to a file')
@@ -630,7 +658,7 @@ def identify_format(filename, dtype=Spectrum):
 def read(file: str) -> Union[Spectrum, Spectrum2D]:
     sp_formats = identify_format(file)
 
-    spec_class: Union[Spectrum, Spectrum2D]
+    spec_class: Union[type[Spectrum], type[Spectrum2D]]
     for spec_format in sp_formats:
         if spec_format == 'clash-vlt-2d':
             spec_class = Spectrum2D
@@ -640,10 +668,13 @@ def read(file: str) -> Union[Spectrum, Spectrum2D]:
             break
     else:
         spec_class = Spectrum
+        spec_format = None
 
-    orig_sp = spec_class.read(file, format=spec_format)
+    orig_sp: Union[Spectrum, Spectrum2D] = spec_class.read(
+        file, format=spec_format
+    )
 
-    sp = type(orig_sp)(
+    sp: Union[Spectrum, Spectrum2D] = type(orig_sp)(
         flux=orig_sp.flux,
         spectral_axis=orig_sp.spectral_axis.to('AA')  # Convert to Angstrom
     )

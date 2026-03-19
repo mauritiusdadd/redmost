@@ -6,10 +6,11 @@ Created on Fri Nov 24 20:38:29 2023.
 @author: Maurizio D'Addona
 """
 import os
-from typing import Optional, Tuple, Union
+import time
+from typing import Optional, Tuple, Union, Dict
 from urllib import request
 import json
-from multiprocessing.pool import Pool
+from concurrent.futures import ProcessPoolExecutor, Future
 
 import numpy as np
 
@@ -247,10 +248,43 @@ def smooth_fft(
         )
 
 
-def continuum_fit_chebyshev_np(
+def continuum_fit_chebyshev_np_1d(
     data: np.ndarray,
     mask: Optional[np.ndarray] = None,
     order: int = 5
+):
+    pix_coords = np.arange(data.shape[0])
+    continuum = np.zeros_like(data)
+    if mask is not None:
+        spec_f = data[~mask]
+        spec_x = pix_coords[~mask]
+    else:
+        spec_f = data
+        spec_x = pix_coords
+
+    try:
+        mu_spectra = np.polynomial.Chebyshev.fit(
+            spec_x,
+            spec_f,
+            order
+        )
+    except Exception:
+        continuum[...] = np.nan
+        return continuum
+
+    if mask is not None:
+        continuum[~mask] = mu_spectra(spec_x)
+        continuum[mask] = np.nan
+    else:
+        continuum = mu_spectra(spec_x)
+    return  continuum
+
+
+def continuum_fit_chebyshev_np(
+    data: np.ndarray,
+    mask: Optional[np.ndarray] = None,
+    order: int = 5,
+    n_jobs: Optional[int] = None
 ) -> np.ndarray:
     """
     Fit the spectrum continuum with a Chebyshev polynomial.
@@ -259,43 +293,39 @@ def continuum_fit_chebyshev_np(
         It can be a 1D, 2D or 3D array. The first dimension is treated as the
         spectral axis (i.e. wavelengths)
     """
+    if n_jobs is None:
+        n_jobs = os.cpu_count()
+
     if len(data.shape) == 1:
-        pix_coords = np.arange(data.shape[0])
-        continuum = np.zeros_like(data)
-        if mask is not None:
-            spec_f = data[~mask]
-            spec_x = pix_coords[~mask]
-        else:
-            spec_f = data
-            spec_x = pix_coords
-
-        try:
-            mu_spectra = np.polynomial.Chebyshev.fit(
-                spec_x,
-                spec_f,
-                order
-            )
-        except ValueError:
-            continuum[...] = np.nan
-            return continuum
-
-        if mask is not None:
-            continuum[~mask] = mu_spectra(spec_x)
-            continuum[mask] = np.nan
-        else:
-            continuum = mu_spectra(spec_x)
+        continuum = continuum_fit_chebyshev_np_1d(data, mask, order)
     elif len(data.shape) == 2:
         continuum = np.zeros_like(data, dtype=np.float32)
         # NOTE: for some reason, np.polynomial.Chebyshev.fit and
         # np.polynomial.chebyshev.chebfit cause a segmentation fault when
         # called inside a multiprocessing.Pool worker function. Therefore,
         # this for loop cannot be parallelized at the moment
+
         for j in range(data.shape[1]):
-            continuum[:, j] = continuum_fit_chebyshev_np(
+            continuum[:, j] = continuum_fit_chebyshev_np_1d(
                 data[:, j],
                 mask=mask[:, j],
                 order=order
             )
+        """
+        jobs_dict: Dict[int, Future] = {}
+        with (ProcessPoolExecutor(max_workers=n_jobs)) as executor:
+            for j in range(data.shape[1]):
+                jobs_dict[j] = executor.submit(
+                    continuum_fit_chebyshev_np_1d,
+                    data[:, j], mask[:, j], order
+                )
+
+            while not all([x.done() for x in jobs_dict.values()]):
+                time.sleep(0.1)
+
+            for j, ft in jobs_dict.items():
+                continuum[:, j] = ft.result()
+        """
     else:
         flattened_data = data.reshape(data.shape[0], -1)
         flattened_mask = mask.reshape(mask.shape[0], -1)

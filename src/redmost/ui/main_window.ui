@@ -1928,6 +1928,8 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <addaction name="separator"/>
     <addaction name="action_mask_copy"/>
     <addaction name="action_mask_paste"/>
+    <addaction name="separator"/>
+    <addaction name="action_extract_spec_1d"/>
    </widget>
    <widget class="QMenu" name="menuExport">
     <property name="title">
@@ -1970,6 +1972,8 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <addaction name="separator"/>
    <addaction name="action_mask_copy"/>
    <addaction name="action_mask_paste"/>
+   <addaction name="separator"/>
+   <addaction name="action_extract_spec_1d"/>
   </widget>
   <action name="action_open_project">
    <property name="icon">
@@ -2149,6 +2153,17 @@ li.checked::marker { content: &quot;\2612&quot;; }
    </property>
    <property name="toolTip">
     <string>Paste a mask on the current selected spectra</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="action_extract_spec_1d">
+   <property name="text">
+    <string>Extract 1D spectrum</string>
+   </property>
+   <property name="toolTip">
+    <string>Extract 1D spectrum from the current selected 2D/3D spec</string>
    </property>
    <property name="menuRole">
     <enum>QAction::MenuRole::NoRole</enum>

@@ -33,7 +33,7 @@ from scipy.ndimage import gaussian_filter
 try:
     from specutils import Spectrum
 except ImportError:
-    # The Spectrum1D class is deprecated and it is only present in older
+    # The Spectrum1D class is deprecated, and it is only present in older
     # version of specutils. We keep this for backward compatibility.
     from specutils import Spectrum1D as Spectrum
 
@@ -222,10 +222,10 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
                     (mouse_line_x >= plot_area.left()) and
                     (mouse_line_x <= plot_area.right())
             ):
-                p_line_top = qt_api.QtCore.QPointF(
+                p_line_top: QtCore.QPointF = qt_api.QtCore.QPointF(
                     mouse_line_x, plot_area.top()
                 )
-                p_line_bottom = qt_api.QtCore.QPointF(
+                p_line_bottom: QtCore.QPointF = qt_api.QtCore.QPointF(
                     mouse_line_x, plot_area.bottom()
                 )
                 painter.drawLine(p_line_bottom, p_line_top)
@@ -331,10 +331,10 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
             ).x()
 
             if (line_x >= plot_area.left()) and (line_x <= plot_area.right()):
-                p_line_top: QtCore.QPointF = qt_api.QtCore.QPointF(
+                p_line_top = qt_api.QtCore.QPointF(
                     line_x, plot_area.top()
                 )
-                p_line_bottom: QtCore.QPointF = qt_api.QtCore.QPointF(
+                p_line_bottom = qt_api.QtCore.QPointF(
                     line_x, plot_area.bottom()
                 )
                 p_text_top: QtCore.QPointF = qt_api.QtCore.QPointF(
@@ -351,7 +351,7 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
     ) -> bool:
 
         if plot_area is None:
-            plot_area: QtCore.QRectF = self.chart().plotArea()
+            plot_area = self.chart().plotArea()
 
         try:
             if not mask['enabled']:
@@ -875,7 +875,7 @@ class SpectrumQChartView2D(SpectrumQChartView):
             img_format = qt_api.QtGui.QImage.Format.Format_RGB888
             bytes_per_line = 3 * self._data.shape[1]
         else:
-            x: np.ndarray = data - np.nanmin(data)
+            x = data - np.nanmin(data)
             x[~np.isfinite(x)] = 0
             img_format = qt_api.QtGui.QImage.Format.Format_Grayscale8
             self._data = (255 * (x / np.nanmax(x))).astype(np.uint8).copy()
@@ -896,7 +896,7 @@ class SpectrumQChartView2D(SpectrumQChartView):
 
             plot_area: QtCore.QRectF = self.chart().plotArea()
             if self._spectral_axis is None:
-                qimg_rect = plot_area
+                qimg_rect: QtCore.QRectF = plot_area
             else:
                 x_left = self.chart().mapToPosition(
                     qt_api.QtCore.QPointF(np.nanmin(self._spectral_axis), 0.0)
@@ -915,7 +915,7 @@ class SpectrumQChartView2D(SpectrumQChartView):
                     x_rigt, plot_area.bottom()
                 )
 
-                qimg_rect: QtCore.QRectF = qt_api.QtCore.QRectF(
+                qimg_rect = qt_api.QtCore.QRectF(
                     top_left, bottom_right
                 )
 
@@ -933,7 +933,7 @@ class SpectrumQChartView2D(SpectrumQChartView):
 
             plot_area_h = plot_area.bottom() - plot_area.top()
 
-            if self.start_1d is not None:
+            if (self.start_1d is not None) and (self._data is not None):
                 spec_start_y = self.start_1d / self._data.shape[0]
                 start_line_left = qt_api.QtCore.QPointF(
                     plot_area.left(),
@@ -945,7 +945,7 @@ class SpectrumQChartView2D(SpectrumQChartView):
                 )
                 painter.drawLine(start_line_left, start_line_right)
 
-            if self.end_1d is not None:
+            if (self.end_1d is not None) and (self._data is not None):
                 spec_end_y =  self.end_1d / self._data.shape[0]
                 end_line_left = qt_api.QtCore.QPointF(
                     plot_area.left(),
@@ -971,7 +971,7 @@ class XCorrQChartView(qt_api.QtCharts.QChartView):
     def __init__(self, *args: Any) -> None:
         super().__init__(*args)
 
-        self._last_mouse_pos: QtCore.QPointF | None = None
+        self._last_mouse_pos: Union[QtCore.QPointF, None] = None
         self._best_z: Union[None, float] = None
         self._mouse_z: Union[None, QtCore.QPointF] = None
 
@@ -1437,8 +1437,8 @@ class QXCorrHandler(qt_api.QtCore.QObject):
         self.subtract_continuum: int = 1
         self.continuum_smoothing_level: float = 50
         self.chebyshev_order: int = 5
-        self.best_z: Dict[uuid.UUID: Dict[str: float]] = {}
-        self.corr_data: Dict[uuid.UUID: Dict[str: np.ndarray]] = {}
+        self.best_z: Dict[uuid.UUID, Dict[str, float]] = {}
+        self.corr_data: Dict[uuid.UUID, Dict[str, np.ndarray]] = {}
 
     def setGpuBackend(self, use_gpu: Union[str, bool]) -> None:
         self.use_gpu = use_gpu
@@ -1497,7 +1497,7 @@ class QXCorrHandler(qt_api.QtCore.QObject):
             self.message.emit(f"{msg_header}: {text}")
             self.qapp.processEvents()
 
-        # NOTE: xcorr_2d if faster xcorr_1d when run on multiple objects
+        # NOTE: xcorr_2d is faster than xcorr_1d when run on multiple objects
         #       even when run on CPU, so we stick with it.
         results = backends.xcorr.xcorr_2d(
             spectra=spectra,
@@ -1749,6 +1749,24 @@ class SettingsDialog(qt_api.QtWidgets.QDialog):
     remove_template_dir_push_button: QtWidgets.QPushButton
 
 
+class ExtractSpec1DDialog(qt_api.QtWidgets.QDialog):
+    """Class definition for the extraction dialog created with the designer."""
+
+    # Widgets
+    button_box: QtWidgets.QDialogButtonBox
+    cmap_combo_box: QtWidgets.QComboBox
+    cmap_max_dspinbox: QtWidgets.QDoubleSpinBox
+    cmap_min_dspinbox: QtWidgets.QDoubleSpinBox
+    flux_widget_layout_1d: QtWidgets.QHBoxLayout
+    flux_widget_layout_2d: QtWidgets.QHBoxLayout
+    smoothing_1d_dspinbox: QtWidgets.QDoubleSpinBox
+    smoothing_1d_check_box: QtWidgets.QCheckBox
+    smoothing_2d_dspinbox: QtWidgets.QDoubleSpinBox
+    smoothing_2d_check_box: QtWidgets.QCheckBox
+    y_end_spinbox: QtWidgets.QSpinBox
+    y_start_spinbox: QtWidgets.QSpinBox
+
+
 class MainWindow(qt_api.QtWidgets.QMainWindow):
     """Class definition for the QMainWindow created with the designer."""
 
@@ -1760,6 +1778,7 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     action_import_zcat: QtGui.QAction
     action_export_zcat: QtGui.QAction
     action_export_as_a_picture: QtGui.QAction
+    action_extract_spec_1d: QtGui.QAction
     action_mask_copy: QtGui.QAction
     action_mask_paste: QtGui.QAction
     action_settings: QtGui.QAction
@@ -1982,11 +2001,338 @@ class MaskPreviewWidget(qt_api.QtWidgets.QWidget):
 
         painter.restore()
 
+class SpecExtractionManager:
+    
+    def __init__(self) -> None:
+        self.ext_dlg: ExtractSpec1DDialog = cast(
+            ExtractSpec1DDialog,
+            qt_api.loadUiWidget("extract_spec_dialog.ui")
+        )
+
+        self.sp2d: Union[loaders.Spectrum2D, None] = None
+        self.sp1d: Union[loaders.Spectrum, None] = None
+
+        # QChartView widget for flux
+
+        self.flux_chart_view_2d: SpectrumQChartView2D = SpectrumQChartView2D()
+        self.flux_chart_view_2d.master = True
+        self.flux_chart_view_2d.setObjectName("flux_chart_view_2d")
+        self.flux_chart_view_2d.setRenderHint(
+            qt_api.QtGui.QPainter.RenderHint.Antialiasing
+        )
+        self.flux_chart_view_2d.setHorizontalScrollBarPolicy(
+            qt_api.QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.flux_chart_view_2d.setVerticalScrollBarPolicy(
+            qt_api.QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.flux_chart_view_2d.setContentsMargins(0, 0, 0, 0)
+        self.flux_chart_view_2d.chart().setContentsMargins(0, 0, 0, 0)
+        self.flux_chart_view_2d.chart().layout().setContentsMargins(0, 0, 0, 0)
+        self.flux_chart_view_2d.setRubberBand(
+            qt_api.QtCharts.QChartView.RubberBand.NoRubberBand
+        )
+        self.ext_dlg.flux_widget_layout_2d.addWidget(self.flux_chart_view_2d)
+
+        self.flux_chart_view_1d: SpectrumQChartView = SpectrumQChartView()
+        self.flux_chart_view_1d.master = False
+        self.flux_chart_view_1d.setObjectName("flux_chart_view")
+        self.flux_chart_view_1d.setRenderHint(
+            qt_api.QtGui.QPainter.RenderHint.Antialiasing
+        )
+        self.flux_chart_view_1d.setHorizontalScrollBarPolicy(
+            qt_api.QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.flux_chart_view_1d.setVerticalScrollBarPolicy(
+            qt_api.QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.flux_chart_view_1d.setContentsMargins(0, 0, 0, 0)
+        self.flux_chart_view_1d.chart().setContentsMargins(0, 0, 0, 0)
+        self.flux_chart_view_1d.chart().layout().setContentsMargins(0, 0, 0, 0)
+        self.flux_chart_view_1d.setRubberBand(
+            qt_api.QtCharts.QChartView.RubberBand.NoRubberBand
+        )
+        self.ext_dlg.flux_widget_layout_1d.addWidget(self.flux_chart_view_1d)
+        self.flux_chart_view_2d.addSibling(self.flux_chart_view_1d)
+
+        self.ext_dlg.y_start_spinbox.valueChanged.connect(
+            self.updateSpectrum1D
+        )
+
+        self.ext_dlg.y_end_spinbox.valueChanged.connect(
+            self.updateSpectrum1D
+        )
+
+        self.ext_dlg.smoothing_1d_check_box.checkStateChanged.connect(
+            self.updateSpectrum1D
+        )
+
+        self.ext_dlg.smoothing_1d_dspinbox.valueChanged.connect(
+            self.updateSpectrum1D
+        )
+
+        self.ext_dlg.smoothing_2d_check_box.checkStateChanged.connect(
+            self.updateSpectrum2D
+        )
+
+        self.ext_dlg.smoothing_2d_dspinbox.valueChanged.connect(
+            self.updateSpectrum2D
+        )
+
+        self.ext_dlg.cmap_combo_box.currentIndexChanged.connect(
+            self.updateColorMap
+        )
+
+        self.ext_dlg.cmap_min_dspinbox.valueChanged.connect(
+            self.updateColorMap
+        )
+
+        self.ext_dlg.cmap_max_dspinbox.valueChanged.connect(
+            self.updateColorMap
+        )
+
+        if HAS_MPL:
+
+            icon_w = 50
+            icon_h = 10
+            _icon_gray_data = np.repeat(
+                np.linspace(start=0, stop=1, num=icon_w)[None, ...],
+                repeats=icon_h,
+                axis=0
+            )
+            self.ext_dlg.cmap_combo_box.setEnabled(True)
+            self.ext_dlg.cmap_combo_box.setToolTip(
+                "Set the current colormap for 2D/3D spectra"
+            )
+            item: QtWidgets.QListWidgetItem
+            for cmap_name in list(colormaps):
+                cmap = colormaps.get(cmap_name)
+
+                if cmap is None:
+                    continue
+
+                _rgb_icon_data: np.ndarray = (
+                        255 * cmap(_icon_gray_data)[..., 0:3]
+                ).astype(np.uint8).copy()
+                icon: QtGui.QIcon = qt_api.QtGui.QIcon(
+                    qt_api.QtGui.QPixmap(
+                        qt_api.QtGui.QImage(
+                            _rgb_icon_data.data,
+                            icon_w, icon_h, 3 * icon_w,
+                            qt_api.QtGui.QImage.Format.Format_RGB888
+                        )
+                    )
+                )
+
+                # NOTE: remember, QImage does not hold the data, it just reads
+                #       the memory location pointed at by the input. If no
+                #       reference is made for the input array it will be
+                #       collected by the garbage collector eventually, and the
+                #       QImage will try to read from an invalid memory segment.
+                #       To prevent this,we just make sure to keep a reference
+                #       of the input array
+                icon._data = _rgb_icon_data
+
+                self.ext_dlg.cmap_combo_box.addItem(
+                    icon, cmap_name, cmap_name
+                )
+            self.ext_dlg.cmap_combo_box.setIconSize(
+                qt_api.QtCore.QSize(icon_w, icon_h)
+            )
+        else:
+            self.ext_dlg.cmap_combo_box.setEnabled(False)
+            self.ext_dlg.cmap_combo_box.setToolTip(
+                "Please, install the matplotlib package to enable colormaps"
+            )
+
+    def exec(self) -> QtWidgets.QDialog.DialogCode:
+        return self.ext_dlg.exec()
+
+    def setSpectrum2D(self, sp2d: loaders.Spectrum2D) -> None:
+        wav_ang = sp2d.spectral_axis.to(units.angstrom).value
+
+        if self.ext_dlg.smoothing_2d_check_box.isChecked():
+            sigma_2d = self.ext_dlg.smoothing_2d_dspinbox.value()
+            if sigma_2d > 0:
+                sp2d_image = gaussian_filter(
+                    sp2d.flux.value, sigma=sigma_2d
+                )
+            else:
+                sp2d_image = sp2d.flux.value
+        else:
+            sp2d_image = sp2d.flux.value
+
+        sp2d_1d = np.nansum(sp2d_image, axis=0)
+
+        if self.sp2d is None:
+            self.ext_dlg.cmap_min_dspinbox.setValue(np.nanmin(sp2d_1d))
+            self.ext_dlg.cmap_max_dspinbox.setValue(np.nanmax(sp2d_1d))
+
+            self.ext_dlg.y_start_spinbox.setMinimum(0)
+            self.ext_dlg.y_end_spinbox.setMinimum(1)
+
+            self.ext_dlg.y_start_spinbox.setMaximum(sp2d_image.shape[0]-1)
+            self.ext_dlg.y_end_spinbox.setMaximum(sp2d_image.shape[0])
+
+            self.ext_dlg.y_start_spinbox.setValue(0)
+            self.ext_dlg.y_end_spinbox.setValue(sp2d_image.shape[0])
+
+        self.sp2d = sp2d
+
+        flux_chart_2d: QtCharts.QChart = self.flux_chart_view_2d.chart()
+        flux_chart_2d.removeAllSeries()
+
+        for ax in flux_chart_2d.axes():
+            flux_chart_2d.removeAxis(ax)
+
+        self.flux_chart_view_2d.setSpectralAxis(wav_ang)
+
+        flux_2d_axis_x = qt_api.QtCharts.QValueAxis()
+        flux_2d_axis_y = qt_api.QtCharts.QValueAxis()
+
+        flux_chart_2d.addAxis(
+            flux_2d_axis_x, qt_api.QtCore.Qt.AlignmentFlag.AlignBottom
+        )
+        flux_chart_2d.addAxis(
+            flux_2d_axis_y, qt_api.QtCore.Qt.AlignmentFlag.AlignLeft
+        )
+
+        flux_2d_series = values2series(wav_ang, sp2d_1d, "Flux")
+        flux_chart_2d.addSeries(flux_2d_series)
+
+        self.flux_chart_view_2d.setSpectrumImage(sp2d_image)
+
+        flux_2d_axis_x.setTickInterval(500)
+        flux_2d_axis_x.setLabelFormat("%.2f")
+        flux_2d_axis_x.setTitleText('Angstrom')
+
+        flux_2d_axis_y.setLabelFormat("%.2f")
+        flux_2d_axis_y.setTitleText('pixels')
+
+        flux_2d_series.attachAxis(flux_2d_axis_x)
+        flux_2d_series.attachAxis(flux_2d_axis_y)
+        flux_2d_series.setOpacity(0.2)
+
+        self.flux_chart_view_2d.zoomReset()
+        self.updateSpectrum1D()
+
+    def updateColorMap(self, *args, **kwargs) -> None:
+        if not HAS_MPL:
+            return
+
+        cmap_name = self.ext_dlg.cmap_combo_box.currentData(
+                qt_api.QtCore.Qt.ItemDataRole.UserRole
+            )
+        cmap = colormaps.get(cmap_name)
+
+        if cmap is None:
+            return
+
+        vmin = self.ext_dlg.cmap_min_dspinbox.value()
+        vmax = self.ext_dlg.cmap_max_dspinbox.value()
+        self.flux_chart_view_2d.setColorMap(cmap, update=False)
+        self.flux_chart_view_2d.setVmin(vmin, update=False)
+        self.flux_chart_view_2d.setVmax(vmax, update=True)
+
+    def updateSpectrum1D(self, *args, **kwargs) -> None:
+        if self.sp2d is None:
+            return
+
+        wav_ang = self.sp2d.spectral_axis.to(units.angstrom).value
+        y_start = int(self.ext_dlg.y_start_spinbox.value())
+        y_end = int(self.ext_dlg.y_end_spinbox.value())
+
+        self.flux_chart_view_2d.end_1d = y_end
+        self.flux_chart_view_2d.start_1d = y_start
+
+        if self.ext_dlg.smoothing_2d_check_box.isChecked():
+            sigma_2d = self.ext_dlg.smoothing_2d_dspinbox.value()
+            if sigma_2d > 0:
+                sp2d_image = gaussian_filter(
+                    self.sp2d.flux.value, sigma=sigma_2d
+                )
+            else:
+                sp2d_image = self.sp2d.flux.value
+        else:
+            sp2d_image = self.sp2d.flux.value
+
+        sub_flux = sp2d_image[y_start: y_end]
+
+        flux = np.nansum(sub_flux, axis=0)
+        var = np.nanstd(sub_flux, axis=0) ** 2
+
+        self.sp1d = Spectrum(
+            flux=flux * self.sp2d.flux.unit,
+            spectral_axis=self.sp2d.spectral_axis.to(units.angstrom),
+            uncertainty=VarianceUncertainty(var, unit=self.sp2d.flux.unit**2)
+        )
+
+        flux_chart: QtCharts.QChart = self.flux_chart_view_1d.chart()
+        flux_chart.removeAllSeries()
+
+        # NOTE: We need this because QChart refuses to handle correctly ticks
+        #       placement when the axis range is very small
+        mean_flux = 10 ** utils.find_exp(np.nanmean(flux))
+        flux_unit: units.Unit = units.Unit(self.sp2d.flux.unit * mean_flux)
+        flux = flux / mean_flux
+
+        if not flux_chart.axes():
+            flux_axis_x = qt_api.QtCharts.QValueAxis()
+            flux_axis_y = qt_api.QtCharts.QValueAxis()
+
+            flux_chart.addAxis(
+                flux_axis_x, qt_api.QtCore.Qt.AlignmentFlag.AlignBottom
+            )
+            flux_chart.addAxis(
+                flux_axis_y, qt_api.QtCore.Qt.AlignmentFlag.AlignLeft
+            )
+        else:
+            flux_axis_x = flux_chart.axes()[0]
+            flux_axis_y = flux_chart.axes()[1]
+
+        flux_series = values2series(wav_ang, flux, "Flux 1D")
+        flux_chart.addSeries(flux_series)
+
+        flux_axis_x.setTickInterval(500)
+        flux_axis_x.setLabelFormat("%.2f")
+        flux_axis_x.setTitleText('Angstrom')
+
+        flux_axis_y.setLabelFormat("%.2f")
+        flux_axis_y.setTitleText(flux_unit.to_string())
+
+        flux_series.attachAxis(flux_axis_x)
+        flux_series.attachAxis(flux_axis_y)
+
+        if self.ext_dlg.smoothing_1d_check_box.isChecked():
+            smoothing_factor = self.ext_dlg.smoothing_1d_dspinbox.value()
+
+            flux_series.setOpacity(0.2)
+            smoothing_sigma = len(flux) / (1 + 2 * smoothing_factor)
+            smoothed_flux = utils.smooth_fft(flux, sigma=smoothing_sigma)
+            smoothed_flux_series = values2series(
+                wav_ang, smoothed_flux, "Smoothed flux"
+            )
+
+            pen: QtGui.QPen = smoothed_flux_series.pen()
+            pen.setColor(qt_api.QtGui.QColor("orange"))
+            pen.setWidth(2)
+            smoothed_flux_series.setPen(pen)
+
+            flux_chart.addSeries(smoothed_flux_series)
+            smoothed_flux_series.attachAxis(flux_axis_x)
+            smoothed_flux_series.attachAxis(flux_axis_y)
+
+        self.flux_chart_view_2d.update()
+        self.flux_chart_view_1d.zoomReset()
+
+    def updateSpectrum2D(self, *args, **kwargs) -> None:
+        self.setSpectrum2D(self.sp2d)
+
 
 class GuiApp:
     """General class for the main GUI."""
 
-    DEFAULT_MASK_PROPERTIES = {
+    DEFAULT_MASK_PROPERTIES: Dict[str, Any] = {
         "name": "Mask",
         "description": "",
         "start": 0,
@@ -2177,6 +2523,10 @@ class GuiApp:
             item: QtWidgets.QListWidgetItem
             for cmap_name in list(colormaps):
                 cmap = colormaps.get(cmap_name)
+
+                if cmap is None:
+                    continue
+
                 _rgb_icon_data: np.ndarray = (
                         255 * cmap(_icon_gray_data)[..., 0:3]
                 ).astype(np.uint8).copy()
@@ -2725,6 +3075,9 @@ class GuiApp:
             self.doExportAsPicture
         )
 
+        self.main_wnd.action_extract_spec_1d.triggered.connect(
+            self.doExtractSpec1D
+        )
         self.main_wnd.xcorr_preview_button.clicked.connect(
             self.doPreviewXcorrTemplate
         )
@@ -3939,7 +4292,7 @@ class GuiApp:
         custom_widget: MaskListWidgetItem = MaskListWidgetItem(
             self.main_wnd.mask_list_widget
         )
-        custom_widget.setName(mask_properties['name'])
+        custom_widget.setName(str(mask_properties['name']))
 
         new_item = qt_api.QtWidgets.QListWidgetItem()
         new_item.setSizeHint(custom_widget.sizeHint())
@@ -3956,10 +4309,17 @@ class GuiApp:
         # self.redrawCurrentSpec()
 
     def doCopyMask(self) -> None:
-        mask_uuid, _ = self.currentMaskItem()
+        if self.current_uuid is None:
+            return
+
+        mask_item_data = self.currentMaskItem()
+        if mask_item_data is None:
+            return
 
         try:
-            self._copy_mask = self.spectral_masks[self.current_uuid][mask_uuid]
+            self._copy_mask = self.spectral_masks[
+                self.current_uuid
+            ][mask_item_data[0]]
         except KeyError:
             self._copy_mask = None
 
@@ -3978,6 +4338,9 @@ class GuiApp:
         self.redrawCurrentSpec()
 
     def doDeleteMask(self) -> None:
+        if self.current_uuid is None:
+            return
+
         current_mask = self.currentMaskItem()
         if current_mask is None:
             return
@@ -3999,6 +4362,36 @@ class GuiApp:
             self.deleteMask(self.current_uuid, mask_uuid)
 
         self.redrawCurrentSpec()
+
+    def doExtractSpec1D(self) -> None:
+        if self.current_uuid is None:
+            return
+
+        try:
+            sp = self.open_spectra[self.current_uuid]
+        except KeyError:
+            return
+
+        try:
+            sp_2d: loaders.Spectrum2D = sp.meta['linked']['2D']
+        except KeyError:
+            return
+
+        ext_manager = SpecExtractionManager()
+        ext_manager.setSpectrum2D(sp_2d)
+        res = ext_manager.exec()
+
+        if res == qt_api.QtWidgets.QDialog.DialogCode.Accepted:
+            old_sp = self.open_spectra[self.current_uuid]
+            new_sp = ext_manager.sp1d
+
+            if new_sp is not None:
+                new_sp.meta = old_sp.meta
+                new_sp.meta['file_name'] = None
+                new_sp.meta['full_path'] = None
+                new_sp.meta['is_dummy'] = True
+                self.open_spectra[self.current_uuid] = new_sp
+                self.redrawCurrentSpec()
 
     def doLoadMasks(self) -> bool:
         if self.current_uuid is None:
@@ -4186,6 +4579,9 @@ class GuiApp:
             )
 
     def updateCurrentMask(self) -> None:
+        if self.current_uuid is None:
+            return
+
         mask = self.currentMaskItem()
         if mask is None:
             return
@@ -4854,17 +5250,18 @@ class GuiApp:
 
         self.open_spectra_items.pop(item_uuid)
 
-        if self.xcorr_handler.best_z is not None:
-            try:
-                self.xcorr_handler.best_z.pop(item_uuid)
-            except KeyError:
-                pass
+        if self.xcorr_handler is not None:
+            if self.xcorr_handler.best_z is not None:
+                try:
+                    self.xcorr_handler.best_z.pop(item_uuid)
+                except KeyError:
+                    pass
 
-        if self.xcorr_handler.corr_data is not None:
-            try:
-                self.xcorr_handler.best_z.pop(item_uuid)
-            except KeyError:
-                pass
+            if self.xcorr_handler.corr_data is not None:
+                try:
+                    self.xcorr_handler.best_z.pop(item_uuid)
+                except KeyError:
+                    pass
 
         try:
             self.object_state_dict.pop(item_uuid)
@@ -5067,7 +5464,7 @@ class GuiApp:
             self.main_wnd.xcorr_csub_chebyshev_order_spinbox.value()
         )
 
-        w_masks = {}
+        w_masks: Dict[uuid.UUID, List[Dict[str, Any]]] = {}
         for spec_uuid in for_xcorr.keys():
             try:
                 mask_dict = self.spectral_masks[spec_uuid]
