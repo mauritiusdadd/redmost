@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 from typing import Optional, Union, Tuple, List, Dict, Callable, Any, cast
 
 import numpy as np
-import specutils
+
 from astropy.nddata import VarianceUncertainty  # type: ignore
 from astropy.nddata import StdDevUncertainty  # type: ignore
 from astropy.nddata import InverseVariance  # type: ignore
@@ -30,6 +30,7 @@ from astropy import units  # type: ignore
 from astropy.table import Table  # type: ignore
 from scipy.ndimage import gaussian_filter
 
+import specutils
 try:
     from specutils import Spectrum
 except ImportError:
@@ -414,10 +415,10 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         if self._sibling_locked:
             return
 
-        self._sibling_locked = True
-        for sibling in self.siblings:
-            pass
-        self._sibling_locked = False
+        # self._sibling_locked = True
+        # for sibling in self.siblings:
+        #    pass  # Insert code here if needed
+        # self._sibling_locked = False
 
         super().mouseDoubleClickEvent(event)
         self.onMouseDoubleClickSeries.emit((self.toSeriesPos(event), event))
@@ -866,7 +867,7 @@ class SpectrumQChartView2D(SpectrumQChartView):
         if data is None:
             return
 
-        if self.cmap is not None:
+        if self.cmap is not None and self.vmin is not None and self.vmax is not None:
             x: np.ndarray = np.clip(data, a_min=self.vmin, a_max=self.vmax)
             x = x - np.nanmin(x)
             x = x / np.nanmax(x)
@@ -933,7 +934,7 @@ class SpectrumQChartView2D(SpectrumQChartView):
 
             plot_area_h = plot_area.bottom() - plot_area.top()
 
-            if (self.start_1d is not None) and (self._data is not None):
+            if (self.start_1d is not None) and (self._data is not None) and (self._data.shape[0] > 0):
                 spec_start_y = self.start_1d / self._data.shape[0]
                 start_line_left = qt_api.QtCore.QPointF(
                     plot_area.left(),
@@ -945,7 +946,7 @@ class SpectrumQChartView2D(SpectrumQChartView):
                 )
                 painter.drawLine(start_line_left, start_line_right)
 
-            if (self.end_1d is not None) and (self._data is not None):
+            if (self.end_1d is not None) and (self._data is not None) and (self._data.shape[0] > 0):
                 spec_end_y =  self.end_1d / self._data.shape[0]
                 end_line_left = qt_api.QtCore.QPointF(
                     plot_area.left(),
@@ -5531,6 +5532,9 @@ class GuiApp:
         if not HAS_MPL:
             return
 
+        if self.current_uuid is None:
+            return
+
         if self.main_wnd.flux_tabwidget.currentIndex() == 1:
             target = self.flux_chart_view_2d
         else:
@@ -5822,7 +5826,8 @@ class GuiApp:
         self.main_wnd.obj_prop_table_widget.setRowCount(0)
         self.updateMaskList()
 
-        self.xcorr_handler.clear()
+        if self.xcorr_handler is not None:
+            self.xcorr_handler.clear()
         self.clearXcorrTreeWidgetZ()
 
         flux_chart = self.flux_chart_view.chart()

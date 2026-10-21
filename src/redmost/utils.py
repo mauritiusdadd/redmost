@@ -96,20 +96,32 @@ else:
 
         data = torch.from_numpy(data).to(device=device)
 
+        # Pad the data by mirroring it to avoid edge effects during convolution
         xx = torch.hstack((data, torch.flip(data, dims=[axis, ])))
 
-        gauss = torch.signal.windows.gaussian(xx.shape[axis], std=sigma,
-                                              device=device)
+        # Generate the Gaussian window
+        gauss = torch.signal.windows.gaussian(
+            xx.shape[axis], std=sigma, device=device
+        )
 
+        # Shift the window to center it for FFT convolution
         win = torch.roll(gauss, xx.shape[axis] // 2)
 
+        # Perform convolution in the frequency domain
         fxx = torch.fft.fft(xx, dim=axis)
         xxf = torch.real(torch.fft.ifft(fxx * win)).cpu().numpy()
+        
+        # Crop back to the original size and re-apply mask
         xxf = xxf[..., :data.shape[axis]]
         xxf[actual_mask] = np.nan
         return xxf
 
 def static_vars(**kwargs):
+    """
+    Decorator to attach static variables to a function.
+
+    :param kwargs: Key-value pairs to be set as attributes on the function.
+    """
     def decorate(func):
         for k in kwargs:
             setattr(func, k, kwargs[k])
@@ -118,6 +130,12 @@ def static_vars(**kwargs):
 
 
 def find_exp(number: float) -> int:
+    """
+    Find the base-10 exponent of a number.
+
+    :param number: The input number.
+    :return: The exponent (e.g., -2 for 0.01).
+    """
     base10 = np.log10(abs(number))
     return int(np.floor(base10))
 
@@ -215,11 +233,16 @@ def smooth_fft_np(
     actual_mask |= ~np.isfinite(data)
     data[actual_mask] = 0
 
+    # Pad the data by mirroring it to avoid edge effects
     xx = np.hstack((data, np.flip(data, axis=[axis, ])))
+
+    # Create and center the Gaussian window
     win = np.roll(
         general_gaussian(xx.shape[axis], 1, sigma),
         xx.shape[axis]//2
     )
+
+    # Perform convolution in the frequency domain
     fxx = np.fft.fft(xx, axis=axis)
     xxf = np.real(np.fft.ifft(fxx*win))[..., :data.shape[axis]]
     xxf[actual_mask] = np.nan
@@ -253,6 +276,14 @@ def continuum_fit_chebyshev_np_1d(
     mask: Optional[np.ndarray] = None,
     order: int = 5
 ):
+    """
+    Fit a 1D Chebyshev polynomial to the data.
+
+    :param data: The 1D input array (spectrum).
+    :param mask: Optional boolean mask (True values are ignored in fit).
+    :param order: The order of the Chebyshev polynomial.
+    :return: The fitted continuum array.
+    """
     pix_coords = np.arange(data.shape[0])
     continuum = np.zeros_like(data)
     if mask is not None:
@@ -327,6 +358,7 @@ def continuum_fit_chebyshev_np(
                 continuum[:, j] = ft.result()
         """
     else:
+        # Handle 3D or higher dimensions by flattening non-spectral dims
         flattened_data = data.reshape(data.shape[0], -1)
         flattened_mask = mask.reshape(mask.shape[0], -1)
         flattened_continuum = continuum_fit_chebyshev_np(
@@ -346,6 +378,16 @@ def continuum_fit_chebyshev(
     use_gpu: Union[str, bool] = False,
     device: Optional[str] = None
 ) -> np.ndarray:
+    """
+    Fit the spectrum continuum with a Chebyshev polynomial.
+
+    :param data: Input data array.
+    :param mask: Optional mask for bad pixels.
+    :param order: Order of the polynomial.
+    :param use_gpu: Whether to use GPU acceleration ('torch' or True).
+    :param device: Specific device identifier (if using torch).
+    :return: The fitted continuum.
+    """
     if use_gpu == 'torch' and HAS_TORCH:
         # TODO: implement chebyshev fitting with torch
         return continuum_fit_chebyshev_np(data, mask, order)

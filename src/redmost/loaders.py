@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional, Union, List, Tuple, Dict, Any
 
 import numpy as np
+from asdf_astropy.converters.nddata import uncertainty
 
 from astropy.nddata import VarianceUncertainty  # type: ignore
 from astropy.nddata import StdDevUncertainty  # type: ignore
@@ -23,11 +24,18 @@ except ImportError:
 
 from redmost import utils
 
-KNOWN_SPEC_EXT_NAMES = ['spec', 'spectrum', 'flux', 'data', 'sci', 'science']
+KNOWN_SPEC_EXT_NAMES = [
+    'spec', 'spectrum', 'flux', 'data', 'sci', 'science',
+    'primary'
+]
 KNOWN_VARIANCE_EXT_NAMES = [
-    'stat', 'stats', 'var', 'variance', 'noise', 'err', 'spec_var',
+    'stat', 'stats', 'var', 'variance', 'spec_var',
     'spectrum_var', 'spec_variance', 'spectrum_variance',
     'variance_spec', 'variance_spectrum'
+]
+KNOWN_RMS_EXT_NAMES = [
+    'noise', 'err', 'rms', 'error_spectrum', 'spectrum_error',
+    'rms_spectrum', 'spectrum_rms', 'noise_spectrum', 'spectrum_noise',
 ]
 KNOWN_INVAR_EXT_NAMES = [
     'ivar', 'ivariance', 'spec_ivar', 'spectrum_ivariance', 'spec_ivariance',
@@ -80,12 +88,6 @@ def identifySpecexFits(origin, *args, **kwargs) -> bool:
     if not isFits(args[0]):
         return False
 
-    valid_id_keys = [
-        f"{i}{j}"
-        for i in ['', 'OBJ', 'OBJ_', 'TARGET', 'TARGET_', 'OBJECT', 'OBJECT_']
-        for j in ['ID', 'NUMBER', 'UID', 'UUID', '']
-    ]
-
     with fits.open(args[0]) as hdul:
         flux_hdu = getHDU(hdul, KNOWN_SPEC_EXT_NAMES)
         if flux_hdu is None:
@@ -94,19 +96,13 @@ def identifySpecexFits(origin, *args, **kwargs) -> bool:
         if flux_hdu.data is None:
             return False
 
-        for hdu in hdul:
-            for key in valid_id_keys:
-                try:
-                    _ = hdu.header[key]
-                except KeyError:
-                    continue
-                else:
-                    try:
-                        specexFitsLoader(args[0])
-                    except Exception:
-                        return False
-                    return True
-    return False
+
+        try:
+            specexFitsLoader(args[0])
+        except Exception:
+            return False
+        return True
+
 
 def identifyClashVlt1dFits(origin, *args, **kwargs) -> bool:
     """Identify spectra extracted with python-specex."""
@@ -136,6 +132,67 @@ def identifyClashVlt1dFits(origin, *args, **kwargs) -> bool:
     return True
 
 
+def identifyFORS21dFits(origin, *args, **kwargs) -> bool:
+    """Identify spectra extracted with python-specex."""
+    if not isFits(args[0]):
+        return False
+
+    with fits.open(args[0]) as hdul:
+        if hdul[0].header.get('NAXIS') != 2:
+            return False
+
+        if hdul[0].header.get('NAXIS2') != 1:
+            return False
+
+        instrument = hdul[0].header.get('INSTRUME')
+        ctype1 = hdul[0].header.get('CTYPE1')
+        ctype2 = hdul[0].header.get('CTYPE2')
+
+        if (instrument is None) or (instrument.strip() != 'FORS2'):
+            return False
+
+        if ctype1.strip() != 'WAVE':
+            return False
+
+        if ctype2.strip() != 'OBJECT':
+            return False
+
+    return True
+
+
+@data_loader(
+    label="FORS2-1d",
+    identifier=identifyFORS21dFits,
+    extensions=['fits']
+)
+def fors2FitsLoader(
+   file_name: str,
+    flux_hdu_index: Optional[Union[str, int]] = None,
+    resolution: Union[int, float] = 1,
+    **kwargs
+) -> Spectrum:
+    data, header = fits.getdata(file_name, header=True)
+    flux_units = units.Unit("Angstrom-1 cm-2 erg s-1")
+
+    flux = data[0] * flux_units
+    flux_wcs = wcs.WCS(header)
+
+    pixel = np.arange(len(flux))
+    lam = flux_wcs.spectral.pixel_to_world(pixel).to(units.Angstrom)
+    var = np.ones_like(data[0]) * (flux_units**2)
+
+
+    meta = {'header': header}
+    sp = Spectrum(
+        flux=flux,
+        spectral_axis=lam,
+        wcs=flux_wcs,
+        uncertainty=VarianceUncertainty(var),
+        meta=meta
+    )
+    sp.mask = ~np.isfinite(data[0])
+    return sp
+
 @data_loader(
     label="specex-1d",
     identifier=identifySpecexFits,
@@ -161,6 +218,8 @@ def specexFitsLoader(
     with fits.open(file_name, **kwargs) as hdulist:
         flux_hdu = getHDU(hdulist, KNOWN_SPEC_EXT_NAMES, index=flux_hdu_index)
         var_hdu = getHDU(hdulist, KNOWN_VARIANCE_EXT_NAMES)
+        ivar_hdu = getHDU(hdulist, KNOWN_INVAR_EXT_NAMES)
+        rms_hdu = getHDU(hdulist, KNOWN_RMS_EXT_NAMES)
         mask_hdu = getHDU(hdulist, KNOWN_MASK_EXT_NAMES)
         rc_hdu = getHDU(hdulist, KNOWN_RCURVE_EXT_NAMES)
 
@@ -183,10 +242,15 @@ def specexFitsLoader(
             raise ValueError("Cannot find flux data")
         flux = flux_hdu.data
 
-        if var_hdu is None:
-            var = np.ones_like(flux)
-        else:
+        if var_hdu is not None:
             var = var_hdu.data
+        elif rms_hdu is not None:
+            var = rms_hdu.data ** 2
+        elif ivar_hdu is not None:
+            var = 1.0 / ivar_hdu.data
+        else:
+            var = np.ones_like(flux)
+
 
         if mask_hdu is None:
             mask = None
@@ -244,7 +308,7 @@ def specexFitsLoader(
         except KeyError:
             flux_units = units.Unit(flux_hdu.header['TUNIT'])
 
-            if flux_units.flux_units == 'dimensionless':
+            if flux_units.physical_type == 'dimensionless':
                 flux_units = flux_units * units.Unit(
                     "Angstrom-1 cm-2 erg s-1"
                 )
@@ -654,7 +718,6 @@ def identify_format(filename, dtype=Spectrum):
     return valid_format
 
 
-
 def read(file: str) -> Union[Spectrum, Spectrum2D]:
     sp_formats = identify_format(file)
 
@@ -664,6 +727,9 @@ def read(file: str) -> Union[Spectrum, Spectrum2D]:
             spec_class = Spectrum2D
             break
         elif spec_format == 'clash-vlt-1d':
+            spec_class = Spectrum
+            break
+        elif spec_format == 'specex-1d':
             spec_class = Spectrum
             break
     else:

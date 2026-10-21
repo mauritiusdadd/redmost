@@ -14,7 +14,7 @@ name = "redmost"
 dynamic = ["version"]
 description = "Display spectra and estimate their redshifts."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = {file = "LICENSE"}
 keywords = ["spectroscopy", "FITS", "astronomy"]
 authors = [
