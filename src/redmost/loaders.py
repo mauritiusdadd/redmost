@@ -24,8 +24,9 @@ except ImportError:
 
 from redmost import utils
 
+
 KNOWN_SPEC_EXT_NAMES = [
-    'spec', 'spectrum', 'flux', 'data', 'sci', 'science',
+    'spec', 'spectrum', 'flux', 'fluxes', 'data', 'sci', 'science',
     'primary'
 ]
 KNOWN_VARIANCE_EXT_NAMES = [
@@ -42,7 +43,9 @@ KNOWN_INVAR_EXT_NAMES = [
     'inverse_variance'
 ]
 KNOWN_MASK_EXT_NAMES = ['mask', 'platemask', 'footprint', 'dq', 'nan_mask']
-KNOWN_WAVE_EXT_NAMES = ['wave', 'wavelenght', 'lambda', 'lam']
+KNOWN_WAVE_EXT_NAMES = [
+    "lam", "lambda", "wave", "wavelength", "waves", "wavelengths"
+]
 KNOWN_RCURVE_EXT_NAMES = ['r', 'reso', 'resolution', 'rcurve', 'wd']
 KNOWN_RGB_EXT_NAMES = ['r', 'g', 'b', 'red', 'green', 'blue']
 
@@ -132,8 +135,128 @@ def identifyClashVlt1dFits(origin, *args, **kwargs) -> bool:
     return True
 
 
+def isAscii(filename: Union[str, os.PathLike[str]], sample_size: int = 4096) -> bool:
+    """
+    Check if the file is a valid ASCII text file.
+
+    Parameters
+    ----------
+    filename : str or os.PathLike
+        The path of the file to check.
+    sample_size : int, optional
+        Number of bytes to sample from the beginning of the file.
+
+    Returns
+    -------
+    bool
+        True if the sampled bytes can be decoded as ASCII and don't contain null bytes.
+    """
+    try:
+        with open(filename, 'rb') as f:
+            chunk = f.read(sample_size)
+        if not chunk:
+            return False
+        if b'\x00' in chunk:
+            return False
+        chunk.decode('ascii')
+    except (OSError, UnicodeDecodeError):
+        return False
+    return True
+
+
+def identify1DAsciiTable(origin, *args, **kwargs) -> bool:
+    if not args or not os.path.isfile(args[0]):
+        return False
+    if isFits(args[0]):
+        return False
+    if not isAscii(args[0]):
+        return False
+
+    with open(args[0], 'r') as f:
+        for l in f:
+            if l.strip().startswith('#'):
+                return True
+
+    return False
+
+
+@data_loader(
+    label="ascii-table",
+    identifier=identify1DAsciiTable,
+    extensions=['txt', 'ascii', 'dat']
+)
+def asciiTableLoader(
+   file_name: str,
+   resolution: Union[int, float] = 1,
+    **kwargs
+) -> Spectrum:
+    t = Table.read(file_name, format='ascii')
+    
+    flux = None
+    var = None
+    lam = None
+    mask = None
+    reso = None
+
+    flux_units = units.Unit("Angstrom-1 cm-2 erg s-1")
+    for col in t.colnames:
+        if col.lower() in KNOWN_SPEC_EXT_NAMES:
+            flux = t[col] * flux_units
+        elif col.lower() in KNOWN_VARIANCE_EXT_NAMES:
+            var = t[col]
+        elif col.lower() in KNOWN_RMS_EXT_NAMES:
+            var = t[col]**2
+        elif col.lower() in KNOWN_INVAR_EXT_NAMES:
+            var = 1/t[col]
+        elif col.lower() in KNOWN_MASK_EXT_NAMES:
+            mask = t[col]
+        elif col.lower() in KNOWN_WAVE_EXT_NAMES:
+            lam = t[col] * units.AA
+        elif col.lower() in KNOWN_RCURVE_EXT_NAMES:
+            reso = t[col]
+
+    if flux is None:
+        raise ValueError(f"Flux column not found in {file_name}")
+
+    if lam is None:
+        raise ValueError(f"Wavelength column not found in {file_name}")
+
+    if mask is None:
+        mask = np.full_like(flux.value, False, dtype=bool)
+
+    mask |= ~np.isfinite(flux.value)
+
+    if var is not None:
+        unc = VarianceUncertainty(var * (flux_units**2))
+    else:
+        unc = None
+    
+    meta = {}
+    sp = Spectrum(
+        flux=flux,
+        spectral_axis=lam,
+        uncertainty=unc,
+        meta=meta
+    )
+
+    if reso is not None:
+        rc = reso.copy()
+    else:
+        # If now wavelenght dispersion information is present, then
+        # compute it using the wavelenght
+        delta_lambda = np.ones_like(lam)
+        delta_lambda[1:] = (lam[1:] - lam[:-1])
+        delta_lambda = delta_lambda.to('Angstrom').value
+        rc = resolution / delta_lambda
+        rc[0] = rc[1]
+    rc[rc < 1e-3] = 2.
+
+    sp.mask = mask
+    sp.rc = rc
+    return sp
+
+
 def identifyFORS21dFits(origin, *args, **kwargs) -> bool:
-    """Identify spectra extracted with python-specex."""
     if not isFits(args[0]):
         return False
 
