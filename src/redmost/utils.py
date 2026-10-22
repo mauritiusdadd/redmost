@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Created on Fri Nov 24 20:38:29 2023.
 
@@ -7,7 +6,6 @@ Created on Fri Nov 24 20:38:29 2023.
 """
 import os
 import time
-from typing import Optional, Tuple, Union, Dict
 from urllib import request
 import json
 from concurrent.futures import ProcessPoolExecutor, Future
@@ -61,8 +59,8 @@ else:
             data: np.ndarray,
             sigma: float = 25.0,
             axis: int = -1,
-            mask: Optional[np.ndarray] = None,
-            device: Optional[str] = None
+            mask: np.ndarray | None = None,
+            device: str | None = None
     ) -> np.ndarray:
         """
         Return a smoothed version of an array.
@@ -139,7 +137,7 @@ def find_exp(number: float) -> int:
     base10 = np.log10(abs(number))
     return int(np.floor(base10))
 
-def check_updates() -> Tuple[bool, str]:
+def check_updates() -> tuple[bool, str]:
     """Check for new a version on pypi.python.org."""
 
     try:
@@ -169,7 +167,7 @@ def check_updates() -> Tuple[bool, str]:
 
 def get_data_file(
     file_name: str,
-) -> Union[str, None]:
+) -> str | None:
     """
     Get the path of a data file.
 
@@ -185,8 +183,8 @@ def get_data_file(
 
 def get_icon(
     icon_name: str,
-    theme: Optional[str] = 'feather'
-) -> Union[str, None]:
+    theme: str | None = 'feather'
+) -> str | None:
     """
     Load icons from an existing theme.
 
@@ -206,7 +204,7 @@ def smooth_fft_np(
     data: np.ndarray,
     sigma: float = 25.0,
     axis: int = -1,
-    mask: Optional[np.ndarray] = None
+    mask: np.ndarray | None = None
 ) -> np.ndarray:
     """
     Return a smoothed version of an array.
@@ -253,9 +251,9 @@ def smooth_fft(
     data: np.ndarray,
     sigma: float = 25.0,
     axis: int = -1,
-    mask: Optional[np.ndarray] = None,
-    use_gpu: Union[str, bool] = False,
-    device: Optional[str] = None
+    mask: np.ndarray | None = None,
+    use_gpu: str | bool = False,
+    device: str | None = None
 ) -> np.ndarray:
 
     if sigma <= 0:
@@ -273,7 +271,7 @@ def smooth_fft(
 
 def continuum_fit_chebyshev_np_1d(
     data: np.ndarray,
-    mask: Optional[np.ndarray] = None,
+    mask: np.ndarray | None = None,
     order: int = 5
 ):
     """
@@ -313,9 +311,9 @@ def continuum_fit_chebyshev_np_1d(
 
 def continuum_fit_chebyshev_np(
     data: np.ndarray,
-    mask: Optional[np.ndarray] = None,
+    mask: np.ndarray | None = None,
     order: int = 5,
-    n_jobs: Optional[int] = None
+    n_jobs: int | None = None
 ) -> np.ndarray:
     """
     Fit the spectrum continuum with a Chebyshev polynomial.
@@ -373,10 +371,10 @@ def continuum_fit_chebyshev_np(
 
 def continuum_fit_chebyshev(
     data: np.ndarray,
-    mask: Optional[np.ndarray] = None,
+    mask: np.ndarray | None = None,
     order: int = 5,
-    use_gpu: Union[str, bool] = False,
-    device: Optional[str] = None
+    use_gpu: str | bool = False,
+    device: str | None = None
 ) -> np.ndarray:
     """
     Fit the spectrum continuum with a Chebyshev polynomial.
@@ -396,13 +394,13 @@ def continuum_fit_chebyshev(
 
 def separate_continuum(
     data: np.ndarray,
-    mask: Optional[np.ndarray] = None,
+    mask: np.ndarray | None = None,
     fit_mode: str = 'chebyshev',
     fft_sigma: float = 10.0,
     chebyshev_order: int = 5,
-    use_gpu: Union[str, bool] = False,
-    device: Optional[str] = None
-) -> Tuple[np.ndarray, np.ndarray]:
+    use_gpu: str | bool = False,
+    device: str | None = None
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Split a numpy array in a smoothed continuum and a residual.
 

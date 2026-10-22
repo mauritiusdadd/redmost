@@ -1,7 +1,5 @@
 import os
 from typing import TYPE_CHECKING
-from typing import Optional, Union, Tuple, List, Dict, Callable, Any, cast
-
 from redmost.qt_compat import qt_api, get_qapp
 from redmost.utils import  get_data_file
 

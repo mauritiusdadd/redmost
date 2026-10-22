@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Created on Fri Nov 24 10:33:40 2023.
 
@@ -18,8 +17,8 @@ import webbrowser
 import traceback
 import hashlib
 from enum import Enum
-from typing import TYPE_CHECKING
-from typing import Optional, Union, Tuple, List, Dict, Callable, Any, cast
+from typing import TYPE_CHECKING, Any, cast
+from collections.abc import Callable
 
 import numpy as np
 
@@ -86,17 +85,17 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         super().__init__(*args)
 
         self._last_mouse_pos: QtCore.QPointF | None = None
-        self._static_lines_list: List[Tuple[float, str, str]] = []
-        self._lines_buffer_list: List[Tuple[float, str, str]] = []
-        self._mouse_lambda: Union[None, QtCore.QPointF] = None
-        self._lines_type: Union[str, None] = None
-        self.line_colors: Dict[str, str] = {
+        self._static_lines_list: list[tuple[float, str, str]] = []
+        self._lines_buffer_list: list[tuple[float, str, str]] = []
+        self._mouse_lambda: None | QtCore.QPointF = None
+        self._lines_type: str | None = None
+        self.line_colors: dict[str, str] = {
             "absorption": "#b02000",
             "both": "#d47800",
             "emission": "#61b000",
             "unknown": "#222222"
         }
-        self.line_plot_options: Dict[str, Any] = {
+        self.line_plot_options: dict[str, Any] = {
             "alpha": 0.5,
             "dash_pattern": (8, 8),
             "width": 1.5
@@ -109,7 +108,7 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         self.sync_width: bool = False
         self.redshift: float = 0
         self.vertical_lock: bool = False
-        self.masks: List[Dict[str, Any]] = []
+        self.masks: list[dict[str, Any]] = []
         self.allow_empty: bool = False
 
         self.setDragMode(qt_api.QtCharts.QChartView.DragMode.NoDrag)
@@ -129,7 +128,7 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
 
         # Pass events also to siblings
         self._sibling_locked: bool = False
-        self.siblings: List[SpectrumQChartView] = []
+        self.siblings: list[SpectrumQChartView] = []
 
         self.setSizePolicy(
             qt_api.QtWidgets.QSizePolicy(
@@ -144,10 +143,10 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
             )
         )
 
-    def _getDataBounds(self) -> Union[
-        Tuple[float, float, float, float],
-        Tuple[None, None, None, None],
-    ]:
+    def _getDataBounds(self) -> (
+        tuple[float, float, float, float] |
+        tuple[None, None, None, None]
+    ):
         x_min = None
         x_max = None
         y_min = None
@@ -347,8 +346,8 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         painter.restore()
 
     def isMouseOnMask(
-        self, mask: Dict[str, Any], mouse_pos: QtCore.QPointF,
-        plot_area: Optional[QtCore.QRectF] = None
+        self, mask: dict[str, Any], mouse_pos: QtCore.QPointF,
+        plot_area: QtCore.QRectF | None = None
     ) -> bool:
 
         if plot_area is None:
@@ -400,7 +399,7 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
                 mask_indices.append(mask_idx)
         return  mask_indices
 
-    def setMasks(self, masks: List[Dict[str, Any]]) -> None:
+    def setMasks(self, masks: list[dict[str, Any]]) -> None:
         self.masks = masks
 
     def hideLines(self) -> None:
@@ -591,10 +590,10 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
 
     def setAxesRange(
         self,
-        x_min: Optional[float],
-        y_min: Optional[float],
-        x_max: Optional[float],
-        y_max: Optional[float]
+        x_min: float | None,
+        y_min: float | None,
+        x_max: float | None,
+        y_max: float | None
     ) -> None:
         if self._sibling_locked:
             return
@@ -695,7 +694,7 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
         return value_in_series
 
     def updateLines(self) -> None:
-        known_lines: List[Tuple[float, str, str]] = lines.get_lines(
+        known_lines: list[tuple[float, str, str]] = lines.get_lines(
             line_type=self._lines_type,
             z=self.redshift
         )
@@ -741,8 +740,8 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
     def zoom(
         self,
         value: float,
-        x_center: Optional[float] = None,
-        y_center: Optional[float] = None
+        x_center: float | None = None,
+        y_center: float | None = None
     ) -> None:
         """
         Zoom.
@@ -785,8 +784,8 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
 
     def zoomIn(
         self, value: float = 2.0,
-        x_center: Optional[float] = None,
-        y_center: Optional[float] = None
+        x_center: float | None = None,
+        y_center: float | None = None
     ) -> None:
         """
         Zoom in.
@@ -800,8 +799,8 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
     def zoomOut(
         self,
         value: float = 0.5,
-        x_center: Optional[float] = None,
-        y_center: Optional[float] = None
+        x_center: float | None = None,
+        y_center: float | None = None
     ) -> None:
         """
         Zoom in.
@@ -828,15 +827,15 @@ class SpectrumQChartView(qt_api.QtCharts.QChartView):
 class SpectrumQChartView2D(SpectrumQChartView):
 
     def __init__(self, *args: Any) -> None:
-        self._orig_data: Union[np.ndarray, None] = None
-        self._data: Union[np.ndarray, None] = None
-        self._spectral_axis: Union[np.ndarray, None] = None
-        self.spec_qimg: Union[QtGui.QImage, None] = None
-        self.cmap: Union[Callable, None] = None
-        self.vmin: Union[float, None] = None
-        self.vmax: Union[float, None] = None
-        self.start_1d: Union[float, None] = None
-        self.end_1d: Union[float, None] = None
+        self._orig_data: np.ndarray | None = None
+        self._data: np.ndarray | None = None
+        self._spectral_axis: np.ndarray | None = None
+        self.spec_qimg: QtGui.QImage | None = None
+        self.cmap: Callable | None = None
+        self.vmin: float | None = None
+        self.vmax: float | None = None
+        self.start_1d: float | None = None
+        self.end_1d: float | None = None
         super().__init__(*args)
 
     def setColorMap(self, cmap, update=True):
@@ -859,7 +858,7 @@ class SpectrumQChartView2D(SpectrumQChartView):
         self.chart().update()
         super().update()
 
-    def setSpectralAxis(self, wav_angstrom: Union[np.ndarray, List, Tuple]):
+    def setSpectralAxis(self, wav_angstrom: np.ndarray | list | tuple):
         self._spectral_axis = np.asarray(wav_angstrom)
 
     def setSpectrumImage(self, data: np.ndarray) -> None:
@@ -972,9 +971,9 @@ class XCorrQChartView(qt_api.QtCharts.QChartView):
     def __init__(self, *args: Any) -> None:
         super().__init__(*args)
 
-        self._last_mouse_pos: Union[QtCore.QPointF, None] = None
-        self._best_z: Union[None, float] = None
-        self._mouse_z: Union[None, QtCore.QPointF] = None
+        self._last_mouse_pos: QtCore.QPointF | None = None
+        self._best_z: None | float = None
+        self._mouse_z: None | QtCore.QPointF = None
 
         self.master: bool = False
         self.horizontal_lock: bool = True
@@ -1006,13 +1005,13 @@ class XCorrQChartView(qt_api.QtCharts.QChartView):
             )
         )
 
-    def setRedshift(self, best_z: Optional[float] = None):
+    def setRedshift(self, best_z: float | None = None):
         self._best_z = best_z
 
-    def _getDataBounds(self) -> Union[
-        Tuple[float, float, float, float],
-        Tuple[None, None, None, None],
-    ]:
+    def _getDataBounds(self) -> (
+        tuple[float, float, float, float] |
+        tuple[None, None, None, None]
+    ):
         x_min = None
         x_max = None
         y_min = None
@@ -1260,8 +1259,8 @@ class XCorrQChartView(qt_api.QtCharts.QChartView):
     def zoom(
         self,
         value: float,
-        x_center: Optional[float] = None,
-        y_center: Optional[float] = None
+        x_center: float | None = None,
+        y_center: float | None = None
     ) -> None:
         """
         Zoom.
@@ -1297,8 +1296,8 @@ class XCorrQChartView(qt_api.QtCharts.QChartView):
 
     def zoomIn(
         self, value: float = 2.0,
-        x_center: Optional[float] = None,
-        y_center: Optional[float] = None
+        x_center: float | None = None,
+        y_center: float | None = None
     ) -> None:
         """
         Zoom in.
@@ -1312,8 +1311,8 @@ class XCorrQChartView(qt_api.QtCharts.QChartView):
     def zoomOut(
         self,
         value: float = 0.5,
-        x_center: Optional[float] = None,
-        y_center: Optional[float] = None
+        x_center: float | None = None,
+        y_center: float | None = None
     ) -> None:
         """
         Zoom in.
@@ -1340,9 +1339,9 @@ class QRedrockHandler(qt_api.QtCore.QObject):
     def __init__(self) -> None:
         super().__init__()
         self.qapp = get_qapp()
-        self.targets: List[Any] = []
+        self.targets: list[Any] = []
         self.results = None
-        self._t_dict: Union[None, Dict[str, uuid.UUID]] = None
+        self._t_dict: None | dict[str, uuid.UUID] = None
 
         self._target_dump_file = 'rr.targets'
         self._result_dump_file = 'rr.result'
@@ -1387,7 +1386,7 @@ class QRedrockHandler(qt_api.QtCore.QObject):
                 self.results = None
         self.finished.emit()
 
-    def run(self, spectra: Dict[uuid.UUID, Spectrum]) -> None:
+    def run(self, spectra: dict[uuid.UUID, Spectrum]) -> None:
         self.reset.emit()
         self.maximum.emit(len(spectra))
         self.message.emit(self.qapp.tr("Building targets"))
@@ -1426,25 +1425,25 @@ class QXCorrHandler(qt_api.QtCore.QObject):
     def __init__(self) -> None:
         super().__init__()
         self.qapp = get_qapp()
-        self.templates: Union[None, Dict[str, Spectrum]] = None
-        self.use_gpu: Union[str, bool] = False
-        self.gpu_device: Union[None, str] = None
+        self.templates: None | dict[str, Spectrum] = None
+        self.use_gpu: str | bool = False
+        self.gpu_device: None | str = None
         self.z_min: float = 0
         self.z_max: float = 6
         self.z_step: float = 0.001
-        self.w_min_ang: Union[float, None] = None
-        self.w_max_ang: Union[float, None] = None
+        self.w_min_ang: float | None = None
+        self.w_max_ang: float | None = None
         self.batch_size: int = 32
         self.subtract_continuum: int = 1
         self.continuum_smoothing_level: float = 50
         self.chebyshev_order: int = 5
-        self.best_z: Dict[uuid.UUID, Dict[str, float]] = {}
-        self.corr_data: Dict[uuid.UUID, Dict[str, np.ndarray]] = {}
+        self.best_z: dict[uuid.UUID, dict[str, float]] = {}
+        self.corr_data: dict[uuid.UUID, dict[str, np.ndarray]] = {}
 
-    def setGpuBackend(self, use_gpu: Union[str, bool]) -> None:
+    def setGpuBackend(self, use_gpu: str | bool) -> None:
         self.use_gpu = use_gpu
 
-    def setGpuDevice(self, device: Optional[str] = None) -> None:
+    def setGpuDevice(self, device: str | None = None) -> None:
         self.gpu_device = device
 
     def setContinuumSubtraction(self, index: int) -> None:
@@ -1462,8 +1461,8 @@ class QXCorrHandler(qt_api.QtCore.QObject):
 
     def run(
         self,
-        spectra: Dict[uuid.UUID, Spectrum],
-        w_masks: Optional[Dict[uuid.UUID, List[Dict[str, Any]]]] = None
+        spectra: dict[uuid.UUID, Spectrum],
+        w_masks: dict[uuid.UUID, list[dict[str, Any]]] | None = None
     ) -> None:
         self.reset.emit()
         self.maximum.emit(0)
@@ -1543,14 +1542,14 @@ class AboutDialog(qt_api.QtWidgets.QDialog):
 
     def __init__(
         self,
-        parent: Optional[QtWidgets.QWidget] = None,
+        parent: QtWidgets.QWidget | None = None,
         flags: QtCore.Qt.WindowType = qt_api.QtCore.Qt.WindowType.Dialog
     ):
         super().__init__(parent, flags)
 
         qapp = get_qapp()
 
-        properties: Dict[str, str] = {
+        properties: dict[str, str] = {
             qapp.tr("PROGRAM VERSION"): redmost.__version__,
             qapp.tr("QT BACKEND"): qt_api.qt_api_name,
             qapp.tr("HAS REDROCK"): bool2tr(backends.HAS_REDROCK),
@@ -1604,7 +1603,7 @@ class AboutDialog(qt_api.QtWidgets.QDialog):
             status_tbl.setItem(j, 0, item_key)
             status_tbl.setItem(j, 1, item_val)
 
-        header: Union[QtWidgets.QHeaderView, None]
+        header: QtWidgets.QHeaderView | None
         header = status_tbl.horizontalHeader()
         if header is None:
             header = qt_api.QtWidgets.QHeaderView(
@@ -1638,7 +1637,7 @@ class ImportZcatDialog(qt_api.QtWidgets.QDialog):
         super().__init__()
         qapp: QtWidgets.QApplication = get_qapp()
 
-        self.zcat_tbl: Union[Table, None] = None
+        self.zcat_tbl: Table | None = None
 
         button_box: QtWidgets.QDialogButtonBox
         button_box = qt_api.QtWidgets.QDialogButtonBox(self)
@@ -1712,7 +1711,7 @@ class ImportZcatDialog(qt_api.QtWidgets.QDialog):
             self.z_combo_box.addItem(col_name, col_name)
             self.qf_combo_box.addItem(col_name, col_name)
 
-    def get_mapping(self) -> Tuple[str, str, Union[str, None]]:
+    def get_mapping(self) -> tuple[str, str, str | None]:
         id_col = str(
             self.id_combo_box.currentData(
                 qt_api.QtCore.Qt.ItemDataRole.UserRole
@@ -1897,7 +1896,7 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
 
 class MaskListWidgetItem(qt_api.QtWidgets.QWidget):
 
-    def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
+    def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
 
         self.label_name: QtWidgets.QLabel = qt_api.QtWidgets.QLabel()
@@ -1938,7 +1937,7 @@ class MaskListWidgetItem(qt_api.QtWidgets.QWidget):
         self.label_flags.adjustSize()
         self.label_name.adjustSize()
 
-    def setPreviewMask(self, mask: Dict[str, Any]) -> None:
+    def setPreviewMask(self, mask: dict[str, Any]) -> None:
         self.mask_preview.setMask(mask)
 
     def clearPreviewMask(self) -> None:
@@ -1947,11 +1946,11 @@ class MaskListWidgetItem(qt_api.QtWidgets.QWidget):
 
 class MaskPreviewWidget(qt_api.QtWidgets.QWidget):
 
-    def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
+    def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
-        self.mask: Union[None, Dict[str, Any]] = None
+        self.mask: None | dict[str, Any] = None
 
-    def setMask(self: QtWidgets.QWidget, mask: Dict[str, Any]) -> None:
+    def setMask(self: QtWidgets.QWidget, mask: dict[str, Any]) -> None:
         self.mask = mask
         self.repaint()
 
@@ -2010,8 +2009,8 @@ class SpecExtractionManager:
             qt_api.loadUiWidget("extract_spec_dialog.ui")
         )
 
-        self.sp2d: Union[loaders.Spectrum2D, None] = None
-        self.sp1d: Union[loaders.Spectrum, None] = None
+        self.sp2d: loaders.Spectrum2D | None = None
+        self.sp1d: loaders.Spectrum | None = None
 
         # QChartView widget for flux
 
@@ -2333,7 +2332,7 @@ class SpecExtractionManager:
 class GuiApp:
     """General class for the main GUI."""
 
-    DEFAULT_MASK_PROPERTIES: Dict[str, Any] = {
+    DEFAULT_MASK_PROPERTIES: dict[str, Any] = {
         "name": "Mask",
         "description": "",
         "start": 0,
@@ -2374,37 +2373,37 @@ class GuiApp:
 
         self.settings: QtCore.QSettings = qt_api.QtCore.QSettings()
 
-        self.open_spectra: Dict[uuid.UUID, Spectrum] = {}
-        self.open_spectra_2d: Dict[uuid.UUID, loaders.Spectrum2D] = {}
-        self.open_spectra_items: Dict[
+        self.open_spectra: dict[uuid.UUID, Spectrum] = {}
+        self.open_spectra_2d: dict[uuid.UUID, loaders.Spectrum2D] = {}
+        self.open_spectra_items: dict[
             uuid.UUID, QtWidgets.QListWidgetItem
         ] = {}
 
-        self.spectral_masks: Dict[
-            uuid.UUID, Dict[uuid.UUID, Dict[str, Any]]
+        self.spectral_masks: dict[
+            uuid.UUID, dict[uuid.UUID, dict[str, Any]]
         ] = {}
 
-        self.current_uuid: Optional[uuid.UUID] = None
-        self.object_state_dict: Dict[uuid.UUID, Any] = {}
-        self.current_project_file_path: Optional[str] = None
-        self.current_open_dir: Union[None, str] = None
-        self.current_zcat_open_dir: Union[None, str] = None
-        self.current_image_open_dir: Union[None, str] = None
-        self.current_mask_open_dir: Union[None, str] = None
-        self.xcor_tree_leaf_items: List[QtWidgets.QTreeWidgetItem] = []
-        self.xcorr_templates: Dict[str, Spectrum] = {}
-        self.cur_xcorr_leaf_item: Optional[QtWidgets.QTreeWidgetItem] = None
-        self.use_gpu: Union[str, bool] = False
-        self.compute_device: Union[str, None] = None
+        self.current_uuid: uuid.UUID | None = None
+        self.object_state_dict: dict[uuid.UUID, Any] = {}
+        self.current_project_file_path: str | None = None
+        self.current_open_dir: None | str = None
+        self.current_zcat_open_dir: None | str = None
+        self.current_image_open_dir: None | str = None
+        self.current_mask_open_dir: None | str = None
+        self.xcor_tree_leaf_items: list[QtWidgets.QTreeWidgetItem] = []
+        self.xcorr_templates: dict[str, Spectrum] = {}
+        self.cur_xcorr_leaf_item: QtWidgets.QTreeWidgetItem | None = None
+        self.use_gpu: str | bool = False
+        self.compute_device: str | None = None
         self.compute_device_id: int = -1
-        self.templates_to_plot: Dict[str, Any] = {}
+        self.templates_to_plot: dict[str, Any] = {}
 
         self.global_state: Enum = GlobalState.READY
         self._updateXcorrTemplateTreeState_lock = False
         self._rebuild_xcorr_template_list = True
-        self._copy_mask: Union[Dict[str, Any], None] = None
+        self._copy_mask: dict[str, Any] | None = None
 
-        self.qf_color: Dict[int, str] = {
+        self.qf_color: dict[int, str] = {
             0: "#FFFFFF",
             1: "#55940a00",
             2: "#55945400",
@@ -3143,9 +3142,9 @@ class GuiApp:
         # used to cast the valued read from the settings to the appropriate
         # type. This last callable is optional and can be replaced with a
         # None if no casting is required.
-        self._global_setting: Dict[
+        self._global_setting: dict[
             str,
-            Tuple[Callable, Callable, Optional[Callable]]
+            tuple[Callable, Callable, Callable | None]
         ] = {
             "geometry": (
                 self.main_wnd.saveGeometry,
@@ -3314,7 +3313,7 @@ class GuiApp:
 
         lines_list = []
         for row_index in range(self.main_wnd.lines_table_widget.rowCount()):
-            w_item: Union[None, QtWidgets.QTableWidgetItem]
+            w_item: None | QtWidgets.QTableWidgetItem
             w_item = self.main_wnd.lines_table_widget.item(row_index, 0)
             if w_item is None:
                 continue
@@ -3331,7 +3330,7 @@ class GuiApp:
 
         redshifts_form_lines = []
         for row_index in range(self.main_wnd.lines_match_list_widget.count()):
-            z_item: Union[None, QtWidgets.QListWidgetItem]
+            z_item: None | QtWidgets.QListWidgetItem
             z_item = self.main_wnd.lines_match_list_widget.item(row_index)
             if z_item is None:
                 continue
@@ -3391,7 +3390,7 @@ class GuiApp:
             self.main_wnd.spec_list_widget.currentRow() - 1
         )
 
-    def _load_icons(self, theme: Optional[str] = "feather") -> None:
+    def _load_icons(self, theme: str | None = "feather") -> None:
 
         # Icons for actions
 
@@ -3637,7 +3636,7 @@ class GuiApp:
 
         self._update_spec_item_qf(obj_uuid, quality_flag)
 
-    def _show_update_message(self, new_version: Optional[str]) -> None:
+    def _show_update_message(self, new_version: str | None) -> None:
         self.msgBox.setText(
             self.qapp.tr(
                 "A new version of Redmost is available"
@@ -3835,7 +3834,7 @@ class GuiApp:
 
     def currentSpecItemChanged(
         self,
-        new_item: Optional[QtWidgets.QListWidgetItem],
+        new_item: QtWidgets.QListWidgetItem | None,
         *args: Any,
         **kwargs: Any
     ) -> None:
@@ -3953,14 +3952,14 @@ class GuiApp:
         flux = flux / mean_flux
         flux_unit: units.Unit = units.Unit(sp.flux.unit * mean_flux)
 
-        var: Union[np.ndarray, None] = None
-        var_unit: Union[units.Unit, None] = None
+        var: np.ndarray | None = None
+        var_unit: units.Unit | None = None
 
-        wdisp: Union[np.ndarray, None] = None
-        wdisp_unit: Union[units.Unit, None] = None
+        wdisp: np.ndarray | None = None
+        wdisp_unit: units.Unit | None = None
 
-        sky: Union[np.ndarray, None] = None
-        sky_unit: Union[units.Unit, None] = None
+        sky: np.ndarray | None = None
+        sky_unit: units.Unit | None = None
 
         if isinstance(sp.uncertainty, VarianceUncertainty):
             var = sp.uncertainty.array / (mean_flux ** 2)
@@ -4244,8 +4243,8 @@ class GuiApp:
     def addMask(
         self,
         spec_uuid: uuid.UUID,
-        mask_properties: Dict[str, Any],
-        mask_uuid: Optional[uuid.UUID] = None
+        mask_properties: dict[str, Any],
+        mask_uuid: uuid.UUID | None = None
     ) -> uuid.UUID:
         if mask_uuid is None:
             mask_uuid = uuid.uuid4()
@@ -4267,10 +4266,10 @@ class GuiApp:
                 self.spectral_masks[spec_uuid].pop(mask_uuid)
         self.updateMaskList()
 
-    def currentMaskItem(self) -> Union[
-        Tuple[uuid.UUID, QtWidgets.QListWidgetItem],
+    def currentMaskItem(self) -> (
+        tuple[uuid.UUID, QtWidgets.QListWidgetItem] |
         None
-    ]:
+    ):
         if self.current_uuid is None:
             return None
 
@@ -4426,7 +4425,7 @@ class GuiApp:
         try:
             serialized_masks = []
 
-            with open(mask_file_path, 'r') as f:
+            with open(mask_file_path) as f:
                 serialized_masks = json.load(f)
 
             for mask_properties in serialized_masks:
@@ -4655,7 +4654,7 @@ class GuiApp:
 
     def maskChanged(
         self,
-        mask_item: Optional[QtWidgets.QListWidgetItem],
+        mask_item: QtWidgets.QListWidgetItem | None,
         *args: Any,
         **kwargs: Any
     ) -> None:
@@ -4679,7 +4678,7 @@ class GuiApp:
 
     def currentMaskChanged(
         self,
-        new_item: Optional[QtWidgets.QListWidgetItem],
+        new_item: QtWidgets.QListWidgetItem | None,
         *args: Any,
         **kwargs: Any
     ) -> None:
@@ -4876,8 +4875,8 @@ class GuiApp:
         elif isinstance(sp.uncertainty, StdDevUncertainty):
             var = sp.uncertainty.array ** 2
 
-        my_lines: List[
-            Tuple[int, float, float, float]
+        my_lines: list[
+            tuple[int, float, float, float]
         ] = lines.get_spectrum_lines(
             wavelengths=wav,
             flux=flux,
@@ -4925,7 +4924,7 @@ class GuiApp:
         )
         self._doImportZcat(catalogue_file)
 
-    def _doImportZcat(self, catalogue_file: Optional[str]) -> None:
+    def _doImportZcat(self, catalogue_file: str | None) -> None:
         if not catalogue_file:
             return
 
@@ -4978,8 +4977,8 @@ class GuiApp:
 
     def importSpectra(
         self,
-        file_list: List[str],
-        file_types: Optional[List[str]] = None
+        file_list: list[str],
+        file_types: list[str] | None = None
     ) -> None:
         """
         Import spectra.
@@ -4987,7 +4986,7 @@ class GuiApp:
         :param file_list: List of file paths.
         :param file_types:  List of file types.
         """
-        exception_tracker: List[Tuple[str, str]] = []
+        exception_tracker: list[tuple[str, str]] = []
 
         self._lock()
         self.global_state = GlobalState.WAITING
@@ -5022,7 +5021,7 @@ class GuiApp:
                 item_uuid = uuid.uuid4()
 
             try:
-                sp: Union[Spectrum, loaders.Spectrum2D] = loaders.read(file)
+                sp: Spectrum | loaders.Spectrum2D = loaders.read(file)
             except Exception as exc:
                 exception_tracker.append((file, str(exc)))
                 continue
@@ -5038,8 +5037,8 @@ class GuiApp:
             except KeyError:
                 sp_header = None
 
-            new_item: Union[QtWidgets.QListWidgetItem, None] = None
-            sp_1d: Union[Spectrum, None] = None
+            new_item: QtWidgets.QListWidgetItem | None = None
+            sp_1d: Spectrum | None = None
 
             if isinstance(sp, Spectrum):
                 item_name = '[1D] ' + os.path.basename(file)
@@ -5108,7 +5107,7 @@ class GuiApp:
                 qt_api.QtCore.Qt.ItemDataRole.UserRole, item_uuid
             )
 
-            info_dict: Dict[str, Any] = copy.deepcopy(self.DEFAULT_SPEC_INFO)
+            info_dict: dict[str, Any] = copy.deepcopy(self.DEFAULT_SPEC_INFO)
             info_dict['vmin'] = float(np.nanmin(sp_1d.flux.value))
             info_dict['vmax'] = float(np.nanmax(sp_1d.flux.value))
 
@@ -5307,7 +5306,7 @@ class GuiApp:
 
     def doSaveProjectAs(
             self,
-            dest: Optional[str] = None,
+            dest: str | None = None,
             *args, **kwargs
     ) -> bool:
         """
@@ -5372,12 +5371,12 @@ class GuiApp:
         self.main_wnd.redrock_text_edit.clear()
         self.statusbar.showMessage("Running redrock backend...")
 
-        for_rr: Dict[uuid.UUID, Spectrum] = {}
+        for_rr: dict[uuid.UUID, Spectrum] = {}
         if self.main_wnd.redrock_all_radio.isChecked():
             for_rr = self.open_spectra
         elif self.main_wnd.redrock_selected_radio.isChecked():
 
-            item: Union[None, QtWidgets.QListWidgetItem]
+            item: None | QtWidgets.QListWidgetItem
             for row in range(self.main_wnd.spec_list_widget.count()):
                 item = self.main_wnd.spec_list_widget.item(row)
 
@@ -5406,14 +5405,14 @@ class GuiApp:
 
         self.statusbar.showMessage("Running xcorr backend...")
 
-        for_xcorr: Dict[uuid.UUID, Spectrum] = {}
+        for_xcorr: dict[uuid.UUID, Spectrum] = {}
 
         if self.main_wnd.xcorr_all_radio.isChecked():
             for_xcorr = self.open_spectra
 
         elif self.main_wnd.xcorr_selected_radio.isChecked():
 
-            item: Union[None, QtWidgets.QListWidgetItem]
+            item: None | QtWidgets.QListWidgetItem
             for row in range(self.main_wnd.spec_list_widget.count()):
                 item = self.main_wnd.spec_list_widget.item(row)
 
@@ -5467,7 +5466,7 @@ class GuiApp:
             self.main_wnd.xcorr_csub_chebyshev_order_spinbox.value()
         )
 
-        w_masks: Dict[uuid.UUID, List[Dict[str, Any]]] = {}
+        w_masks: dict[uuid.UUID, list[dict[str, Any]]] = {}
         for spec_uuid in for_xcorr.keys():
             try:
                 mask_dict = self.spectral_masks[spec_uuid]
@@ -5486,7 +5485,7 @@ class GuiApp:
 
     def doToggleDone(self) -> None:
         check_state = None
-        item: Union[QtWidgets.QListWidgetItem, None]
+        item: QtWidgets.QListWidgetItem | None
         for row in range(self.main_wnd.spec_list_widget.count()):
             item = self.main_wnd.spec_list_widget.item(row)
             if item is None:
@@ -5523,7 +5522,7 @@ class GuiApp:
         else:
             ref_check_state = qt_api.QtCore.Qt.CheckState.Checked
 
-        other_item: Union[None, QtWidgets.QListWidgetItem]
+        other_item: None | QtWidgets.QListWidgetItem
         for row in range(self.main_wnd.spec_list_widget.count()):
             other_item = self.main_wnd.spec_list_widget.item(row)
             if other_item is None:
@@ -5639,11 +5638,11 @@ class GuiApp:
     def getGpuDeviceId(self):
         return self.compute_device_id
 
-    def getXcorrCsubOptions(self) -> Dict[str, Any]:
+    def getXcorrCsubOptions(self) -> dict[str, Any]:
         """
         Read the X-Corr continuum subtraction options.
         """
-        xcorr_csub_options: Dict[str, Any] = {}
+        xcorr_csub_options: dict[str, Any] = {}
         sub_cont = self.main_wnd.xcorr_csub_combobox.currentIndex()
         if sub_cont == 0:
             xcorr_csub_options['mode'] = None
@@ -5667,7 +5666,7 @@ class GuiApp:
         return xcorr_csub_options
 
 
-    def getXcorrSelectedTemplates(self) -> Dict[str, specutils.Spectrum]:
+    def getXcorrSelectedTemplates(self) -> dict[str, specutils.Spectrum]:
 
         selected_templates = {}
         for item in self.xcor_tree_leaf_items:
@@ -5680,7 +5679,7 @@ class GuiApp:
 
 
 
-    def getXcorrTemplateDirs(self) -> List[str]:
+    def getXcorrTemplateDirs(self) -> list[str]:
         xcorr_template_dir_list = []
         for j in range(self.settings_wnd.template_dirs_list_widget.count()):
             item = self.settings_wnd.template_dirs_list_widget.item(j)
@@ -5690,7 +5689,7 @@ class GuiApp:
 
         return xcorr_template_dir_list
 
-    def getXcorrTreeWidgetColumnWidth(self) -> List[int]:
+    def getXcorrTreeWidgetColumnWidth(self) -> list[int]:
         widths = [
             int(self.main_wnd.xcorr_templates_tree_widget.columnWidth(col))
             for col in range(
@@ -5782,7 +5781,7 @@ class GuiApp:
     def loadIcons(self) -> None:
         self._load_icons(self.getCurrentTheme())
 
-    def loadSettings(self, prog_callback: Optional[Callable] = None) -> None:
+    def loadSettings(self, prog_callback: Callable | None = None) -> None:
         st_items = self._global_setting.items()
         for j, (key, (_, set_func, cast_func)) in enumerate(st_items):
             if prog_callback is not None:
@@ -5850,8 +5849,8 @@ class GuiApp:
 
     def openProject(self, file_name: str) -> None:
         """Load the project from a file."""
-        with open(file_name, 'r') as f:
-            serialized_dict: Dict[str, Any] = json.load(f)
+        with open(file_name) as f:
+            serialized_dict: dict[str, Any] = json.load(f)
 
         self._lock()
         self.global_state = GlobalState.WAITING
@@ -5859,7 +5858,7 @@ class GuiApp:
         self.pbar.show()
 
         n_files = len(serialized_dict['open_files'])
-        exception_tracker: Dict[uuid.UUID, Tuple[str, str]] = {}
+        exception_tracker: dict[uuid.UUID, tuple[str, str]] = {}
 
         self.pbar.setMaximum(n_files)
 
@@ -5868,7 +5867,7 @@ class GuiApp:
         except Exception:
             current_uuid = None
 
-        current_spec_list_item: Optional[QtWidgets.QListWidgetItem]
+        current_spec_list_item: QtWidgets.QListWidgetItem | None
         current_spec_list_item = None
         for j, file_info in enumerate(serialized_dict['open_files']):
             self.pbar.setValue(j + 1)
@@ -5902,7 +5901,7 @@ class GuiApp:
                     )
                     continue
 
-            sp: Union[Spectrum, loaders.Spectrum2D]
+            sp: Spectrum | loaders.Spectrum2D
             try:
                 sp = loaders.read(file_path)
             except Exception as exc:
@@ -6026,7 +6025,7 @@ class GuiApp:
                 self.spectral_masks[obj_uuid] = {}
                 for mask_uuid_str, properties in serialized_masks.items():
                     mask_uuid = uuid.UUID(mask_uuid_str)
-                    mask_properties: Dict[str, Any] = copy.deepcopy(
+                    mask_properties: dict[str, Any] = copy.deepcopy(
                         self.DEFAULT_MASK_PROPERTIES
                     )
 
@@ -6089,7 +6088,7 @@ class GuiApp:
 
     def plotXcorrFunction(
             self,
-            item: Optional[QtWidgets.QTreeWidgetItem] = None,
+            item: QtWidgets.QTreeWidgetItem | None = None,
             col: int = 0
     ) -> None:
         self.cur_xcorr_leaf_item = item
@@ -6156,10 +6155,10 @@ class GuiApp:
 
         xcorr_axis_x.setTickInterval(500)
         xcorr_axis_x.setLabelFormat("%.2f")
-        xcorr_axis_x.setTitleText(str('redshift'))
+        xcorr_axis_x.setTitleText('redshift')
 
         xcorr_axis_y.setLabelFormat("%.2f")
-        xcorr_axis_y.setTitleText(str('xcorr value'))
+        xcorr_axis_y.setTitleText('xcorr value')
 
         xcorr_series.attachAxis(xcorr_axis_x)
         xcorr_series.attachAxis(xcorr_axis_y)
@@ -6173,9 +6172,9 @@ class GuiApp:
 
     def plotXcorrTemplate(
             self,
-            item: Optional[QtWidgets.QTreeWidgetItem] = None,
+            item: QtWidgets.QTreeWidgetItem | None = None,
             col: int = 0,
-            redshift: Optional[float] = None
+            redshift: float | None = None
     ) -> None:
         if item is None:
             sel = self.main_wnd.xcorr_templates_tree_widget.selectedItems()
@@ -6197,7 +6196,7 @@ class GuiApp:
     def doPlotTemplates(self, *args, **kwargs) -> None:
         self.plotTemplates()
 
-    def plotTemplates(self, redshift: Optional[float] = None) -> None:
+    def plotTemplates(self, redshift: float | None = None) -> None:
         if redshift is None:
             redshift = self.main_wnd.z_dspinbox.value()
 
@@ -6218,8 +6217,8 @@ class GuiApp:
 
     def drawXcorrTemplate(
             self,
-            template_id: Optional[str] = None,
-            redshift: Optional[float] = None
+            template_id: str | None = None,
+            redshift: float | None = None
     ) -> None:
         if not self.main_wnd.plot_templates_check_box.isChecked():
             return
@@ -6273,8 +6272,8 @@ class GuiApp:
 
         # min_y and max_y are used to rescale the template to the current
         # 1D spectrum flux range
-        min_y: Union[float, None] = None
-        max_y: Union[float, None] = None
+        min_y: float | None = None
+        max_y: float | None = None
 
         ser: QtCharts.QXYSeries
         for ser in flux_chart.series():
@@ -6334,7 +6333,7 @@ class GuiApp:
         if not self.main_wnd.xcorr_csub_preview_checkbox.isChecked():
             return
 
-        csub_options: Dict[str, Any] = self.getXcorrCsubOptions()
+        csub_options: dict[str, Any] = self.getXcorrCsubOptions()
 
         mask = ~np.isfinite(flux)
 
@@ -6442,7 +6441,7 @@ class GuiApp:
 
     def previewXcorrTemplate(
             self,
-            item: Optional[QtWidgets.QTreeWidgetItem] = None,
+            item: QtWidgets.QTreeWidgetItem | None = None,
             col: int = 0
     ):
         """
@@ -6508,7 +6507,7 @@ class GuiApp:
 
         # Serialize program state for json dumping
         serialized_open_file_list = []
-        item: Union[QtWidgets.QListWidgetItem, None]
+        item: QtWidgets.QListWidgetItem | None
         proj_path = os.path.dirname(file_name)
         for k in range(self.main_wnd.spec_list_widget.count()):
             item = self.main_wnd.spec_list_widget.item(k)
@@ -6521,7 +6520,7 @@ class GuiApp:
             spec_meta = self.open_spectra[item_uuid].meta
 
 
-            file_info: Dict[str, Any] = {
+            file_info: dict[str, Any] = {
                 'index': k,
                 'uuid': item_uuid.hex,
                 'text': item.text(),
@@ -6541,7 +6540,7 @@ class GuiApp:
                 )
 
             try:
-                serialized_links: Dict[str, Any] = {
+                serialized_links: dict[str, Any] = {
                     sp_type: os.path.relpath(
                         sp.meta['full_path'], proj_path
                     )
@@ -6555,11 +6554,11 @@ class GuiApp:
             serialized_open_file_list.append(file_info)
 
         # Serialize objects info for json dumping
-        serialized_object_info_dict: Dict[str, Any] = {}
-        serialized_object_mask_dict: Dict[str, Any] = {}
+        serialized_object_info_dict: dict[str, Any] = {}
+        serialized_object_mask_dict: dict[str, Any] = {}
         for obj_uuid, obj_info in self.object_state_dict.items():
-            serialized_lines_list: List[Dict[str, Any]] = []
-            serialized_z_list: List[Dict[str, Any]] = []
+            serialized_lines_list: list[dict[str, Any]] = []
+            serialized_z_list: list[dict[str, Any]] = []
 
             for line_info in obj_info['lines']['list']:
                 try:
@@ -6582,7 +6581,7 @@ class GuiApp:
                 except (TypeError, ValueError):
                     continue
 
-            serialized_info_dict: Dict[str, Any] = copy.deepcopy(obj_info)
+            serialized_info_dict: dict[str, Any] = copy.deepcopy(obj_info)
             serialized_info_dict['lines'] = {
                 'list': serialized_lines_list,
                 'redshifts': serialized_z_list,
@@ -6595,7 +6594,7 @@ class GuiApp:
             except KeyError:
                 pass
             else:
-                serialized_masks: Dict[str, Any] = {}
+                serialized_masks: dict[str, Any] = {}
                 for mask_uuid, masks_properties in masks.items():
                     serialized_masks[mask_uuid.hex] = copy.deepcopy(
                         masks_properties
@@ -6633,7 +6632,7 @@ class GuiApp:
             val = get_func()
             self.settings.setValue(key, val)
 
-    def setGpuBackend(self, backend_index: Union[int, str, None]):
+    def setGpuBackend(self, backend_index: int | str | None):
         self.settings_wnd.gpu_device_combo_box.clear()
         if backend_index == 0 or backend_index is None:
             self.settings_wnd.gpu_device_combo_box.setEnabled(False)
@@ -6685,7 +6684,7 @@ class GuiApp:
         else:
             self.setGpuBackend(None)
 
-    def setCurrentObjectRedshift(self, redshift: Optional[float]) -> None:
+    def setCurrentObjectRedshift(self, redshift: float | None) -> None:
         if redshift is None:
             redshift = 0
 
@@ -6695,9 +6694,9 @@ class GuiApp:
         self.flux_chart_view_2d.setRedshift(redshift=redshift)
         self.plotTemplates(redshift=redshift)
 
-        item_col_0: Union[QtWidgets.QTableWidgetItem, None]
-        item_col_1: Union[QtWidgets.QTableWidgetItem, None]
-        item_col_2: Union[QtWidgets.QTableWidgetItem, None]
+        item_col_0: QtWidgets.QTableWidgetItem | None
+        item_col_1: QtWidgets.QTableWidgetItem | None
+        item_col_2: QtWidgets.QTableWidgetItem | None
         for j in range(self.main_wnd.lines_table_widget.rowCount()):
             item_col_0 = self.main_wnd.lines_table_widget.item(j, 0)
             item_col_1 = self.main_wnd.lines_table_widget.item(j, 1)
@@ -6724,7 +6723,7 @@ class GuiApp:
 
     def setCurrentObjectRedshiftFromXcorr(
             self,
-            item: Optional[QtWidgets.QTreeWidgetItem] = None,
+            item: QtWidgets.QTreeWidgetItem | None = None,
             col: int = 0
     ) -> None:
         if item is None:
@@ -6758,7 +6757,7 @@ class GuiApp:
         if row < 0:
             return
 
-        item: Union[QtWidgets.QListWidgetItem, None]
+        item: QtWidgets.QListWidgetItem | None
         item = self.main_wnd.lines_match_list_widget.item(row)
         if item is None:
             return
@@ -6778,7 +6777,7 @@ class GuiApp:
         if lines_tbl_row < 0:
             return
 
-        w_item: Union[None, QtWidgets.QTableWidgetItem]
+        w_item: None | QtWidgets.QTableWidgetItem
         w_item = self.main_wnd.lines_table_widget.item(lines_tbl_row, 0)
         if w_item is None:
             return
@@ -6804,12 +6803,12 @@ class GuiApp:
             self.flux_chart_view.setLinesType('A')
             self.flux_chart_view_2d.setLinesType('A')
 
-    def setXcorrTemplateDirs(self, dir_list: List[str]) -> None:
+    def setXcorrTemplateDirs(self, dir_list: list[str]) -> None:
         for dir_path in dir_list:
             self.addNewTemplateDir(dir_path, update=False)
         self.updateXcorrTemplateList()
 
-    def setXcorrTreeWidgetColumnWidth(self, widths: List[int]) -> None:
+    def setXcorrTreeWidgetColumnWidth(self, widths: list[int]) -> None:
         for col, col_width in enumerate(widths):
             self.main_wnd.xcorr_templates_tree_widget.setColumnWidth(
                 col, int(col_width)
@@ -6856,7 +6855,7 @@ class GuiApp:
             self.main_wnd.obj_prop_table_widget.setItem(j, 0, val_item)
             self.main_wnd.obj_prop_table_widget.setItem(j, 1, com_item)
 
-    def showXcorrZ(self, object_uuid: Optional[uuid.UUID] = None) -> None:
+    def showXcorrZ(self, object_uuid: uuid.UUID | None = None) -> None:
         if self.xcorr_handler.best_z is None:
             return
 
@@ -6884,7 +6883,7 @@ class GuiApp:
 
     def toggleSimilarSpecItems(
         self,
-        item: Optional[QtWidgets.QListWidgetItem]
+        item: QtWidgets.QListWidgetItem | None
     ) -> None:
         if item is None:
             return
@@ -6900,7 +6899,7 @@ class GuiApp:
         else:
             ref_check_state = qt_api.QtCore.Qt.CheckState.Checked
 
-        other_item: Union[None, QtWidgets.QListWidgetItem]
+        other_item: None | QtWidgets.QListWidgetItem
         for row in range(self.main_wnd.spec_list_widget.count()):
             other_item = self.main_wnd.spec_list_widget.item(row)
 
@@ -6987,9 +6986,9 @@ class GuiApp:
         book_icon = qt_api.get_qicon("book", self.getCurrentTheme())
 
         def _build_folder_tree(
-                parts: List[str],
+                parts: list[str],
                 parent: QtWidgets.QTreeWidgetItem
-        ) -> Union[None, QtWidgets.QTreeWidgetItem]:
+        ) -> None | QtWidgets.QTreeWidgetItem:
             if len(parts) <= 1:
                 return None
 
@@ -7056,8 +7055,8 @@ class GuiApp:
 
 
 def values2series(
-    x_values: Union[List[float], np.ndarray],
-    y_values: Union[List[float], np.ndarray],
+    x_values: list[float] | np.ndarray,
+    y_values: list[float] | np.ndarray,
     name: str
 ) -> QtCharts.QLineSeries:
     """

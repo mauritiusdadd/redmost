@@ -7,8 +7,7 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import TYPE_CHECKING
-from typing import Dict, Union, Optional, Any
+from typing import TYPE_CHECKING, Any
 from types import ModuleType
 from collections import namedtuple
 
@@ -33,7 +32,7 @@ VersionTuple = namedtuple(
     field_names="qt_api, qt_api_version, runtime, compiled"
 )
 
-QT_APIS: Dict[str, str] = {
+QT_APIS: dict[str, str] = {
     x.lower(): x
     for x in ["PyQt6", "PySide6", "PyQt5", "PySide2"]
 }
@@ -48,7 +47,7 @@ def is_library_loaded(name):
     return name in sys.modules
 
 
-def get_qt_api_from_env() -> Union[None, str]:
+def get_qt_api_from_env() -> None | str:
     api = os.environ.get("PYTEST_QT_API")
     if api is None:
         api = os.environ.get("QT_API")
@@ -63,7 +62,7 @@ def get_qt_api_from_env() -> Union[None, str]:
     return api
 
 
-def get_already_loaded_backend() -> Union[None, str]:
+def get_already_loaded_backend() -> None | str:
     for api, backend in QT_APIS.items():
         if is_library_loaded(backend):
             return api
@@ -81,25 +80,25 @@ class QtBackend:
 
     def __init__(self) -> None:
         self._import_errors = {}
-        self.is_pyside: Union[None, bool] = None
-        self.is_pyqt: Union[None, bool] = None
-        self.qt_api_name: Union[None, str] = None
+        self.is_pyside: None | bool = None
+        self.is_pyqt: None | bool = None
+        self.qt_api_name: None | str = None
 
-        self.QtCore: Optional[ModuleType] = None
-        self.QtGui: Optional[ModuleType] = None
-        self.QtTest: Optional[ModuleType] = None
-        self.QtWidgets: Optional[ModuleType] = None
-        self.QtCharts: Optional[ModuleType] = None
+        self.QtCore: ModuleType | None = None
+        self.QtGui: ModuleType | None = None
+        self.QtTest: ModuleType | None = None
+        self.QtWidgets: ModuleType | None = None
+        self.QtCharts: ModuleType | None = None
 
-        self.qInfo: Optional[QtCore.qInfo] = None
-        self.qDebug: Optional[QtCore.qDebug] = None
-        self.qWarning: Optional[QtCore.qWarning] = None
-        self.qCritical: Optional[QtCore.qCritical] = None
-        self.qFatal: Optional[QtCore.qFatal] = None
+        self.qInfo: QtCore.qInfo | None = None
+        self.qDebug: QtCore.qDebug | None = None
+        self.qWarning: QtCore.qWarning | None = None
+        self.qCritical: QtCore.qCritical | None = None
+        self.qFatal: QtCore.qFatal | None = None
 
-        self.Signal: Optional[Signal] = None
-        self.Slot: Optional[Slot] = None
-        self.Property: Optional[Property] = None
+        self.Signal: Signal | None = None
+        self.Slot: Slot | None = None
+        self.Property: Property | None = None
 
         self.set_qt_api()
 
@@ -205,7 +204,7 @@ class QtBackend:
     def get_qicon(
         self,
         icon_name: str,
-        icon_theme: Optional[str] = "feather"
+        icon_theme: str | None = "feather"
     ) -> QtBackend.QtGui.QIcon:
         icon_file = get_icon(icon_name, icon_theme)
         if icon_file is None:

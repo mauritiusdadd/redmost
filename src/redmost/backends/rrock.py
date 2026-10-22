@@ -3,7 +3,8 @@ import uuid
 import pickle
 import argparse
 from packaging import version
-from typing import Tuple, List, Dict, Optional, Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 import numpy as np
 
@@ -47,10 +48,10 @@ else:
     from redrock.zfind import zfind
 
     def get_templates(
-        template_types: Optional[List[str]] = None,
+        template_types: list[str] | None = None,
         filepath: bool = False,
-        templates: Optional[str] = None
-    ) -> List[Template]:
+        templates: str | None = None
+    ) -> list[Template]:
         """
         Get avilable templates.
 
@@ -85,7 +86,7 @@ else:
         return available_templates
 
 
-    def get_template_types() -> List[str]:
+    def get_template_types() -> list[str]:
         """
         Get the available types of templates.
 
@@ -100,15 +101,15 @@ else:
 
 
     def build_redrock_targets(
-        spectra: Dict[uuid.UUID, Spectrum1D],
+        spectra: dict[uuid.UUID, Spectrum1D],
         lambda_min_ang: float = 3500.0,
         lambda_max_ang: float = 10000.0,
-        progress_callback: Optional[Callable] = None
-    ) -> List[Target]:
+        progress_callback: Callable | None = None
+    ) -> list[Target]:
 
         target_dict = {}
 
-        targets: List[Target] = []
+        targets: list[Target] = []
         sp: Spectrum1D
         sp_uuid: uuid.UUID
         for j, (sp_uuid, sp) in enumerate(spectra.items()):
@@ -188,7 +189,7 @@ else:
 
         return targets, target_dict
 
-    def run_redrock(targets: List[Target]) -> Tuple[Any, Any]:
+    def run_redrock(targets: list[Target]) -> tuple[Any, Any]:
         start = elapsed(None, "", comm=None)
         print(f"Using redrock version {redrock.__version__}")
 
@@ -207,7 +208,7 @@ else:
 
         _ = elapsed(
             start,
-            "Distribution of {} targets".format(len(dtargets.all_target_ids)),
+            f"Distribution of {len(dtargets.all_target_ids)} targets",
             comm=None
         )
 
@@ -247,7 +248,7 @@ else:
         return (scandata, zfit)
 
 
-def dump_targets(targets: List[Any], pickle_file: str):
+def dump_targets(targets: list[Any], pickle_file: str):
     with open(pickle_file, 'wb') as f:
         pickle.dump(targets, f)
 
@@ -255,14 +256,14 @@ def dump_targets(targets: List[Any], pickle_file: str):
 def run_redrock_on_pickled_targets(pickle_file: str):
     try:
         with open(pickle_file, 'rb') as f:
-            targets: List[Any] = pickle.load(f)
+            targets: list[Any] = pickle.load(f)
     except Exception:
         return
 
     return run_redrock(targets)
 
 
-def main(options: Optional[List] = None) -> None:
+def main(options: list | None = None) -> None:
     parser = argparse.ArgumentParser()
 
     parser.add_argument(

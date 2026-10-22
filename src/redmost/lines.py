@@ -1,4 +1,3 @@
-from typing import Optional, Union, List, Tuple
 
 from astropy.modeling import Fittable1DModel, Parameter  # type: ignore
 from scipy.stats import median_abs_deviation  # type: ignore
@@ -88,7 +87,7 @@ class Emission1D(Fittable1DModel):
 
     def __init__(
         self,
-        lines_identifications: List[float],
+        lines_identifications: list[float],
         sigma: float = 1.0,
         redshift: float = 0.0,
         **kwargs
@@ -116,10 +115,10 @@ class Emission1D(Fittable1DModel):
 def get_spectrum_lines(
     wavelengths: np.ndarray,
     flux: np.ndarray,
-    var: Optional[Union[np.ndarray, float]] = None,
+    var: np.ndarray | float | None = None,
     sigma_threshold: float = 10.0,
     smoothing_sigma: float = 10,
-) -> List[Tuple[int, float, float, float]]:
+) -> list[tuple[int, float, float, float]]:
     """
     Identify the position of clear emission or absorption lines.
 
@@ -178,7 +177,7 @@ def get_spectrum_lines(
             outlier[k] = 0
 
     # Get position, width and height of the identifications
-    identifications: List[Tuple[int, float, float, float]] = []
+    identifications: list[tuple[int, float, float, float]] = []
     c_start = None
     c_wstart = None
     c_end = None
@@ -208,11 +207,11 @@ def get_spectrum_lines(
 
 
 def get_lines(
-    name: Optional[str] = None,
-    line_type: Optional[str] = None,
-    wrange: Optional[Union[np.ndarray, List[float]]] = None,
+    name: str | None = None,
+    line_type: str | None = None,
+    wrange: np.ndarray | list[float] | None = None,
     z: float = 0
-) -> List[Tuple[float, str, str]]:
+) -> list[tuple[float, str, str]]:
     """
     Return line data according to the given line name and types.
 
@@ -268,12 +267,12 @@ def get_lines(
 
 
 def get_redshift_from_lines(
-    identifications: List[float],
+    identifications: list[float],
     z_max: float = 6.0,
     z_min: float = 0.0,
-    z_points: Optional[int] = None,
+    z_points: int | None = None,
     tol: float = 1.0
-) -> Union[None, Tuple[np.ndarray, np.ndarray]]:
+) -> None | tuple[np.ndarray, np.ndarray]:
     """
     Get the redshift of a set of line identifications.
 

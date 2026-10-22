@@ -1,7 +1,7 @@
 import os
 import copy
 from pathlib import Path
-from typing import Optional, Union, List, Tuple, Dict, Any
+from typing import Any
 
 import numpy as np
 
@@ -51,8 +51,8 @@ KNOWN_RGB_EXT_NAMES = ['r', 'g', 'b', 'red', 'green', 'blue']
 
 def getHDU(
         hdul: fits.HDUList,
-        valid_names: List[str],
-        index: Optional[Union[str, int]] = None
+        valid_names: list[str],
+        index: str | int | None = None
 ):
     if index is None:
         for hdu in hdul:
@@ -63,7 +63,7 @@ def getHDU(
         return hdul[index]
 
 
-def isFits(filename: Union[str, os.PathLike[str]]) -> bool:
+def isFits(filename: str | os.PathLike[str]) -> bool:
     """
     Check if the file is a valid FITS file.
 
@@ -133,7 +133,7 @@ def identifyClashVlt1dFits(origin, *args, **kwargs) -> bool:
     return True
 
 
-def isAscii(filename: Union[str, os.PathLike[str]], sample_size: int = 4096) -> bool:
+def isAscii(filename: str | os.PathLike[str], sample_size: int = 4096) -> bool:
     """
     Check if the file is a valid ASCII text file.
 
@@ -170,7 +170,7 @@ def identify1DAsciiTable(origin, *args, **kwargs) -> bool:
     if not isAscii(args[0]):
         return False
 
-    with open(args[0], 'r') as f:
+    with open(args[0]) as f:
         for l in f:
             if l.strip().startswith('#'):
                 return True
@@ -185,7 +185,7 @@ def identify1DAsciiTable(origin, *args, **kwargs) -> bool:
 )
 def asciiTableLoader(
    file_name: str,
-   resolution: Union[int, float] = 1,
+   resolution: int | float = 1,
     **kwargs
 ) -> Spectrum:
     t = Table.read(file_name, format='ascii')
@@ -294,8 +294,8 @@ def identifyFORS21dFits(origin, *args, **kwargs) -> bool:
 )
 def fors2FitsLoader(
    file_name: str,
-    flux_hdu_index: Optional[Union[str, int]] = None,
-    resolution: Union[int, float] = 1,
+    flux_hdu_index: str | int | None = None,
+    resolution: int | float = 1,
     **kwargs
 ) -> Spectrum:
     data, header = fits.getdata(file_name, header=True)
@@ -327,8 +327,8 @@ def fors2FitsLoader(
 )
 def specexFitsLoader(
     file_name: str,
-    flux_hdu_index: Optional[Union[str, int]] = None,
-    resolution: Union[int, float] = 1,
+    flux_hdu_index: str | int | None = None,
+    resolution: int | float = 1,
     **kwargs
 ) -> Spectrum:
     """
@@ -350,7 +350,7 @@ def specexFitsLoader(
         mask_hdu = getHDU(hdulist, KNOWN_MASK_EXT_NAMES)
         rc_hdu = getHDU(hdulist, KNOWN_RCURVE_EXT_NAMES)
 
-        valid_id_keys: List[str] = [
+        valid_id_keys: list[str] = [
             f"{i}{j}"
             for i in ['', 'OBJ', 'OBJ_', 'TARGET', 'TARGET_']
             for j in ['ID', 'NUMBER', 'UID', 'UUID']
@@ -483,8 +483,8 @@ def specexFitsLoader(
 )
 def clashVlt1DFitsLoader(
         file_name: str,
-        flux_hdu_index: Optional[Union[str, int]] = None,
-        resolution: Union[int, float] = 1,
+        flux_hdu_index: str | int | None = None,
+        resolution: int | float = 1,
         **kwargs
 ) -> Spectrum:
     """
@@ -624,7 +624,7 @@ def identifyJWSTStacked(origin, *args, **kwargs) -> bool:
     extensions=['fits']
 )
 def JWSTStackedLoader(
-    file_name: Union[str, os.PathLike[str]], *args, **kwargs
+    file_name: str | os.PathLike[str], *args, **kwargs
 ) -> Spectrum:
     chunks = []
 
@@ -672,7 +672,7 @@ def JWSTStackedLoader(
 
 def read_sdss_extra(
     file: str
-) -> Tuple[Union[np.ndarray, None], Union[np.ndarray, None]]:
+) -> tuple[np.ndarray | None, np.ndarray | None]:
     try:
         myt = Table.read(file, hdu='COADD')
     except KeyError:
@@ -694,15 +694,15 @@ def read_sdss_extra(
 class Spectrum2D:
     def __init__(
         self,
-        flux: Optional[Union[np.ndarray, units.Quantity]] = None,
-        spectral_axis: Optional[units.Quantity] = None,
-        uncertainty: Optional[Union[
-            StdDevUncertainty, VarianceUncertainty, InverseVariance
-        ]] = None
+        flux: np.ndarray | units.Quantity | None = None,
+        spectral_axis: units.Quantity | None = None,
+        uncertainty: None | (
+            StdDevUncertainty | VarianceUncertainty | InverseVariance
+        ) = None
     ) -> None:
-        self.wcs: Union[wcs.WCS, None] = None
-        self.spectral_axis: Union[units.Quantity, None] = spectral_axis
-        self.flux: Union[np.ndarray, None] = None
+        self.wcs: wcs.WCS | None = None
+        self.spectral_axis: units.Quantity | None = spectral_axis
+        self.flux: np.ndarray | None = None
 
         if flux is not None:
             if isinstance(flux, units.Quantity):
@@ -711,12 +711,12 @@ class Spectrum2D:
                 self.flux = flux * units.dimensionless_unscaled
 
         self.uncertainty = uncertainty
-        self.meta: Dict[Any, Any] = {}
+        self.meta: dict[Any, Any] = {}
 
     @classmethod
     def read(
-        cls, file_path: str, ext: Optional[Union[int, str]] = None,
-        format: Optional[str] = None
+        cls, file_path: str, ext: int | str | None = None,
+        format: str | None = None
     ) -> "Spectrum2D":
         if ext is None:
             ext = 0
@@ -807,8 +807,8 @@ def identifyClashVlt2dFits(origin, *args, **kwargs) -> bool:
 )
 def clashVlt2DFitsLoader(
         file_name: str,
-        flux_hdu_index: Optional[Union[str, int]] = None,
-        resolution: Union[int, float] = 1,
+        flux_hdu_index: str | int | None = None,
+        resolution: int | float = 1,
         **kwargs
 ) -> Spectrum2D:
     """
@@ -845,10 +845,10 @@ def identify_format(filename, dtype=Spectrum):
     return valid_format
 
 
-def read(file: str) -> Union[Spectrum, Spectrum2D]:
+def read(file: str) -> Spectrum | Spectrum2D:
     sp_formats = identify_format(file)
 
-    spec_class: Union[type[Spectrum], type[Spectrum2D]]
+    spec_class: type[Spectrum] | type[Spectrum2D]
     for spec_format in sp_formats:
         if spec_format == 'clash-vlt-2d':
             spec_class = Spectrum2D
@@ -863,11 +863,11 @@ def read(file: str) -> Union[Spectrum, Spectrum2D]:
         spec_class = Spectrum
         spec_format = None
 
-    orig_sp: Union[Spectrum, Spectrum2D] = spec_class.read(
+    orig_sp: Spectrum | Spectrum2D = spec_class.read(
         file, format=spec_format
     )
 
-    sp: Union[Spectrum, Spectrum2D] = type(orig_sp)(
+    sp: Spectrum | Spectrum2D = type(orig_sp)(
         flux=orig_sp.flux,
         spectral_axis=orig_sp.spectral_axis.to('AA')  # Convert to Angstrom
     )

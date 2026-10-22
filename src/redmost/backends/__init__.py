@@ -1,4 +1,3 @@
-
 import redmost.backends.rrock as rrock
 try:
     import redmost.backends.xcorr as xcorr
