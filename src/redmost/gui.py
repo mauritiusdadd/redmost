@@ -13,6 +13,7 @@ import sys
 import json
 import uuid
 import pathlib
+import tempfile
 import webbrowser
 import traceback
 import hashlib
@@ -1440,6 +1441,21 @@ class QXCorrHandler(qt_api.QtCore.QObject):
         self.best_z: dict[uuid.UUID, dict[str, float]] = {}
         self.corr_data: dict[uuid.UUID, dict[str, np.ndarray]] = {}
 
+        self._in_file: str | None = None
+        self._out_file: str | None = None
+        self._msg_header: str = ""
+
+        self.process: QtCore.QProcess = qt_api.QtCore.QProcess(self)
+        self.process.readyReadStandardOutput.connect(  # type: ignore
+            self._process_output
+        )
+        self.process.readyReadStandardError.connect(  # type: ignore
+            self._process_error
+        )
+        self.process.finished.connect(  # type: ignore
+            self.retrieve_results
+        )
+
     def setGpuBackend(self, use_gpu: str | bool) -> None:
         self.use_gpu = use_gpu
 
@@ -1459,6 +1475,74 @@ class QXCorrHandler(qt_api.QtCore.QObject):
         self.best_z = {}
         self.corr_data = {}
 
+    def _process_output(self) -> None:
+        data_bytes: QtCore.QByteArray = self.process.readAllStandardOutput()
+        text = bytes(data_bytes).decode('utf-8', errors='replace')
+        for line in text.splitlines():
+            line_str = line.strip()
+            if not line_str:
+                continue
+            try:
+                info = json.loads(line_str)
+                if isinstance(info, dict) and "progress" in info:
+                    total = int(info.get("total", 0))
+                    prog = int(info.get("progress", 0))
+                    desc = info.get("description", "")
+                    if total > 0:
+                        self.maximum.emit(total)
+                        self.progress.emit(prog)
+                    if desc:
+                        self.message.emit(f"{self._msg_header}: {desc}")
+                    continue
+            except (json.JSONDecodeError, ValueError):
+                pass
+            self.message.emit(line_str)
+
+    def _process_error(self) -> None:
+        data_bytes: QtCore.QByteArray = self.process.readAllStandardError()
+        text = bytes(data_bytes).decode('utf-8', errors='replace')
+        for line in text.splitlines():
+            line_str = line.strip()
+            if line_str:
+                self.message.emit(line_str)
+
+    def retrieve_results(self, exit_status: int) -> None:
+        if exit_status != 0:
+            self.message.emit(self.qapp.tr("*** X-CORR EXECUTION FAILED ***"))
+        else:
+            try:
+                if self._out_file and os.path.exists(self._out_file):
+                    with open(self._out_file, 'rb') as f:
+                        results = pickle.load(f)
+                    if results is not None:
+                        self.best_z.update(results[0])
+                        self.corr_data.update(results[1])
+                        self.message.emit(self.qapp.tr("X-Corr done!"))
+            except Exception:
+                self.message.emit(self.qapp.tr("*** X-CORR LOAD FAILED ***"))
+
+        for fpath in (self._in_file, self._out_file):
+            if fpath and os.path.exists(fpath):
+                try:
+                    os.remove(fpath)
+                except OSError:
+                    pass
+        self._in_file = None
+        self._out_file = None
+
+        self.reset.emit()
+        self.finished.emit()
+
+    def is_running(self) -> bool:
+        return (
+            self.process.state()
+            != qt_api.QtCore.QProcess.ProcessState.NotRunning
+        )
+
+    def cancel(self) -> None:
+        if self.is_running():
+            self.process.kill()
+
     def run(
         self,
         spectra: dict[uuid.UUID, Spectrum],
@@ -1466,15 +1550,14 @@ class QXCorrHandler(qt_api.QtCore.QObject):
     ) -> None:
         self.reset.emit()
         self.maximum.emit(0)
-        self.maximum.emit(100)
 
         if self.use_gpu:
-            msg_header = (
+            self._msg_header = (
                 self.qapp.tr("Running X-Corr backend on GPU")
                 + f" [{self.gpu_device}]"
             )
         else:
-            msg_header = self.qapp.tr("Running X-Corr backend on CPU")
+            self._msg_header = self.qapp.tr("Running X-Corr backend on CPU")
 
         if not self.subtract_continuum:
             sub_mode = None
@@ -1483,46 +1566,56 @@ class QXCorrHandler(qt_api.QtCore.QObject):
         else:
             sub_mode = 'fft'
 
-        msg_header += f" [c.sub.={sub_mode}]"
+        self._msg_header += f" [c.sub.={sub_mode}]"
+        self.message.emit(self._msg_header)
 
-        self.message.emit(msg_header)
+        run_id = uuid.uuid4().hex[:8]
+        tmp_dir = tempfile.gettempdir()
+        self._in_file = os.path.join(tmp_dir, f"xcorr_in_{run_id}.pkl")
+        self._out_file = os.path.join(tmp_dir, f"xcorr_out_{run_id}.pkl")
 
-        def progress_callback(prog, total, text: str):
-            if total == 0:
-                self.maximum.emit(0)
-                self.progress.emit(0)
-            else:
-                self.maximum.emit(total)
-                self.progress.emit(prog)
-            self.message.emit(f"{msg_header}: {text}")
-            self.qapp.processEvents()
+        config = {
+            "z_min": self.z_min,
+            "z_max": self.z_max,
+            "z_step": self.z_step,
+            "w_min": self.w_min_ang,
+            "w_max": self.w_max_ang,
+            "w_masks": w_masks,
+            "use_gpu": self.use_gpu,
+            "device": self.gpu_device,
+            "continuum_subtracted": sub_mode,
+            "batch_size": self.batch_size,
+            "fft_sigma": self.continuum_smoothing_level,
+            "chebyshev_order": self.chebyshev_order,
+        }
 
-        # NOTE: xcorr_2d is faster than xcorr_1d when run on multiple objects
-        #       even when run on CPU, so we stick with it.
-        results = backends.xcorr.xcorr_2d(
+        backends.xcorr.dump_xcorr_batch(
+            self._in_file,
             spectra=spectra,
             templates=self.templates,
-            z_min=self.z_min,
-            z_max=self.z_max,
-            z_step=self.z_step,
-            w_min=self.w_min_ang,
-            w_max=self.w_max_ang,
-            w_masks=w_masks,
-            use_gpu=self.use_gpu,
-            device=self.gpu_device,
-            continuum_subtracted=sub_mode,
-            batch_size=self.batch_size,
-            progress_callback=progress_callback,
-            fft_sigma=self.continuum_smoothing_level,
-            chebyshev_order=self.chebyshev_order,
+            config=config,
         )
 
-        self.best_z.update(results[0])
-        self.corr_data.update(results[1])
+        env = qt_api.QtCore.QProcessEnvironment.systemEnvironment()
+        src_path = str(pathlib.Path(__file__).resolve().parent.parent)
+        existing_ppath = env.value("PYTHONPATH", "")
+        if existing_ppath:
+            env.insert(
+                "PYTHONPATH", f"{src_path}{os.pathsep}{existing_ppath}"
+            )
+        else:
+            env.insert("PYTHONPATH", src_path)
+        self.process.setProcessEnvironment(env)
 
-        self.reset.emit()
-        self.message.emit(self.qapp.tr("X-Corr done!"))
-        self.finished.emit()
+        self.process.start(
+            sys.executable,
+            [
+                backends.xcorr.__file__,
+                "--batch-file", self._in_file,
+                "--output-file", self._out_file,
+                "--stdout-mode", "json",
+            ]
+        )
 
 
 class GlobalState(Enum):
@@ -3820,7 +3913,69 @@ class GuiApp:
         self.global_state = GlobalState.READY
         self._unlock()
 
+    def _disable_xcorr_controls(self) -> None:
+        """
+        Disable controls in tab_xcorr while xcorr runs, keeping run button.
+        """
+        if (
+            not hasattr(self, 'main_wnd')
+            or not hasattr(self.main_wnd, 'tab_xcorr')
+        ):
+            return
+
+        self._disabled_xcorr_controls = []
+        tab = self.main_wnd.tab_xcorr
+        btn = getattr(self.main_wnd, 'xcorr_run_button', None)
+
+        layout = tab.layout()
+        if layout is None:
+            return
+
+        for i in range(layout.count()):
+            item = layout.itemAt(i)
+            if item is None:
+                continue
+            w = item.widget()
+            if w is not None and w is not btn:
+                if w.isEnabled():
+                    self._disabled_xcorr_controls.append(w)
+                    w.setEnabled(False)
+            elif item.layout() is not None:
+                sub = item.layout()
+                for j in range(sub.count()):
+                    subitem = sub.itemAt(j)
+                    subw = subitem.widget() if subitem else None
+                    if subw is not None and subw is not btn:
+                        if subw.isEnabled():
+                            self._disabled_xcorr_controls.append(subw)
+                            subw.setEnabled(False)
+
+        if btn is not None:
+            btn.setText(self.qapp.tr("Cancel"))
+            btn.setEnabled(True)
+
+    def _restore_xcorr_controls(self) -> None:
+        """Re-enable tab_xcorr controls that were disabled during run."""
+        if hasattr(self, '_disabled_xcorr_controls'):
+            for w in self._disabled_xcorr_controls:
+                try:
+                    w.setEnabled(True)
+                except Exception:
+                    pass
+            self._disabled_xcorr_controls.clear()
+
+        if (
+            hasattr(self, 'main_wnd')
+            and hasattr(self.main_wnd, 'xcorr_run_button')
+            and self.main_wnd.xcorr_run_button is not None
+        ):
+            self.main_wnd.xcorr_run_button.setText(self.qapp.tr("Run"))
+            self.main_wnd.xcorr_run_button.setEnabled(True)
+
     def collectXCorrResults(self) -> None:
+        self.pbar.hide()
+        self._restore_xcorr_controls()
+
         if self.xcorr_handler is None:
             return
 
@@ -5403,6 +5558,11 @@ class GuiApp:
             # action if the xcorr backend is not found
             return
 
+        if self.xcorr_handler.is_running():
+            self.statusbar.showMessage(self.qapp.tr("Cancelling X-Corr..."))
+            self.xcorr_handler.cancel()
+            return
+
         self.statusbar.showMessage("Running xcorr backend...")
 
         for_xcorr: dict[uuid.UUID, Spectrum] = {}
@@ -5480,8 +5640,8 @@ class GuiApp:
                 )
 
         self.pbar.show()
+        self._disable_xcorr_controls()
         self.xcorr_handler.run(for_xcorr, w_masks)
-        self.pbar.hide()
 
     def doToggleDone(self) -> None:
         check_state = None
