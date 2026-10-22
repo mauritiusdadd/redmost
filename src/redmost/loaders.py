@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Optional, Union, List, Tuple, Dict, Any
 
 import numpy as np
-from asdf_astropy.converters.nddata import uncertainty
 
 from astropy.nddata import VarianceUncertainty  # type: ignore
 from astropy.nddata import StdDevUncertainty  # type: ignore
@@ -57,10 +56,9 @@ def getHDU(
 ):
     if index is None:
         for hdu in hdul:
-            if hdu.name.lower() in valid_names:
+            if hdu.name.lower() in valid_names and hdu.data is not None:
                 return hdu
-        else:
-            return None
+        return None
     else:
         return hdul[index]
 
@@ -191,6 +189,10 @@ def asciiTableLoader(
     **kwargs
 ) -> Spectrum:
     t = Table.read(file_name, format='ascii')
+    try:
+        t_sky = Table.read(f"{file_name}_sky", format='ascii')
+    except OSError:
+        t_sky = None
     
     flux = None
     var = None
@@ -202,6 +204,8 @@ def asciiTableLoader(
     for col in t.colnames:
         if col.lower() in KNOWN_SPEC_EXT_NAMES:
             flux = t[col] * flux_units
+            if t_sky is not None:
+                var = t_sky[col]**2
         elif col.lower() in KNOWN_VARIANCE_EXT_NAMES:
             var = t[col]
         elif col.lower() in KNOWN_RMS_EXT_NAMES:
@@ -561,10 +565,10 @@ def clashVlt1DFitsLoader(
 
         lam_mask = np.ones(len(flux), dtype=bool)
 
-        if w_min != None:
+        if w_min is not None:
             lam_mask &= lam >= w_min
 
-        if w_max != None:
+        if w_max is not None:
             lam_mask &= lam <= w_max
 
         flux = flux[lam_mask]

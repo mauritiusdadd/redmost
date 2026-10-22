@@ -3671,6 +3671,8 @@ class GuiApp:
         )
 
     def _update_spec_item_qf(self, item_uuid: uuid.UUID, qf: int) -> None:
+        if item_uuid not in self.open_spectra_items:
+            return
         item: QtWidgets.QListWidgetItem
         item = self.open_spectra_items[item_uuid]
         try:
@@ -6001,7 +6003,8 @@ class GuiApp:
             except KeyError:
                 z_comment = ""
 
-            self._update_spec_item_qf(obj_uuid, quality_flag)
+            if obj_uuid in self.open_spectra_items:
+                self._update_spec_item_qf(obj_uuid, quality_flag)
             self.object_state_dict[obj_uuid] = {
                 'redshift': redshift,
                 'comment': z_comment,
