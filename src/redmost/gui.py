@@ -2738,13 +2738,16 @@ class GuiApp:
             self.doRemoveCurrentTemplateDir
         )
 
-        self.settings_wnd.select_template_dir_rrock.clicked.connect(
-            self.doSelectRedrockTemplateDir
-        )
-
-        self.settings_wnd.linet_edit_template_dir_rrock.textChanged.connect(
-            self.updateRedrockTemplateList
-        )
+        if backends.HAS_REDROCK:
+            self.settings_wnd.select_template_dir_rrock.clicked.connect(
+                self.doSelectRedrockTemplateDir
+            )
+            self.settings_wnd.linet_edit_template_dir_rrock.textChanged.connect(
+                self.updateRedrockTemplateList
+            )
+        else:
+            # Disable the entire RedRock tab in the settings dialog.
+            self.settings_wnd.settings_tab_widget.setTabEnabled(2, False)
 
         self.control_mapping_wnd = cast(
             ControlMappingDialog,
@@ -6096,7 +6099,18 @@ class GuiApp:
     def doSelectRedrockTemplateDir(
         self, *args: Any, **kwargs: Any
     ) -> None:
-        """Open a folder-selection dialog and update the Redrock template dir."""
+        """
+        Open a folder-selection dialog and update the Redrock template dir.
+
+        After selection, validates that the folder contains valid Redrock
+        templates. If no templates are found, asks the user whether to
+        download them into that folder.
+        """
+        if not backends.HAS_REDROCK:
+            return
+
+        from redrock.templates import find_templates
+
         url = qt_api.QtWidgets.QFileDialog.getExistingDirectoryUrl(
             self.settings_wnd,
             self.qapp.tr("Select Redrock templates directory"),
@@ -6105,7 +6119,54 @@ class GuiApp:
         if not url.isValid():
             return
 
-        self.setRedrockTemplateDir(url.path())
+        selected_dir = url.path()
+
+        # Validate: check that the folder contains recognisable templates.
+        try:
+            tmpl_files = list(find_templates(selected_dir))
+        except Exception:
+            tmpl_files = []
+
+        if tmpl_files:
+            # Valid templates found - accept the selection.
+            self.setRedrockTemplateDir(selected_dir)
+            self.updateRedrockTemplateList(selected_dir)
+            return
+
+        # No templates found in the selected folder - ask the user.
+        msg = qt_api.QtWidgets.QMessageBox(parent=self.settings_wnd)
+        msg.setWindowTitle(self.qapp.tr("No templates found"))
+        msg.setText(
+            self.qapp.tr(
+                "No valid Redrock templates were found in the selected "
+                "folder:\n{}\n\nWould you like to download the templates "
+                "into that folder?"
+            ).format(selected_dir)
+        )
+        msg.setIcon(qt_api.QtWidgets.QMessageBox.Icon.Warning)
+
+        btn_download = msg.addButton(
+            self.qapp.tr("Download"),
+            qt_api.QtWidgets.QMessageBox.ButtonRole.AcceptRole
+        )
+        msg.addButton(
+            self.qapp.tr("Cancel"),
+            qt_api.QtWidgets.QMessageBox.ButtonRole.RejectRole
+        )
+        msg.setDefaultButton(btn_download)
+        msg.exec()
+
+        if msg.clickedButton() != btn_download:
+            return
+
+        # Clone into a subdirectory of the selected folder.
+        clone_dir = str(
+            pathlib.Path(selected_dir) / "redrock-templates"
+        )
+        if self.doDownloadRedrockTemplates(clone_dir):
+            self.setRedrockTemplateDir(clone_dir)
+            self.saveSettings()
+            self.updateRedrockTemplateList(clone_dir)
 
     def doDownloadRedrockTemplates(
         self, dest_dir: str
