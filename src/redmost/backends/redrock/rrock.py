@@ -62,6 +62,12 @@ except (ImportError, ModuleNotFoundError):
     def run_redrock(*args, **kwargs):
         raise NotImplementedError()
 
+    def get_redrock_templates_dict(*args, **kwargs):
+        raise NotImplementedError()
+
+    def eval_redrock_template(*args, **kwargs):
+        raise NotImplementedError()
+
 else:
     HAS_REDROCK = True
 
@@ -122,6 +128,34 @@ else:
         ]
         types = list(set(templates))
         return types
+
+    _loaded_templates_dict: dict[tuple[str, str], Template] | None = None
+
+    def get_redrock_templates_dict(
+        template_dir: str | None = None
+    ) -> dict[tuple[str, str], Template]:
+        """Return a dictionary of (spectype, subtype) -> Template."""
+        global _loaded_templates_dict
+        if _loaded_templates_dict is not None and template_dir is None:
+            return _loaded_templates_dict
+        from redrock.templates import load_templates
+        t_dict = load_templates(template_dir, asdict=True)
+        if template_dir is None:
+            _loaded_templates_dict = t_dict
+        return t_dict
+
+    def eval_redrock_template(
+        spectype: str,
+        subtype: str,
+        coeff: np.ndarray,
+        wave: np.ndarray,
+        z: float,
+        template_dir: str | None = None
+    ) -> np.ndarray:
+        """Evaluate a redrock model spectrum given coefficients and redshift."""
+        t_dict = get_redrock_templates_dict(template_dir)
+        tx = t_dict[(spectype, subtype)]
+        return tx.eval(coeff, wave, z)
 
 
     def build_redrock_targets(

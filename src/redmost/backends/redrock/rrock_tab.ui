@@ -78,6 +78,85 @@
     </widget>
    </item>
    <item>
+    <widget class="QGroupBox" name="group_box_redrock_templates">
+     <property name="title">
+      <string>Templates</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_redrock_templates">
+      <property name="spacing">
+       <number>5</number>
+      </property>
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QTableWidget" name="redrock_templates_table_widget">
+        <property name="verticalScrollBarPolicy">
+         <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOn</enum>
+        </property>
+        <property name="editTriggers">
+         <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
+        </property>
+        <property name="selectionMode">
+         <enum>QAbstractItemView::SelectionMode::SingleSelection</enum>
+        </property>
+        <property name="selectionBehavior">
+         <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
+        </property>
+        <property name="sortingEnabled">
+         <bool>true</bool>
+        </property>
+        <attribute name="horizontalHeaderStretchLastSection">
+         <bool>true</bool>
+        </attribute>
+        <column>
+         <property name="text">
+          <string>Template</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Redshift</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>chi2</string>
+         </property>
+        </column>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_rr_buttons">
+        <item>
+         <widget class="QPushButton" name="redrock_preview_button">
+          <property name="text">
+           <string>Preview selected template</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="redrock_use_z_button">
+          <property name="text">
+           <string>Use selected redshift</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QGroupBox" name="group_box_6">
      <property name="title">
       <string>Status</string>
@@ -100,6 +179,12 @@
       </property>
       <item>
        <widget class="QTextEdit" name="redrock_text_edit">
+        <property name="maximumSize">
+         <size>
+          <width>16777215</width>
+          <height>120</height>
+         </size>
+        </property>
         <property name="verticalScrollBarPolicy">
          <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOn</enum>
         </property>

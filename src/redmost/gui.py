@@ -3685,25 +3685,7 @@ class GuiApp:
         if res is None:
             return
 
-        zbest = res[1][res[1]['znum'] == 0]
-
-        self._lock()
-        self.global_state = GlobalState.LOAD_OBJECT_STATE
-        self._backup_current_object_state()
-        for row in zbest:
-            obj_uuid = t_dict[row['targetid']]
-            try:
-                info_dict = self.object_state_dict[obj_uuid]
-            except KeyError:
-                info_dict = copy.deepcopy(self.DEFAULT_SPEC_INFO)
-                self.object_state_dict[obj_uuid] = info_dict
-
-            info_dict['redshift'] = row['z']
-            if row['zwarn'] != 0:
-                self._update_spec_item_qf(obj_uuid, 1)
-        self._restore_object_state(self.current_uuid)
-        self.global_state = GlobalState.READY
-        self._unlock()
+        self.showRedrockZ(self.current_uuid)
 
     def _on_redrock_cancelled(self) -> None:
         """Handle Redrock job cancellation."""
@@ -3803,6 +3785,7 @@ class GuiApp:
         )
 
         self.showXcorrZ(spec_uuid)
+        self.showRedrockZ(spec_uuid)
         self.plotXcorrFunction(self.cur_xcorr_leaf_item)
 
         self.showObjectInfo(spec_uuid)
@@ -6144,6 +6127,8 @@ class GuiApp:
         for t_kind, t_id in self.templates_to_plot.items():
             if t_kind == 'xcorr':
                 self.drawXcorrTemplate(t_id, redshift)
+            elif t_kind == 'rrock':
+                self.drawRedrockTemplate(t_id, redshift)
 
     def drawXcorrTemplate(
             self,
@@ -6247,6 +6232,103 @@ class GuiApp:
         pen.setWidth(2)
         template_series.setPen(pen)
         template_series.setOpacity(0.2)
+
+    def drawRedrockTemplate(
+            self,
+            template_id: str | None = None,
+            redshift: float | None = None
+    ) -> None:
+        if not self.main_wnd.plot_templates_check_box.isChecked():
+            return
+
+        if template_id is None:
+            if self.templates_to_plot.get('rrock') is None:
+                return
+            template_id = self.templates_to_plot['rrock']
+
+        if self.current_uuid is None:
+            return
+
+        obj_results = self.redrock_plugin.results_per_object.get(
+            self.current_uuid
+        )
+        if not obj_results or template_id not in obj_results:
+            return
+
+        t_info = obj_results[template_id]
+        if redshift is None:
+            redshift = t_info['z']
+
+        current_sp = self.open_spectra.get(self.current_uuid)
+        if current_sp is None:
+            return
+
+        wave = current_sp.spectral_axis.to(units.angstrom).value
+
+        try:
+            from redmost.backends.redrock import rrock as rrock_backend
+            template_dir = self.redrock_plugin.get_template_dir() or None
+            template_flux = rrock_backend.eval_redrock_template(
+                spectype=t_info['spectype'],
+                subtype=t_info['subtype'],
+                coeff=t_info['coeff'],
+                wave=wave,
+                z=redshift,
+                template_dir=template_dir
+            )
+        except Exception:
+            return
+
+        template_name = f"rrock/{template_id}"
+        flux_chart: QtCharts.QChart = self.flux_chart_view.chart()
+
+        if not flux_chart.axes():
+            flux_axis_x = qt_api.QtCharts.QValueAxis()
+            flux_axis_y = qt_api.QtCharts.QValueAxis()
+            flux_chart.addAxis(
+                flux_axis_x, qt_api.QtCore.Qt.AlignmentFlag.AlignBottom
+            )
+            flux_chart.addAxis(
+                flux_axis_y, qt_api.QtCore.Qt.AlignmentFlag.AlignLeft
+            )
+        else:
+            flux_axis_x = flux_chart.axes()[0]
+            flux_axis_y = flux_chart.axes()[1]
+
+        min_y: float | None = None
+        max_y: float | None = None
+
+        for ser in flux_chart.series():
+            if ser.name().startswith('rrock/'):
+                flux_chart.removeSeries(ser)
+            elif ser.name().lower() == 'flux':
+                ser_points = ser.points()
+                if (ser_points is not None) and (len(ser_points) > 5):
+                    p_y_list = [p.y() for p in ser_points]
+                    min_y = np.percentile(p_y_list, 20)
+                    max_y = np.percentile(p_y_list, 80)
+
+        if (min_y is not None) and (max_y is not None):
+            t_mask = np.isfinite(template_flux)
+            if any(t_mask):
+                template_flux -= np.nanpercentile(template_flux[t_mask], 20)
+                denom = np.nanpercentile(template_flux[t_mask], 80)
+                if denom > 0:
+                    template_flux /= denom
+            template_flux *= (max_y - min_y)
+            template_flux += min_y
+
+        template_series: QtCharts.QLineSeries = values2series(
+            wave, template_flux, template_name
+        )
+        flux_chart.addSeries(template_series)
+        template_series.attachAxis(flux_axis_x)
+        template_series.attachAxis(flux_axis_y)
+        pen: QtGui.QPen = template_series.pen()
+        pen.setColor(qt_api.QtGui.QColor("blue"))
+        pen.setWidth(2)
+        template_series.setPen(pen)
+        template_series.setOpacity(0.5)
 
     def plotXcorrCsub(
         self, spectral_axis_ang: np.ndarray, flux: np.ndarray
@@ -6747,6 +6829,178 @@ class GuiApp:
             return
 
         self.setCurrentObjectRedshift(template_z)
+
+    def showRedrockZ(self, object_uuid: uuid.UUID | None = None) -> None:
+        tbl = getattr(self.redrock_plugin, 'templates_table_widget', None)
+        if tbl is None:
+            return
+
+        if object_uuid is None:
+            if self.current_uuid is None:
+                tbl.setRowCount(0)
+                return
+            object_uuid = self.current_uuid
+
+        obj_results = self.redrock_plugin.results_per_object.get(object_uuid)
+        if not obj_results:
+            tbl.setRowCount(0)
+            return
+
+        tbl.setSortingEnabled(False)
+        tbl.setRowCount(len(obj_results))
+        for row_idx, (tname, tinfo) in enumerate(obj_results.items()):
+            name_item = qt_api.QtWidgets.QTableWidgetItem(str(tname))
+            name_item.setData(qt_api.QtCore.Qt.ItemDataRole.UserRole, tname)
+            name_item.setFlags(
+                qt_api.QtCore.Qt.ItemFlag.ItemIsSelectable |
+                qt_api.QtCore.Qt.ItemFlag.ItemIsEnabled
+            )
+
+            z_val = tinfo.get('z')
+            z_str = f"{z_val:.5f}" if z_val is not None else "None"
+            z_item = qt_api.QtWidgets.QTableWidgetItem(z_str)
+            z_item.setData(qt_api.QtCore.Qt.ItemDataRole.UserRole, z_val)
+            z_item.setFlags(
+                qt_api.QtCore.Qt.ItemFlag.ItemIsSelectable |
+                qt_api.QtCore.Qt.ItemFlag.ItemIsEnabled
+            )
+
+            chi2_val = tinfo.get('chi2')
+            chi2_str = f"{chi2_val:.1f}" if chi2_val is not None else "None"
+            chi2_item = qt_api.QtWidgets.QTableWidgetItem(chi2_str)
+            chi2_item.setData(qt_api.QtCore.Qt.ItemDataRole.UserRole, chi2_val)
+            chi2_item.setFlags(
+                qt_api.QtCore.Qt.ItemFlag.ItemIsSelectable |
+                qt_api.QtCore.Qt.ItemFlag.ItemIsEnabled
+            )
+
+            tbl.setItem(row_idx, 0, name_item)
+            tbl.setItem(row_idx, 1, z_item)
+            tbl.setItem(row_idx, 2, chi2_item)
+
+        tbl.setSortingEnabled(True)
+
+    def doSetCurrentObjectRedshiftFromRedrock(self, *args, **kwargs) -> None:
+        self.setCurrentObjectRedshiftFromRedrock()
+
+    def setCurrentObjectRedshiftFromRedrock(
+        self,
+        item: QtWidgets.QTableWidgetItem | None = None,
+        *args,
+        **kwargs
+    ) -> None:
+        tbl = getattr(self.redrock_plugin, 'templates_table_widget', None)
+        if tbl is None or self.current_uuid is None:
+            return
+
+        if item is None:
+            selected_items = tbl.selectedItems()
+            if not selected_items:
+                return
+            item = selected_items[0]
+
+        row = item.row()
+        item_0 = tbl.item(row, 0)
+        item_1 = tbl.item(row, 1)
+        if item_0 is None or item_1 is None:
+            return
+
+        tname = item_0.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
+        z_val = item_1.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
+        if z_val is None:
+            return
+
+        self.setCurrentObjectRedshift(float(z_val))
+
+    def doPlotRedrockTemplate(self, *args, **kwargs) -> None:
+        self.plotRedrockTemplate()
+
+    def plotRedrockTemplate(
+        self,
+        item: QtWidgets.QTableWidgetItem | None = None,
+        *args,
+        **kwargs
+    ) -> None:
+        tbl = getattr(self.redrock_plugin, 'templates_table_widget', None)
+        if tbl is None or self.current_uuid is None:
+            return
+
+        if item is None:
+            selected_items = tbl.selectedItems()
+            if not selected_items:
+                return
+            item = selected_items[0]
+
+        row = item.row()
+        item_0 = tbl.item(row, 0)
+        if item_0 is None:
+            return
+
+        tname = item_0.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
+        self.templates_to_plot['rrock'] = tname
+        self.drawRedrockTemplate()
+
+    def doPreviewRedrockTemplate(self, *args, **kwargs) -> None:
+        self.previewRedrockTemplate()
+
+    def previewRedrockTemplate(
+        self,
+        item: QtWidgets.QTableWidgetItem | None = None,
+        *args,
+        **kwargs
+    ) -> None:
+        tbl = getattr(self.redrock_plugin, 'templates_table_widget', None)
+        if tbl is None or self.current_uuid is None:
+            return
+
+        if item is None:
+            selected_items = tbl.selectedItems()
+            if not selected_items:
+                return
+            item = selected_items[0]
+
+        row = item.row()
+        item_0 = tbl.item(row, 0)
+        if item_0 is None:
+            return
+
+        tname = item_0.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
+        obj_results = self.redrock_plugin.results_per_object.get(
+            self.current_uuid
+        )
+        if not obj_results or tname not in obj_results:
+            return
+
+        t_info = obj_results[tname]
+        current_sp = self.open_spectra.get(self.current_uuid)
+        if current_sp is None:
+            return
+
+        wave = current_sp.spectral_axis.to(units.angstrom).value
+        try:
+            from redmost.backends.redrock import rrock as rrock_backend
+            template_dir = self.redrock_plugin.get_template_dir() or None
+            flux = rrock_backend.eval_redrock_template(
+                spectype=t_info['spectype'],
+                subtype=t_info['subtype'],
+                coeff=t_info['coeff'],
+                wave=wave,
+                z=t_info['z'],
+                template_dir=template_dir
+            )
+        except Exception:
+            return
+
+        series = values2series(
+            wave,
+            flux,
+            name=f"{tname} (z={t_info['z']:.5f})"
+        )
+        pen: QtGui.QPen = series.pen()
+        pen.setColor(qt_api.QtGui.QColor("blue"))
+        pen.setWidth(2)
+        series.setPen(pen)
+        self.previewSeries([series])
 
     def setCurrentObjectRedshiftFromLines(self, row: int) -> None:
         if row < 0:

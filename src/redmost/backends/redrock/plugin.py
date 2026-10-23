@@ -25,6 +25,7 @@ import uuid
 import pickle
 from pathlib import Path
 import traceback
+import numpy as np
 
 from typing import Optional, Any
 
@@ -66,6 +67,12 @@ class RedrockPlugin(BackendPlugin):
         self.all_radio: Optional[QtWidgets.QRadioButton] = None
         self.log_text_edit: Optional[QtWidgets.QTextEdit] = None
         self.run_button: Optional[QtWidgets.QPushButton] = None
+        self.templates_table_widget: Optional[QtWidgets.QTableWidget] = None
+        self.preview_button: Optional[QtWidgets.QPushButton] = None
+        self.use_z_button: Optional[QtWidgets.QPushButton] = None
+
+        # Redrock results store: target_uuid -> {template_name: dict_with_z_and_info}
+        self.results_per_object: dict[uuid.UUID, dict[str, Any]] = {}
 
         # Settings UI widgets
         self._settings_widget: Optional[QtWidgets.QWidget] = None
@@ -87,6 +94,12 @@ class RedrockPlugin(BackendPlugin):
             self.process.state()
             != QtCore.QProcess.ProcessState.NotRunning
         )
+
+    def clear(self) -> None:
+        """Clear cached redrock results."""
+        self.results_per_object.clear()
+        if self.templates_table_widget is not None:
+            self.templates_table_widget.setRowCount(0)
 
     def cancel(self) -> None:
         """Kill the running redrock subprocess."""
@@ -136,6 +149,11 @@ class RedrockPlugin(BackendPlugin):
         self.all_radio = getattr(widget, "redrock_all_radio", None)
         self.log_text_edit = getattr(widget, "redrock_text_edit", None)
         self.run_button = getattr(widget, "redrock_run_button", None)
+        self.templates_table_widget = getattr(
+            widget, "redrock_templates_table_widget", None
+        )
+        self.preview_button = getattr(widget, "redrock_preview_button", None)
+        self.use_z_button = getattr(widget, "redrock_use_z_button", None)
 
         if not self.is_available():
             if self.run_button is not None:
@@ -256,6 +274,45 @@ class RedrockPlugin(BackendPlugin):
                 if self.log_text_edit is not None:
                     self.log_text_edit.append(msg)
                 self.message.emit(msg)
+            else:
+                if results is not None:
+                    scandata, zfit = results
+                    for target_id, target_uuid in self._t_dict.items():
+                        obj_dict: dict[str, Any] = {}
+                        if scandata is not None and target_id in scandata:
+                            for tname, val in scandata[target_id].items():
+                                z_grid = val['redshifts']
+                                tot_chi2 = val['zchi2'] + val['penalty']
+                                idx = int(tot_chi2.argmin())
+                                best_z = float(z_grid[idx])
+                                best_coeff = np.array(val['zcoeff'][idx])
+                                parts = tname.split(':::')
+                                spectype = parts[0]
+                                subtype = parts[1] if len(parts) > 1 else ''
+                                obj_dict[tname] = {
+                                    'name': tname,
+                                    'z': best_z,
+                                    'chi2': float(tot_chi2[idx]),
+                                    'coeff': best_coeff,
+                                    'spectype': spectype,
+                                    'subtype': subtype,
+                                }
+                        elif zfit is not None:
+                            t_rows = zfit[zfit['targetid'] == target_id]
+                            for row in t_rows:
+                                tname = row['spectype'] + (
+                                    ':::' + row['subtype'] if row['subtype']
+                                    else ''
+                                )
+                                obj_dict[tname] = {
+                                    'name': tname,
+                                    'z': float(row['z']),
+                                    'chi2': float(row['chi2']),
+                                    'coeff': np.array(row['coeff']),
+                                    'spectype': row['spectype'],
+                                    'subtype': row['subtype'],
+                                }
+                        self.results_per_object[target_uuid] = obj_dict
 
         self._stderr_buffer.clear()
         self.restore_controls()
@@ -435,7 +492,6 @@ class RedrockPlugin(BackendPlugin):
                 tmpl_files = list(find_templates(configured_dir))
             except Exception:
                 tmpl_files = []
-
             if tmpl_files:
                 os.environ["RR_TEMPLATE_DIR"] = configured_dir
                 self._update_template_files_list(configured_dir)
@@ -544,3 +600,24 @@ class RedrockPlugin(BackendPlugin):
         rr_btn = self.get_run_button()
         if rr_btn is not None:
             rr_btn.clicked.connect(app.doStartRedrock)
+
+        if self.templates_table_widget is not None:
+            self.templates_table_widget.itemDoubleClicked.connect(
+                app.setCurrentObjectRedshiftFromRedrock
+            )
+            self.templates_table_widget.itemDoubleClicked.connect(
+                app.plotRedrockTemplate
+            )
+
+        if self.use_z_button is not None:
+            self.use_z_button.clicked.connect(
+                app.doSetCurrentObjectRedshiftFromRedrock
+            )
+            self.use_z_button.clicked.connect(
+                app.doPlotRedrockTemplate
+            )
+
+        if self.preview_button is not None:
+            self.preview_button.clicked.connect(
+                app.doPreviewRedrockTemplate
+            )
