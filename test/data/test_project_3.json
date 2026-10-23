@@ -1,0 +1,163 @@
+{
+  "current_uuid": "71391f98e77449ae9349ef7b31cfdcd5",
+  "open_files": [
+    {
+      "index": 0,
+      "uuid": "89c6c862ecd447a0933be3a15ee5b34f",
+      "text": "spec_95.fits",
+      "checked": 2,
+      "path": "spec_95.fits"
+    },
+    {
+      "index": 1,
+      "uuid": "e0e861cc85ae4398b432af20c33a5c8b",
+      "text": "spec_955.fits",
+      "checked": 2,
+      "path": "spec_955.fits"
+    },
+    {
+      "index": 2,
+      "uuid": "1bf0287f5b8441289c9ccf4f1f9f53e7",
+      "text": "spec_963.fits",
+      "checked": 2,
+      "path": "spec_963.fits"
+    },
+    {
+      "index": 3,
+      "uuid": "71391f98e77449ae9349ef7b31cfdcd5",
+      "text": "spec_965.fits",
+      "checked": 2,
+      "path": "spec_965.fits"
+    }
+  ],
+  "objects_properties": {
+    "89c6c862ecd447a0933be3a15ee5b34f": {
+      "redshift": 0.4,
+      "comment": "",
+      "quality_flag": 0,
+      "cmap": "viridis",
+      "vmin": 0.0,
+      "vmax": 1.0,
+      "lines": {
+        "list": [],
+        "redshifts": []
+      }
+    },
+    "e0e861cc85ae4398b432af20c33a5c8b": {
+      "redshift": 0.374,
+      "comment": "",
+      "quality_flag": 0,
+      "cmap": "viridis",
+      "vmin": 0.0,
+      "vmax": 1.0,
+      "lines": {
+        "list": [],
+        "redshifts": []
+      }
+    },
+    "1bf0287f5b8441289c9ccf4f1f9f53e7": {
+      "redshift": 0.389,
+      "comment": "",
+      "quality_flag": 0,
+      "cmap": "viridis",
+      "vmin": 0.0,
+      "vmax": 1.0,
+      "lines": {
+        "list": [],
+        "redshifts": []
+      }
+    },
+    "71391f98e77449ae9349ef7b31cfdcd5": {
+      "redshift": 0.383,
+      "comment": "",
+      "quality_flag": 0,
+      "cmap": "viridis",
+      "vmin": 0.0,
+      "vmax": 1.0,
+      "lines": {
+        "list": [],
+        "redshifts": []
+      }
+    }
+  },
+  "spectral_masks": {
+    "89c6c862ecd447a0933be3a15ee5b34f": {
+      "88d3313ca4314651b261b351beb94099": {
+        "name": "Global",
+        "description": "A global mask",
+        "start": 5800,
+        "end": 6000,
+        "color": "red",
+        "pattern": "SolidPattern",
+        "alpha": 0.4,
+        "enabled": true,
+        "global": true,
+        "linked": "89c6c862ecd447a0933be3a15ee5b34f",
+        "selected": false,
+        "highlighted": false
+      }
+    },
+    "e0e861cc85ae4398b432af20c33a5c8b": {
+      "88d3313ca4314651b261b351beb94099": {
+        "name": "Global",
+        "description": "A global mask",
+        "start": 5800,
+        "end": 6000,
+        "color": "red",
+        "pattern": "SolidPattern",
+        "alpha": 0.4,
+        "enabled": true,
+        "global": true,
+        "linked": "89c6c862ecd447a0933be3a15ee5b34f",
+        "selected": false,
+        "highlighted": false
+      },
+      "f2d0c759239745a0b0d9086ece171a41": {
+        "name": "Mask 995",
+        "description": "a mask for object 995",
+        "start": 8000,
+        "end": 8100,
+        "color": "#0000ff",
+        "pattern": "BDiagPattern",
+        "alpha": 0.81,
+        "enabled": true,
+        "global": false,
+        "linked": null,
+        "selected": false,
+        "highlighted": false
+      }
+    },
+    "1bf0287f5b8441289c9ccf4f1f9f53e7": {
+      "88d3313ca4314651b261b351beb94099": {
+        "name": "Global",
+        "description": "A global mask",
+        "start": 5800,
+        "end": 6000,
+        "color": "red",
+        "pattern": "SolidPattern",
+        "alpha": 0.4,
+        "enabled": true,
+        "global": true,
+        "linked": "89c6c862ecd447a0933be3a15ee5b34f",
+        "selected": false,
+        "highlighted": false
+      }
+    },
+    "71391f98e77449ae9349ef7b31cfdcd5": {
+      "88d3313ca4314651b261b351beb94099": {
+        "name": "Global",
+        "description": "A global mask",
+        "start": 5800,
+        "end": 6000,
+        "color": "red",
+        "pattern": "SolidPattern",
+        "alpha": 0.4,
+        "enabled": true,
+        "global": true,
+        "linked": "89c6c862ecd447a0933be3a15ee5b34f",
+        "selected": false,
+        "highlighted": false
+      }
+    }
+  }
+}

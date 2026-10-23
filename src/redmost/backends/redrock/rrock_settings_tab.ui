@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>RedrockSettingsWidget</class>
+ <widget class="QWidget" name="RedrockSettingsWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>500</width>
+    <height>350</height>
+   </rect>
+  </property>
+  <layout class="QGridLayout" name="gridLayout_2">
+   <item row="0" column="0">
+    <widget class="QPushButton" name="select_template_dir_rrock">
+     <property name="text">
+      <string>Choose template folder</string>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="1">
+    <widget class="QLineEdit" name="linet_edit_template_dir_rrock"/>
+   </item>
+   <item row="1" column="0" colspan="2">
+    <widget class="QGroupBox" name="groupBox_rrock">
+     <property name="title">
+      <string>Template files found</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_rrock_files">
+      <item row="0" column="0">
+       <widget class="QListWidget" name="template_files_list_widget_rrock">
+        <property name="verticalScrollBarPolicy">
+         <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOn</enum>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

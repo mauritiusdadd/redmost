@@ -10,4 +10,4 @@ dist/
 src/redmost/_version.py
 
 # Private modules
-src/redmost/backends/xcorr.py
+src/redmost/backends/xcorr/*

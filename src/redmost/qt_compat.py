@@ -268,10 +268,13 @@ class QtBackend:
 
         """
 
-        ui_file_path: str = os.path.join(
-            os.path.abspath(os.path.dirname(__file__)), 'ui',
-            ui_filename
-        )
+        if os.path.isabs(ui_filename):
+            ui_file_path = ui_filename
+        else:
+            ui_file_path = os.path.join(
+                os.path.abspath(os.path.dirname(__file__)), 'ui',
+                ui_filename
+            )
 
         if self.is_pyqt:
             uic = self._import_module("uic")

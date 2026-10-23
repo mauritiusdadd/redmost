@@ -1328,350 +1328,6 @@ class XCorrQChartView(qt_api.QtCharts.QChartView):
         """Reset the zoom to fit the chart content."""
         self.setAxesRange(*self._getDataBounds())
 
-class QRedrockHandler(qt_api.QtCore.QObject):
-    """Class to handle redrock subprocess."""
-
-    progress: Signal = qt_api.Signal(int)
-    maximum: Signal = qt_api.Signal(int)
-    reset: Signal = qt_api.Signal()
-    message: Signal = qt_api.Signal(str)
-    finished: Signal = qt_api.Signal()
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.qapp = get_qapp()
-        self.targets: list[Any] = []
-        self.results = None
-        self._t_dict: None | dict[str, uuid.UUID] = None
-
-        self._target_dump_file = 'rr.targets'
-        self._result_dump_file = 'rr.result'
-        self._stderr_buffer: list[str] = []
-        self.process: QtCore.QProcess = qt_api.QtCore.QProcess(self)
-        self.process.readyReadStandardOutput.connect(  # type: ignore
-            self._process_output
-        )
-        self.process.readyReadStandardError.connect(  # type: ignore
-            self._process_error
-        )
-        self.process.finished.connect(  # type: ignore
-            self.retrieve_results
-        )
-
-        self._total_progress = 0
-        self._total_maximum = 0
-
-    def _process_output(self) -> None:
-        data_bytes: QtCore.QByteArray
-        data_bytes = self.process.readAllStandardOutput()
-        text = bytes(data_bytes).decode('utf-8', errors='replace')
-        for line in text.splitlines():
-            simplified = ' '.join(line.lower().strip().split())
-            if "finished in" in simplified:
-                self._total_progress += 1
-                self.progress.emit(self._total_progress)
-            elif "computing redshifts took:" in simplified:
-                self.progress.emit(self._total_maximum)
-
-        self.message.emit(str(text))
-
-    def _process_error(self) -> None:
-        data_bytes: QtCore.QByteArray
-        data_bytes = self.process.readAllStandardError()
-        text = bytes(data_bytes).decode('utf-8', errors='replace')
-        if text:
-            self._stderr_buffer.append(text)
-            self.message.emit(str(text))
-
-    def retrieve_results(self, exit_status: int) -> None:
-        rem_err_bytes = self.process.readAllStandardError()
-        rem_err = bytes(rem_err_bytes).decode('utf-8', errors='replace')
-        if rem_err:
-            self._stderr_buffer.append(rem_err)
-            self.message.emit(rem_err)
-
-        if exit_status != 0:
-            err_details = "".join(self._stderr_buffer).strip()
-            if err_details:
-                self.message.emit(
-                    f"\n*** REDROCK EXECUTION FAILED "
-                    f"(exit code {exit_status}) ***\n{err_details}\n"
-                )
-            else:
-                self.message.emit(
-                    f"\n*** REDROCK EXECUTION FAILED "
-                    f"(exit code {exit_status}) ***\n"
-                )
-            self.results = None
-        else:
-            try:
-                with open(self._result_dump_file, 'rb') as f:
-                    self.results = pickle.load(f)
-            except Exception:
-                tb = traceback.format_exc()
-                self.message.emit(
-                    f"\n*** REDROCK EXECUTION FAILED: "
-                    f"failed to load results ***\n{tb}\n"
-                )
-                self.results = None
-
-        self._stderr_buffer.clear()
-        self.finished.emit()
-
-    def run(self, spectra: dict[uuid.UUID, Spectrum]) -> None:
-        self._stderr_buffer.clear()
-        self.reset.emit()
-        self.maximum.emit(len(spectra))
-        self.message.emit(self.qapp.tr("Building targets"))
-        self.targets, self._t_dict = backends.rrock.build_redrock_targets(
-            spectra,
-            progress_callback=self.progress.emit
-        )
-
-        self.reset.emit()
-        self.maximum.emit(0)
-        backends.rrock.dump_targets(self.targets, self._target_dump_file)
-
-        self._total_maximum = 22
-        self._total_progress = 0
-        self.maximum.emit(self._total_maximum)
-        self.message.emit(self.qapp.tr("Running redrock backend"))
-
-        env = qt_api.QtCore.QProcessEnvironment.systemEnvironment()
-        src_path = str(pathlib.Path(__file__).resolve().parent.parent)
-        existing_ppath = env.value("PYTHONPATH", "")
-        if existing_ppath:
-            env.insert(
-                "PYTHONPATH", f"{src_path}{os.pathsep}{existing_ppath}"
-            )
-        else:
-            env.insert("PYTHONPATH", src_path)
-        self.process.setProcessEnvironment(env)
-
-        self.process.start(
-            sys.executable,
-            [
-                backends.rrock.__file__,
-                self._target_dump_file,
-                self._result_dump_file
-            ]
-        )
-
-    def is_running(self) -> bool:
-        """Return True if the redrock subprocess is currently running."""
-        return (
-            self.process.state()
-            != qt_api.QtCore.QProcess.ProcessState.NotRunning
-        )
-
-    def cancel(self) -> None:
-        """Kill the running redrock subprocess."""
-        if self.is_running():
-            self.process.kill()
-
-class QXCorrHandler(qt_api.QtCore.QObject):
-    """Class to handle xcorr subprocess."""
-
-    progress: Signal = qt_api.Signal(int)
-    maximum: Signal = qt_api.Signal(int)
-    reset: Signal = qt_api.Signal()
-    message: Signal = qt_api.Signal(str)
-    finished: Signal = qt_api.Signal()
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.qapp = get_qapp()
-        self.templates: None | dict[str, Spectrum] = None
-        self.use_gpu: str | bool = False
-        self.gpu_device: None | str = None
-        self.z_min: float = 0
-        self.z_max: float = 6
-        self.z_step: float = 0.001
-        self.w_min_ang: float | None = None
-        self.w_max_ang: float | None = None
-        self.batch_size: int = 32
-        self.subtract_continuum: int = 1
-        self.continuum_smoothing_level: float = 50
-        self.chebyshev_order: int = 5
-        self.best_z: dict[uuid.UUID, dict[str, float]] = {}
-        self.corr_data: dict[uuid.UUID, dict[str, np.ndarray]] = {}
-
-        self._in_file: str | None = None
-        self._out_file: str | None = None
-        self._msg_header: str = ""
-
-        self.process: QtCore.QProcess = qt_api.QtCore.QProcess(self)
-        self.process.readyReadStandardOutput.connect(  # type: ignore
-            self._process_output
-        )
-        self.process.readyReadStandardError.connect(  # type: ignore
-            self._process_error
-        )
-        self.process.finished.connect(  # type: ignore
-            self.retrieve_results
-        )
-
-    def setGpuBackend(self, use_gpu: str | bool) -> None:
-        self.use_gpu = use_gpu
-
-    def setGpuDevice(self, device: str | None = None) -> None:
-        self.gpu_device = device
-
-    def setContinuumSubtraction(self, index: int) -> None:
-        self.subtract_continuum = index
-
-    def setFFTSmoothing(self, val: float) -> None:
-        self.continuum_smoothing_level = val
-
-    def setChebyshevOrder(self, order: int) -> None:
-        self.chebyshev_order = order
-
-    def clear(self) -> None:
-        self.best_z = {}
-        self.corr_data = {}
-
-    def _process_output(self) -> None:
-        data_bytes: QtCore.QByteArray = self.process.readAllStandardOutput()
-        text = bytes(data_bytes).decode('utf-8', errors='replace')
-        for line in text.splitlines():
-            line_str = line.strip()
-            if not line_str:
-                continue
-            try:
-                info = json.loads(line_str)
-                if isinstance(info, dict) and "progress" in info:
-                    total = int(info.get("total", 0))
-                    prog = int(info.get("progress", 0))
-                    desc = info.get("description", "")
-                    if total > 0:
-                        self.maximum.emit(total)
-                        self.progress.emit(prog)
-                    if desc:
-                        self.message.emit(f"{self._msg_header}: {desc}")
-                    continue
-            except (json.JSONDecodeError, ValueError):
-                pass
-            self.message.emit(line_str)
-
-    def _process_error(self) -> None:
-        data_bytes: QtCore.QByteArray = self.process.readAllStandardError()
-        text = bytes(data_bytes).decode('utf-8', errors='replace')
-        for line in text.splitlines():
-            line_str = line.strip()
-            if line_str:
-                self.message.emit(line_str)
-
-    def retrieve_results(self, exit_status: int) -> None:
-        if exit_status != 0:
-            self.message.emit(self.qapp.tr("*** X-CORR EXECUTION FAILED ***"))
-        else:
-            try:
-                if self._out_file and os.path.exists(self._out_file):
-                    with open(self._out_file, 'rb') as f:
-                        results = pickle.load(f)
-                    if results is not None:
-                        self.best_z.update(results[0])
-                        self.corr_data.update(results[1])
-                        self.message.emit(self.qapp.tr("X-Corr done!"))
-            except Exception:
-                self.message.emit(self.qapp.tr("*** X-CORR LOAD FAILED ***"))
-
-        for fpath in (self._in_file, self._out_file):
-            if fpath and os.path.exists(fpath):
-                try:
-                    os.remove(fpath)
-                except OSError:
-                    pass
-        self._in_file = None
-        self._out_file = None
-
-        self.reset.emit()
-        self.finished.emit()
-
-    def is_running(self) -> bool:
-        return (
-            self.process.state()
-            != qt_api.QtCore.QProcess.ProcessState.NotRunning
-        )
-
-    def cancel(self) -> None:
-        if self.is_running():
-            self.process.kill()
-
-    def run(
-        self,
-        spectra: dict[uuid.UUID, Spectrum],
-        w_masks: dict[uuid.UUID, list[dict[str, Any]]] | None = None
-    ) -> None:
-        self.reset.emit()
-        self.maximum.emit(0)
-
-        if self.use_gpu:
-            self._msg_header = (
-                self.qapp.tr("Running X-Corr backend on GPU")
-                + f" [{self.gpu_device}]"
-            )
-        else:
-            self._msg_header = self.qapp.tr("Running X-Corr backend on CPU")
-
-        if not self.subtract_continuum:
-            sub_mode = None
-        elif self.subtract_continuum == 1:
-            sub_mode = 'chebyshev'
-        else:
-            sub_mode = 'fft'
-
-        self._msg_header += f" [c.sub.={sub_mode}]"
-        self.message.emit(self._msg_header)
-
-        run_id = uuid.uuid4().hex[:8]
-        tmp_dir = tempfile.gettempdir()
-        self._in_file = os.path.join(tmp_dir, f"xcorr_in_{run_id}.pkl")
-        self._out_file = os.path.join(tmp_dir, f"xcorr_out_{run_id}.pkl")
-
-        config = {
-            "z_min": self.z_min,
-            "z_max": self.z_max,
-            "z_step": self.z_step,
-            "w_min": self.w_min_ang,
-            "w_max": self.w_max_ang,
-            "w_masks": w_masks,
-            "use_gpu": self.use_gpu,
-            "device": self.gpu_device,
-            "continuum_subtracted": sub_mode,
-            "batch_size": self.batch_size,
-            "fft_sigma": self.continuum_smoothing_level,
-            "chebyshev_order": self.chebyshev_order,
-        }
-
-        backends.xcorr.dump_xcorr_batch(
-            self._in_file,
-            spectra=spectra,
-            templates=self.templates,
-            config=config,
-        )
-
-        env = qt_api.QtCore.QProcessEnvironment.systemEnvironment()
-        src_path = str(pathlib.Path(__file__).resolve().parent.parent)
-        existing_ppath = env.value("PYTHONPATH", "")
-        if existing_ppath:
-            env.insert(
-                "PYTHONPATH", f"{src_path}{os.pathsep}{existing_ppath}"
-            )
-        else:
-            env.insert("PYTHONPATH", src_path)
-        self.process.setProcessEnvironment(env)
-
-        self.process.start(
-            sys.executable,
-            [
-                backends.xcorr.__file__,
-                "--batch-file", self._in_file,
-                "--output-file", self._out_file,
-                "--stdout-mode", "json",
-            ]
-        )
-
 
 class GlobalState(Enum):
     READY = 0
@@ -2038,14 +1694,6 @@ class SettingsDialog(qt_api.QtWidgets.QDialog):
     icon_theme_combo_box: QtWidgets.QComboBox
     gpu_backend_combo_box: QtWidgets.QComboBox
     gpu_device_combo_box: QtWidgets.QComboBox
-    template_dirs_list_widget: QtWidgets.QListWidget
-    template_files_list_widget: QtWidgets.QListWidget
-    add_template_dir_push_button: QtWidgets.QPushButton
-    remove_template_dir_push_button: QtWidgets.QPushButton
-    # RedRock tab widgets
-    select_template_dir_rrock: QtWidgets.QPushButton
-    linet_edit_template_dir_rrock: QtWidgets.QLineEdit
-    template_files_list_widget_rrock: QtWidgets.QListWidget
 
 
 class ExtractSpec1DDialog(qt_api.QtWidgets.QDialog):
@@ -2139,11 +1787,6 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     previous_spec_button: QtWidgets.QPushButton
     qflag_spinbox: QtWidgets.QSpinBox
     redshift_tools_tab: QtWidgets.QGroupBox
-    redrock_all_radio: QtWidgets.QRadioButton
-    redrock_selected_radio: QtWidgets.QRadioButton
-    redrock_run_button: QtWidgets.QPushButton
-    redrock_text_edit: QtWidgets.QTextEdit
-    redrock_current_radio: QtWidgets.QRadioButton
     remove_selected_button: QtWidgets.QPushButton
     remove_spec_button: QtWidgets.QPushButton
     show_legend_check_box: QtWidgets.QCheckBox
@@ -2736,28 +2379,7 @@ class GuiApp:
             self.restoreSettings
         )
 
-        self.settings_wnd.template_dirs_list_widget.addItem(
-            backends.xcorr.TEMPLATE_DIR
-        )
 
-        self.settings_wnd.add_template_dir_push_button.clicked.connect(
-            self.doAddNewTemplateDir
-        )
-
-        self.settings_wnd.remove_template_dir_push_button.clicked.connect(
-            self.doRemoveCurrentTemplateDir
-        )
-
-        if backends.HAS_REDROCK:
-            self.settings_wnd.select_template_dir_rrock.clicked.connect(
-                self.doSelectRedrockTemplateDir
-            )
-            self.settings_wnd.linet_edit_template_dir_rrock.textChanged.connect(
-                self.updateRedrockTemplateList
-            )
-        else:
-            # Disable the entire RedRock tab in the settings dialog.
-            self.settings_wnd.settings_tab_widget.setTabEnabled(2, False)
 
         self.control_mapping_wnd = cast(
             ControlMappingDialog,
@@ -2871,105 +2493,16 @@ class GuiApp:
             )
 
         self.splash.showMessage(self.qapp.tr("Loading backends..."))
-        # Check for RedRock.
-        if not backends.HAS_REDROCK:
-            self.main_wnd.redrock_run_button.setEnabled(False)
-            self.main_wnd.redrock_text_edit.setText(
-                "*** WARNING ***\n"
-                "\n"
-                "Cannot load redrock python module.\n"
-                "Please, check if redrock is correctly installed!\n"
-            )
-
-            self.redrock_handler = None
-        else:
-            self.main_wnd.redrock_run_button.clicked.connect(
-                self.doStartRedrock
-            )
-
-            self.redrock_handler = QRedrockHandler()
-            self.redrock_handler.reset.connect(
-                self.pbar.reset
-            )
-            self.redrock_handler.maximum.connect(
-                self.pbar.setMaximum
-            )
-            self.redrock_handler.progress.connect(
-                self.pbar.setValue
-            )
-            self.redrock_handler.message.connect(
-                self.main_wnd.redrock_text_edit.append
-            )
-            self.redrock_handler.finished.connect(
-                self.collectRedrockResults
-            )
-
-        self.main_wnd.redrock_current_radio.setEnabled(False)
-
-        # Check for X-Corr plugin.
-        if not backends.HAS_XCORR:
-            self.main_wnd.tab_xcorr.setEnabled(False)
-            self.xcorr_handler = None
-        else:
-            self.main_wnd.tab_xcorr.setEnabled(True)
-            self.main_wnd.xcorr_wrange_checkbox.setEnabled(True)
-            self.main_wnd.xcorr_wrange_checkbox.setChecked(False)
-            if utils.HAS_TORCH or utils.HAS_TENSORFLOW:
-                self.main_wnd.xcorr_gpu_checkbox.setEnabled(True)
-            else:
-                self.main_wnd.xcorr_gpu_checkbox.setEnabled(False)
-
-            self.main_wnd.xcorr_run_button.clicked.connect(
-                self.doStartXCorr
-            )
-
-            self.main_wnd.xcorr_csub_preview_checkbox.clicked.connect(
-                self.redrawCurrentSpec
-            )
-
-            self.main_wnd.xcorr_csub_combobox.currentIndexChanged.connect(
-                self.redrawCurrentSpec
-            )
-
-            self.main_wnd.xcorr_csub_chebyshev_order_spinbox.valueChanged.connect(
-                self.redrawCurrentSpec
-            )
-
-            self.main_wnd.xcorr_csub_fft_sigma_dspinbox.valueChanged.connect(
-                self.redrawCurrentSpec
-            )
-
-            self.xcorr_handler = QXCorrHandler()
-            self.xcorr_handler.reset.connect(
-                self.pbar.reset
-            )
-            self.xcorr_handler.maximum.connect(
-                self.pbar.setMaximum
-            )
-            self.xcorr_handler.progress.connect(
-                self.pbar.setValue
-            )
-            self.xcorr_handler.message.connect(
-                self.statusbar.showMessage
-            )
-            self.xcorr_handler.finished.connect(
-                self.collectXCorrResults
-            )
-
-        self.setXcorrTreeWidgetColumnWidth([200, 20])
-
-        # Registry of backend run buttons. Each entry is the QPushButton used
-        # to start a backend. When any backend is running all other entries are
-        # disabled. Extend this list when adding new backends.
+        self.backends: dict[str, backends.BackendPlugin] = {}
         self._backend_run_buttons: list[QtWidgets.QPushButton] = []
-        if self.redrock_handler is not None:
-            self._backend_run_buttons.append(
-                self.main_wnd.redrock_run_button
-            )
-        if self.xcorr_handler is not None:
-            self._backend_run_buttons.append(
-                self.main_wnd.xcorr_run_button
-            )
+
+        for plugin_cls in backends.BACKEND_PLUGINS:
+            plugin = plugin_cls(self.main_wnd)
+            self.backends[plugin.backend_id] = plugin
+            plugin.setup_gui(self)
+            btn = plugin.get_run_button()
+            if btn is not None:
+                self._backend_run_buttons.append(btn)
 
         # Dialog for importing zcat
 
@@ -3598,21 +3131,11 @@ class GuiApp:
                 self.setGpuDeviceId,
                 str
             ),
-            "xcorr_template_dirs": (
-                self.getXcorrTemplateDirs,
-                self.setXcorrTemplateDirs,
-                lambda x: x if isinstance(x, list) else [x,]
-            ),
             "xcorr_tree_widget_column_widths": (
                 self.getXcorrTreeWidgetColumnWidth,
                 self.setXcorrTreeWidgetColumnWidth,
                 lambda x: x if isinstance(x, list) else [int(x),]
             ),
-            "rrock_template_dir": (
-                self.getRedrockTemplateDir,
-                self.setRedrockTemplateDir,
-                str
-            )
         }
 
         self.splash.showMessage(
@@ -3629,8 +3152,7 @@ class GuiApp:
             if is_outdated:
                 self._show_update_message(new_ver)
 
-        if backends.HAS_REDROCK:
-            self._check_redrock_templates()
+        self.redrock_plugin.check_templates_on_startup(self.main_wnd)
 
 
 
@@ -3823,9 +3345,9 @@ class GuiApp:
             self.main_wnd.previous_spec_button.setText("")
             self.main_wnd.previous_spec_button.setIcon(previous_icon)
 
-        self.main_wnd.redrock_run_button.setIcon(
-            qt_api.get_qicon("play", theme)
-        )
+        rr_btn = self.redrock_plugin.get_run_button()
+        if rr_btn is not None:
+            rr_btn.setIcon(qt_api.get_qicon("play", theme))
         self.main_wnd.xcorr_run_button.setIcon(
             qt_api.get_qicon("play", theme)
         )
@@ -4067,18 +3589,12 @@ class GuiApp:
         self.main_wnd.lines_table_widget.setItem(new_item_row, 2, match_item)
 
     def addNewTemplateDir(self, dir_path, update=True) -> None:
-        dir_path = pathlib.Path(str(dir_path)).resolve()
-
-        for j in range(self.settings_wnd.template_dirs_list_widget.count()):
-            item = self.settings_wnd.template_dirs_list_widget.item(j)
-            existing_path = pathlib.Path(item.text()).resolve()
-            if dir_path == existing_path:
-                break
-        else:
+        dirs = self.xcorr_plugin.get_template_dirs()
+        dir_resolved = str(pathlib.Path(str(dir_path)).resolve())
+        if dir_resolved not in dirs:
+            dirs.append(dir_resolved)
+            self.xcorr_plugin.set_template_dirs(dirs)
             self._rebuild_xcorr_template_list = True
-            self.settings_wnd.template_dirs_list_widget.addItem(
-                str(dir_path)
-            )
             if update:
                 self.updateXcorrTemplateList()
 
@@ -4118,16 +3634,23 @@ class GuiApp:
 
         self.saveSettings()
 
-    def collectRedrockResults(self) -> None:
-        if self.redrock_handler is None:
-            return
+    def _on_redrock_started(self) -> None:
+        """Handle Redrock job start."""
+        btn = self.redrock_plugin.get_run_button()
+        if btn is not None:
+            self._lock_other_backend_buttons(btn)
+        self.redrock_plugin.disable_controls()
+        self.pbar.show()
 
+    def _on_redrock_finished(
+        self, data: tuple[Any, dict[str, uuid.UUID]]
+    ) -> None:
+        """Handle Redrock job completion and collect results."""
         self.pbar.hide()
-        self._restore_redrock_controls()
+        self._unlock_all_backend_buttons()
         self.statusbar.showMessage(self.qapp.tr("Redrock results ready!"))
 
-        res = self.redrock_handler.results
-
+        res, t_dict = data
         if res is None:
             return
 
@@ -4137,8 +3660,7 @@ class GuiApp:
         self.global_state = GlobalState.LOAD_OBJECT_STATE
         self._backup_current_object_state()
         for row in zbest:
-            obj_uuid = self.redrock_handler._t_dict[row['targetid']]
-
+            obj_uuid = t_dict[row['targetid']]
             try:
                 info_dict = self.object_state_dict[obj_uuid]
             except KeyError:
@@ -4151,6 +3673,12 @@ class GuiApp:
         self._restore_object_state(self.current_uuid)
         self.global_state = GlobalState.READY
         self._unlock()
+
+    def _on_redrock_cancelled(self) -> None:
+        """Handle Redrock job cancellation."""
+        self.pbar.hide()
+        self._unlock_all_backend_buttons()
+        self.statusbar.showMessage(self.qapp.tr("Redrock cancelled."))
 
     def _lock_other_backend_buttons(
         self, active_btn: QtWidgets.QPushButton
@@ -4177,118 +3705,30 @@ class GuiApp:
         for btn in self._backend_run_buttons:
             btn.setEnabled(True)
 
-    def _disable_xcorr_controls(self) -> None:
-        """
-        Disable controls in tab_xcorr while xcorr runs, keeping run button.
-        """
-        if (
-            not hasattr(self, 'main_wnd')
-            or not hasattr(self.main_wnd, 'tab_xcorr')
-        ):
-            return
-
-        self._disabled_xcorr_controls = []
-        tab = self.main_wnd.tab_xcorr
-        btn = getattr(self.main_wnd, 'xcorr_run_button', None)
-
-        layout = tab.layout()
-        if layout is None:
-            return
-
-        for i in range(layout.count()):
-            item = layout.itemAt(i)
-            if item is None:
-                continue
-            w = item.widget()
-            if w is not None and w is not btn:
-                if w.isEnabled():
-                    self._disabled_xcorr_controls.append(w)
-                    w.setEnabled(False)
-            elif item.layout() is not None:
-                sub = item.layout()
-                for j in range(sub.count()):
-                    subitem = sub.itemAt(j)
-                    subw = subitem.widget() if subitem else None
-                    if subw is not None and subw is not btn:
-                        if subw.isEnabled():
-                            self._disabled_xcorr_controls.append(subw)
-                            subw.setEnabled(False)
-
+    def _on_xcorr_started(self) -> None:
+        """Handle X-Corr job start."""
+        btn = self.xcorr_plugin.get_run_button()
         if btn is not None:
-            btn.setText(self.qapp.tr("Cancel"))
-            btn.setEnabled(True)
+            self._lock_other_backend_buttons(btn)
+        self.xcorr_plugin.disable_controls()
+        self.pbar.show()
 
-        self._lock_other_backend_buttons(btn)
-
-    def _restore_xcorr_controls(self) -> None:
-        """Re-enable tab_xcorr controls that were disabled during run."""
-        if hasattr(self, '_disabled_xcorr_controls'):
-            for w in self._disabled_xcorr_controls:
-                try:
-                    w.setEnabled(True)
-                except Exception:
-                    pass
-            self._disabled_xcorr_controls.clear()
-
-        if (
-            hasattr(self, 'main_wnd')
-            and hasattr(self.main_wnd, 'xcorr_run_button')
-            and self.main_wnd.xcorr_run_button is not None
-        ):
-            self.main_wnd.xcorr_run_button.setText(self.qapp.tr("Run"))
-            self.main_wnd.xcorr_run_button.setEnabled(True)
-
-        self._unlock_all_backend_buttons()
-
-    def _disable_redrock_controls(self) -> None:
-        """
-        Disable controls in the redrock tab while redrock runs.
-
-        The run button is kept enabled and its text is changed to "Cancel".
-        """
-        btn = getattr(self.main_wnd, 'redrock_run_button', None)
-
-        self._disabled_redrock_controls: list = []
-        for widget_name in (
-            'redrock_all_radio',
-            'redrock_selected_radio',
-            'redrock_current_radio',
-        ):
-            w = getattr(self.main_wnd, widget_name, None)
-            if w is not None and w.isEnabled():
-                self._disabled_redrock_controls.append(w)
-                w.setEnabled(False)
-
-        if btn is not None:
-            btn.setText(self.qapp.tr("Cancel"))
-            btn.setEnabled(True)
-
-        self._lock_other_backend_buttons(btn)
-
-    def _restore_redrock_controls(self) -> None:
-        """Re-enable redrock controls that were disabled during run."""
-        if hasattr(self, '_disabled_redrock_controls'):
-            for w in self._disabled_redrock_controls:
-                try:
-                    w.setEnabled(True)
-                except Exception:
-                    pass
-            self._disabled_redrock_controls.clear()
-
-        btn = getattr(self.main_wnd, 'redrock_run_button', None)
-        if btn is not None:
-            btn.setText(self.qapp.tr("Run"))
-            btn.setEnabled(True)
-
-        self._unlock_all_backend_buttons()
-
-    def collectXCorrResults(self) -> None:
+    def _on_xcorr_cancelled(self) -> None:
+        """Handle X-Corr job cancellation."""
         self.pbar.hide()
-        self._restore_xcorr_controls()
+        self.xcorr_plugin.restore_controls()
+        self._unlock_all_backend_buttons()
+        self.statusbar.showMessage(self.qapp.tr("X-Corr cancelled."))
 
-        if self.xcorr_handler is None:
-            return
+    def _on_xcorr_templates_changed(self) -> None:
+        """Handle updates to X-Corr template directories."""
+        self._rebuild_xcorr_template_list = True
+        self.updateXcorrTemplateList()
 
+    def collectXCorrResults(self, *args: Any) -> None:
+        self.pbar.hide()
+        self.xcorr_plugin.restore_controls()
+        self._unlock_all_backend_buttons()
         self.showXcorrZ()
 
     def currentQualityFlagChanged(self, df_index):
@@ -4310,12 +3750,14 @@ class GuiApp:
         """
 
         if new_item is None:
-            self.main_wnd.redrock_current_radio.setEnabled(False)
+            if self.redrock_plugin.current_radio is not None:
+                self.redrock_plugin.current_radio.setEnabled(False)
             self.main_wnd.xcorr_current_radio.setEnabled(False)
             self.updateMaskList()
             return
         else:
-            self.main_wnd.redrock_current_radio.setEnabled(True)
+            if self.redrock_plugin.current_radio is not None:
+                self.redrock_plugin.current_radio.setEnabled(True)
             self.main_wnd.xcorr_current_radio.setEnabled(True)
             self.main_wnd.mask_add_button.setEnabled(True)
             self.main_wnd.mask_load_button.setEnabled(True)
@@ -5828,36 +5270,35 @@ class GuiApp:
         return True
 
     def doStartRedrock(self, *args, **kwargs) -> None:
-        if self.redrock_handler is None:
+        if not self.redrock_plugin.is_available():
             return
 
-        if self.redrock_handler.is_running():
+        if self.redrock_plugin.is_running():
             self.statusbar.showMessage(
                 self.qapp.tr("Cancelling Redrock...")
             )
-            self.redrock_handler.cancel()
+            self.redrock_plugin.cancel()
             return
 
-        self.main_wnd.redrock_text_edit.clear()
         self.statusbar.showMessage(
             self.qapp.tr("Running redrock backend...")
         )
-        self.pbar.show()
-        self._disable_redrock_controls()
 
         for_rr: dict[uuid.UUID, Spectrum] = {}
-        if self.main_wnd.redrock_all_radio.isChecked():
+        if (
+            self.redrock_plugin.all_radio is not None
+            and self.redrock_plugin.all_radio.isChecked()
+        ):
             for_rr = self.open_spectra
-        elif self.main_wnd.redrock_selected_radio.isChecked():
-
+        elif (
+            self.redrock_plugin.selected_radio is not None
+            and self.redrock_plugin.selected_radio.isChecked()
+        ):
             item: None | QtWidgets.QListWidgetItem
             for row in range(self.main_wnd.spec_list_widget.count()):
                 item = self.main_wnd.spec_list_widget.item(row)
-
                 if item is None:
-                    # should never happen!
                     continue
-
                 if item.checkState() == qt_api.QtCore.Qt.CheckState.Checked:
                     item_uuid = item.data(
                         qt_api.QtCore.Qt.ItemDataRole.UserRole
@@ -5868,37 +5309,27 @@ class GuiApp:
                 return
             for_rr[self.current_uuid] = self.open_spectra[self.current_uuid]
 
-        self.redrock_handler.run(for_rr)
+        self.redrock_plugin.run(for_rr)
 
 
     def doStartXCorr(self, *args, **kwargs) -> None:
-        if self.xcorr_handler is None:
-            # Should never happen since we disable the button to start this
-            # action if the xcorr backend is not found
+        if not self.xcorr_plugin.is_available():
             return
 
-        if self.xcorr_handler.is_running():
+        if self.xcorr_plugin.is_running():
             self.statusbar.showMessage(self.qapp.tr("Cancelling X-Corr..."))
-            self.xcorr_handler.cancel()
+            self.xcorr_plugin.cancel()
             return
-
-        self.statusbar.showMessage("Running xcorr backend...")
 
         for_xcorr: dict[uuid.UUID, Spectrum] = {}
-
         if self.main_wnd.xcorr_all_radio.isChecked():
             for_xcorr = self.open_spectra
-
         elif self.main_wnd.xcorr_selected_radio.isChecked():
-
             item: None | QtWidgets.QListWidgetItem
             for row in range(self.main_wnd.spec_list_widget.count()):
                 item = self.main_wnd.spec_list_widget.item(row)
-
                 if item is None:
-                    # should never happen!
                     continue
-
                 if item.checkState() == qt_api.QtCore.Qt.CheckState.Checked:
                     item_uuid = item.data(
                         qt_api.QtCore.Qt.ItemDataRole.UserRole
@@ -5909,41 +5340,9 @@ class GuiApp:
                 return
             for_xcorr[self.current_uuid] = self.open_spectra[self.current_uuid]
 
-        self.xcorr_handler.z_min = self.main_wnd.xcorr_z_min_dspinbox.value()
-        self.xcorr_handler.z_max = self.main_wnd.xcorr_z_max_dspinbox.value()
-        self.xcorr_handler.z_step = self.main_wnd.xcorr_z_step_dspinbox.value()
-
-        self.xcorr_handler.templates = self.getXcorrSelectedTemplates()
-
-        if self.main_wnd.xcorr_wrange_checkbox.isChecked():
-            self.xcorr_handler.w_min_ang = float(
-                self.main_wnd.xcorr_wav_min_spinbox.value()
-            )
-            self.xcorr_handler.w_max_ang = float(
-                self.main_wnd.xcorr_wav_max_spinbox.value()
-            )
-        else:
-            self.xcorr_handler.w_min_ang = None
-            self.xcorr_handler.w_max_ang = None
-
-        if self.main_wnd.xcorr_gpu_checkbox.isChecked():
-            self.xcorr_handler.setGpuBackend(self.use_gpu)
-            self.xcorr_handler.setGpuDevice(self.compute_device)
-        else:
-            self.xcorr_handler.setGpuBackend(False)
-            self.xcorr_handler.setGpuDevice(None)
-
-        self.xcorr_handler.setContinuumSubtraction(
-            self.main_wnd.xcorr_csub_combobox.currentIndex()
-        )
-
-        self.xcorr_handler.setFFTSmoothing(
-            self.main_wnd.xcorr_csub_fft_sigma_dspinbox.value()
-        )
-
-        self.xcorr_handler.setChebyshevOrder(
-            self.main_wnd.xcorr_csub_chebyshev_order_spinbox.value()
-        )
+        self.xcorr_plugin.templates = self.getXcorrSelectedTemplates()
+        self.xcorr_plugin.set_gpu_backend(self.use_gpu)
+        self.xcorr_plugin.set_gpu_device(self.compute_device)
 
         w_masks: dict[uuid.UUID, list[dict[str, Any]]] = {}
         for spec_uuid in for_xcorr.keys():
@@ -5958,9 +5357,7 @@ class GuiApp:
                     if mask['enabled']
                 )
 
-        self.pbar.show()
-        self._disable_xcorr_controls()
-        self.xcorr_handler.run(for_xcorr, w_masks)
+        self.xcorr_plugin.run(for_xcorr, w_masks)
 
     def doToggleDone(self) -> None:
         check_state = None
@@ -6156,268 +5553,9 @@ class GuiApp:
                 selected_templates[template_id] = self.xcorr_templates[template_id]
         return selected_templates
 
-    def getRedrockTemplateDir(self) -> str:
-        """Return the currently configured Redrock template directory."""
-        return self.settings_wnd.linet_edit_template_dir_rrock.text()
-
-    def setRedrockTemplateDir(self, dir_path: str) -> None:
-        """
-        Set the Redrock template directory.
-
-        :param dir_path: Path to the directory containing templates.
-        """
-        if not dir_path:
-            return
-        resolved = str(pathlib.Path(dir_path).resolve())
-        self.settings_wnd.linet_edit_template_dir_rrock.setText(resolved)
-        # Set the env variable so that redrock picks it up at runtime.
-        os.environ['RR_TEMPLATE_DIR'] = resolved
-
-    def updateRedrockTemplateList(self, dir_path: str = '') -> None:
-        """
-        Populate template_files_list_widget_rrock with the files found in
-        the configured Redrock template directory.
-
-        :param dir_path: Directory to scan. If empty the current widget text
-            is used.
-        """
-        if not dir_path:
-            dir_path = (
-                self.settings_wnd.linet_edit_template_dir_rrock.text()
-            )
-
-        self.settings_wnd.template_files_list_widget_rrock.clear()
-
-        if not dir_path:
-            return
-
-        resolved = pathlib.Path(dir_path)
-        if not resolved.is_dir():
-            return
-
-        for entry in sorted(resolved.iterdir()):
-            if entry.is_file():
-                self.settings_wnd.template_files_list_widget_rrock.addItem(
-                    entry.name
-                )
-
-    def doSelectRedrockTemplateDir(
-        self, *args: Any, **kwargs: Any
-    ) -> None:
-        """
-        Open a folder-selection dialog and update the Redrock template dir.
-
-        After selection, validates that the folder contains valid Redrock
-        templates. If no templates are found, asks the user whether to
-        download them into that folder.
-        """
-        if not backends.HAS_REDROCK:
-            return
-
-        from redrock.templates import find_templates
-
-        url = qt_api.QtWidgets.QFileDialog.getExistingDirectoryUrl(
-            self.settings_wnd,
-            self.qapp.tr("Select Redrock templates directory"),
-        )
-
-        if not url.isValid():
-            return
-
-        selected_dir = url.path()
-
-        # Validate: check that the folder contains recognisable templates.
-        try:
-            tmpl_files = list(find_templates(selected_dir))
-        except Exception:
-            tmpl_files = []
-
-        if tmpl_files:
-            # Valid templates found - accept the selection.
-            self.setRedrockTemplateDir(selected_dir)
-            self.updateRedrockTemplateList(selected_dir)
-            return
-
-        # No templates found in the selected folder - ask the user.
-        msg = qt_api.QtWidgets.QMessageBox(parent=self.settings_wnd)
-        msg.setWindowTitle(self.qapp.tr("No templates found"))
-        msg.setText(
-            self.qapp.tr(
-                "No valid Redrock templates were found in the selected "
-                "folder:\n{}\n\nWould you like to download the templates "
-                "into that folder?"
-            ).format(selected_dir)
-        )
-        msg.setIcon(qt_api.QtWidgets.QMessageBox.Icon.Warning)
-
-        btn_download = msg.addButton(
-            self.qapp.tr("Download"),
-            qt_api.QtWidgets.QMessageBox.ButtonRole.AcceptRole
-        )
-        msg.addButton(
-            self.qapp.tr("Cancel"),
-            qt_api.QtWidgets.QMessageBox.ButtonRole.RejectRole
-        )
-        msg.setDefaultButton(btn_download)
-        msg.exec()
-
-        if msg.clickedButton() != btn_download:
-            return
-
-        # Clone into a subdirectory of the selected folder.
-        clone_dir = str(
-            pathlib.Path(selected_dir) / "redrock-templates"
-        )
-        if self.doDownloadRedrockTemplates(clone_dir):
-            self.setRedrockTemplateDir(clone_dir)
-            self.saveSettings()
-            self.updateRedrockTemplateList(clone_dir)
-
-    def doDownloadRedrockTemplates(
-        self, dest_dir: str
-    ) -> bool:
-        """
-        Clone the Redrock templates repository into dest_dir.
-
-        Uses ProcessOutputDialog so that git output is visible in real time.
-        The Ok button is enabled when git finishes; Cancel kills the process.
-
-        :param dest_dir: Destination directory for the cloned repository.
-        :return: True if git exited with code 0, False otherwise.
-        """
-        repo_url = "https://github.com/desihub/redrock-templates"
-        command = [
-            "git", "clone", "--progress", "--depth", "1",
-            repo_url, dest_dir
-        ]
-
-        dlg = ProcessOutputDialog(
-            command=command,
-            title=self.qapp.tr("Downloading Redrock templates"),
-            parent=self.main_wnd
-        )
-        result = dlg.exec()
-
-        if result != qt_api.QtWidgets.QDialog.DialogCode.Accepted:
-            # User cancelled or process was killed.
-            return False
-
-        exit_code = dlg.exit_code()
-        if exit_code != 0:
-            return False
-
-        return True
-
-
-    def _check_redrock_templates(self) -> None:
-        """
-        Check whether Redrock templates are available at startup.
-
-        If a template directory is already configured and valid, just update
-        the list widget. Otherwise, ask the user what to do.
-        """
-        from redrock.templates import find_templates
-
-        configured_dir = self.getRedrockTemplateDir()
-
-        # Check whether the currently configured directory already works.
-        if configured_dir and pathlib.Path(configured_dir).is_dir():
-            try:
-                tmpl_files = list(find_templates(configured_dir))
-            except Exception:
-                tmpl_files = []
-
-            if tmpl_files:
-                # Templates are available - update env var and list.
-                os.environ['RR_TEMPLATE_DIR'] = configured_dir
-                self.updateRedrockTemplateList(configured_dir)
-                return
-
-        # Templates are not found. Check if there are templates in the
-        # default Redrock location.
-        try:
-            tmpl_files = list(find_templates(None))
-        except Exception:
-            tmpl_files = []
-
-        if tmpl_files:
-            # Default templates found, no user action needed.
-            self.updateRedrockTemplateList()
-            return
-
-        # No templates found anywhere - prompt the user.
-        msg = qt_api.QtWidgets.QMessageBox(parent=self.main_wnd)
-        msg.setWindowTitle(self.qapp.tr("Redrock templates not found"))
-        msg.setText(
-            self.qapp.tr(
-                "Redrock templates could not be found.\n\n"
-                "What would you like to do?"
-            )
-        )
-        msg.setIcon(qt_api.QtWidgets.QMessageBox.Icon.Warning)
-
-        btn_download = msg.addButton(
-            self.qapp.tr("Download"),
-            qt_api.QtWidgets.QMessageBox.ButtonRole.AcceptRole
-        )
-        btn_select = msg.addButton(
-            self.qapp.tr("Select folder"),
-            qt_api.QtWidgets.QMessageBox.ButtonRole.ActionRole
-        )
-        btn_ignore = msg.addButton(
-            self.qapp.tr("Ignore"),
-            qt_api.QtWidgets.QMessageBox.ButtonRole.RejectRole
-        )
-        msg.setDefaultButton(btn_download)
-        msg.exec()
-
-        clicked = msg.clickedButton()
-
-        if clicked == btn_download:
-            # Ask the user where to save the downloaded templates.
-            dest_url = qt_api.QtWidgets.QFileDialog.getExistingDirectoryUrl(
-                self.main_wnd,
-                self.qapp.tr("Select destination folder for templates"),
-            )
-            if not dest_url.isValid():
-                return
-
-            dest_dir = dest_url.path()
-            # We clone into a subdirectory called "redrock-templates" so that
-            # the destination folder can be any existing directory.
-            clone_dir = str(
-                pathlib.Path(dest_dir) / "redrock-templates"
-            )
-
-            if self.doDownloadRedrockTemplates(clone_dir):
-                self.setRedrockTemplateDir(clone_dir)
-                self.saveSettings()
-                self.updateRedrockTemplateList(clone_dir)
-
-        elif clicked == btn_select:
-            url = qt_api.QtWidgets.QFileDialog.getExistingDirectoryUrl(
-                self.main_wnd,
-                self.qapp.tr("Select Redrock templates directory"),
-            )
-            if not url.isValid():
-                return
-
-            selected_dir = url.path()
-            self.setRedrockTemplateDir(selected_dir)
-            self.saveSettings()
-            self.updateRedrockTemplateList(selected_dir)
-
-        # btn_ignore: do nothing.
 
     def getXcorrTemplateDirs(self) -> list[str]:
-        xcorr_template_dir_list = []
-        for j in range(self.settings_wnd.template_dirs_list_widget.count()):
-            item = self.settings_wnd.template_dirs_list_widget.item(j)
-            xcorr_template_dir_list.append(
-                str(pathlib.Path(item.text()).resolve())
-            )
-
-        return xcorr_template_dir_list
+        return self.xcorr_plugin.get_template_dirs()
 
     def getXcorrTreeWidgetColumnWidth(self) -> list[int]:
         widths = [
@@ -6528,6 +5666,9 @@ class GuiApp:
                     set_func(value)
                 except (TypeError, ValueError):
                     continue
+        for plugin in self.backends.values():
+            plugin.load_settings(self.settings)
+        self.updateXcorrTemplateList()
         self.loadIcons()
 
     def mousePressedFlux(self, args) -> None:
@@ -7361,6 +6502,8 @@ class GuiApp:
         for key, (get_func, _, _) in self._global_setting.items():
             val = get_func()
             self.settings.setValue(key, val)
+        for plugin in self.backends.values():
+            plugin.apply_settings(self.settings)
 
     def setGpuBackend(self, backend_index: int | str | None):
         self.settings_wnd.gpu_device_combo_box.clear()
@@ -7534,8 +6677,8 @@ class GuiApp:
             self.flux_chart_view_2d.setLinesType('A')
 
     def setXcorrTemplateDirs(self, dir_list: list[str]) -> None:
-        for dir_path in dir_list:
-            self.addNewTemplateDir(dir_path, update=False)
+        self.xcorr_plugin.set_template_dirs(dir_list)
+        self._rebuild_xcorr_template_list = True
         self.updateXcorrTemplateList()
 
     def setXcorrTreeWidgetColumnWidth(self, widths: list[int]) -> None:
@@ -7749,7 +6892,6 @@ class GuiApp:
         self.xcor_tree_leaf_items = []
         self.xcorr_templates = {}
 
-        self.settings_wnd.template_files_list_widget.clear()
         for dir_path in self.getXcorrTemplateDirs():
             template_dict = backends.xcorr.load_templates(dir_path)
 
@@ -7764,9 +6906,6 @@ class GuiApp:
             self.qapp.processEvents()
 
             for local_template_id, template_sp in template_dict.items():
-                self.settings_wnd.template_files_list_widget.addItem(
-                    local_template_id
-                )
                 self.qapp.processEvents()
                 template_id = dir_path + '::' + local_template_id
                 path_parts = list(pathlib.PurePath(local_template_id).parts)
