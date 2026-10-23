@@ -1457,6 +1457,17 @@ class QRedrockHandler(qt_api.QtCore.QObject):
             ]
         )
 
+    def is_running(self) -> bool:
+        """Return True if the redrock subprocess is currently running."""
+        return (
+            self.process.state()
+            != qt_api.QtCore.QProcess.ProcessState.NotRunning
+        )
+
+    def cancel(self) -> None:
+        """Kill the running redrock subprocess."""
+        if self.is_running():
+            self.process.kill()
 
 class QXCorrHandler(qt_api.QtCore.QObject):
     """Class to handle xcorr subprocess."""
@@ -2132,7 +2143,6 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     redrock_selected_radio: QtWidgets.QRadioButton
     redrock_run_button: QtWidgets.QPushButton
     redrock_text_edit: QtWidgets.QTextEdit
-    redrock_progress_bar: QtWidgets.QProgressBar
     redrock_current_radio: QtWidgets.QRadioButton
     remove_selected_button: QtWidgets.QPushButton
     remove_spec_button: QtWidgets.QPushButton
@@ -2879,13 +2889,13 @@ class GuiApp:
 
             self.redrock_handler = QRedrockHandler()
             self.redrock_handler.reset.connect(
-                self.main_wnd.redrock_progress_bar.reset
+                self.pbar.reset
             )
             self.redrock_handler.maximum.connect(
-                self.main_wnd.redrock_progress_bar.setMaximum
+                self.pbar.setMaximum
             )
             self.redrock_handler.progress.connect(
-                self.main_wnd.redrock_progress_bar.setValue
+                self.pbar.setValue
             )
             self.redrock_handler.message.connect(
                 self.main_wnd.redrock_text_edit.append
@@ -2947,6 +2957,19 @@ class GuiApp:
             )
 
         self.setXcorrTreeWidgetColumnWidth([200, 20])
+
+        # Registry of backend run buttons. Each entry is the QPushButton used
+        # to start a backend. When any backend is running all other entries are
+        # disabled. Extend this list when adding new backends.
+        self._backend_run_buttons: list[QtWidgets.QPushButton] = []
+        if self.redrock_handler is not None:
+            self._backend_run_buttons.append(
+                self.main_wnd.redrock_run_button
+            )
+        if self.xcorr_handler is not None:
+            self._backend_run_buttons.append(
+                self.main_wnd.xcorr_run_button
+            )
 
         # Dialog for importing zcat
 
@@ -4099,6 +4122,8 @@ class GuiApp:
         if self.redrock_handler is None:
             return
 
+        self.pbar.hide()
+        self._restore_redrock_controls()
         self.statusbar.showMessage(self.qapp.tr("Redrock results ready!"))
 
         res = self.redrock_handler.results
@@ -4126,6 +4151,31 @@ class GuiApp:
         self._restore_object_state(self.current_uuid)
         self.global_state = GlobalState.READY
         self._unlock()
+
+    def _lock_other_backend_buttons(
+        self, active_btn: QtWidgets.QPushButton
+    ) -> None:
+        """
+        Disable all registered backend run buttons except active_btn.
+
+        Call this when a backend starts running so that the user cannot
+        launch a second backend concurrently.
+
+        :param active_btn: The run button of the backend that is now running.
+        """
+        for btn in self._backend_run_buttons:
+            if btn is not active_btn:
+                btn.setEnabled(False)
+
+    def _unlock_all_backend_buttons(self) -> None:
+        """
+        Re-enable all registered backend run buttons.
+
+        Call this when a backend finishes (or is cancelled) so that any
+        backend can be started again.
+        """
+        for btn in self._backend_run_buttons:
+            btn.setEnabled(True)
 
     def _disable_xcorr_controls(self) -> None:
         """
@@ -4168,6 +4218,8 @@ class GuiApp:
             btn.setText(self.qapp.tr("Cancel"))
             btn.setEnabled(True)
 
+        self._lock_other_backend_buttons(btn)
+
     def _restore_xcorr_controls(self) -> None:
         """Re-enable tab_xcorr controls that were disabled during run."""
         if hasattr(self, '_disabled_xcorr_controls'):
@@ -4185,6 +4237,50 @@ class GuiApp:
         ):
             self.main_wnd.xcorr_run_button.setText(self.qapp.tr("Run"))
             self.main_wnd.xcorr_run_button.setEnabled(True)
+
+        self._unlock_all_backend_buttons()
+
+    def _disable_redrock_controls(self) -> None:
+        """
+        Disable controls in the redrock tab while redrock runs.
+
+        The run button is kept enabled and its text is changed to "Cancel".
+        """
+        btn = getattr(self.main_wnd, 'redrock_run_button', None)
+
+        self._disabled_redrock_controls: list = []
+        for widget_name in (
+            'redrock_all_radio',
+            'redrock_selected_radio',
+            'redrock_current_radio',
+        ):
+            w = getattr(self.main_wnd, widget_name, None)
+            if w is not None and w.isEnabled():
+                self._disabled_redrock_controls.append(w)
+                w.setEnabled(False)
+
+        if btn is not None:
+            btn.setText(self.qapp.tr("Cancel"))
+            btn.setEnabled(True)
+
+        self._lock_other_backend_buttons(btn)
+
+    def _restore_redrock_controls(self) -> None:
+        """Re-enable redrock controls that were disabled during run."""
+        if hasattr(self, '_disabled_redrock_controls'):
+            for w in self._disabled_redrock_controls:
+                try:
+                    w.setEnabled(True)
+                except Exception:
+                    pass
+            self._disabled_redrock_controls.clear()
+
+        btn = getattr(self.main_wnd, 'redrock_run_button', None)
+        if btn is not None:
+            btn.setText(self.qapp.tr("Run"))
+            btn.setEnabled(True)
+
+        self._unlock_all_backend_buttons()
 
     def collectXCorrResults(self) -> None:
         self.pbar.hide()
@@ -5733,12 +5829,21 @@ class GuiApp:
 
     def doStartRedrock(self, *args, **kwargs) -> None:
         if self.redrock_handler is None:
-            # Should never happen since we lock the button to start this
-            # action if the redrock backend is not found
+            return
+
+        if self.redrock_handler.is_running():
+            self.statusbar.showMessage(
+                self.qapp.tr("Cancelling Redrock...")
+            )
+            self.redrock_handler.cancel()
             return
 
         self.main_wnd.redrock_text_edit.clear()
-        self.statusbar.showMessage("Running redrock backend...")
+        self.statusbar.showMessage(
+            self.qapp.tr("Running redrock backend...")
+        )
+        self.pbar.show()
+        self._disable_redrock_controls()
 
         for_rr: dict[uuid.UUID, Spectrum] = {}
         if self.main_wnd.redrock_all_radio.isChecked():
