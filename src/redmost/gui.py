@@ -1712,6 +1712,8 @@ class SettingsDialog(qt_api.QtWidgets.QDialog):
     icon_theme_combo_box: QtWidgets.QComboBox
     gpu_backend_combo_box: QtWidgets.QComboBox
     gpu_device_combo_box: QtWidgets.QComboBox
+    select_cache_dir_lineedit: QtWidgets.QLineEdit
+    select_cache_dir_button: QtWidgets.QPushButton
 
 
 class ExtractSpec1DDialog(qt_api.QtWidgets.QDialog):
@@ -2389,6 +2391,11 @@ class GuiApp:
         self.settings_wnd.gpu_device_combo_box.currentIndexChanged.connect(
             self.setGpuDevice
         )
+
+        self.settings_wnd.select_cache_dir_button.clicked.connect(
+            self._onSelectCacheDir
+        )
+        self.setCacheDir(self.getCacheDir())
 
         self.settings_wnd.accepted.connect(
             self.acceptSettings
@@ -3153,6 +3160,11 @@ class GuiApp:
                 self.getXcorrTreeWidgetColumnWidth,
                 self.setXcorrTreeWidgetColumnWidth,
                 lambda x: x if isinstance(x, list) else [int(x),]
+            ),
+            "cache_dir": (
+                self.getCacheDir,
+                self.setCacheDir,
+                str
             ),
         }
 
@@ -5570,14 +5582,36 @@ class GuiApp:
 
 
     def getXcorrSelectedTemplates(self) -> dict[str, specutils.Spectrum]:
-
+        use_csub = (
+            self.main_wnd.xcorr_csub_combobox.currentIndex() != 0
+        )
+        cache_dir = self.getCacheDir()
         selected_templates = {}
         for item in self.xcor_tree_leaf_items:
             if item.checkState(0) == qt_api.QtCore.Qt.CheckState.Checked:
                 template_id = item.data(
                     0, qt_api.QtCore.Qt.ItemDataRole.UserRole
                 )
-                selected_templates[template_id] = self.xcorr_templates[template_id]
+                if use_csub:
+                    try:
+                        parts = str(template_id).split("::", 1)
+                        if len(parts) == 2:
+                            t_path = Path(parts[0]) / parts[1]
+                        else:
+                            t_path = Path(parts[0])
+                        csub_sp = backends.xcorr.load_template(
+                            t_path,
+                            continuum_subtracted=True,
+                            cache_dir=cache_dir
+                        )
+                    except Exception:
+                        csub_sp = None
+                    if csub_sp is not None:
+                        selected_templates[template_id] = csub_sp
+                        continue
+                selected_templates[template_id] = self.xcorr_templates[
+                    template_id
+                ]
         return selected_templates
 
 
@@ -6007,10 +6041,13 @@ class GuiApp:
             object_ze = self.xcorr_handler.best_z[self.current_uuid]
         except KeyError:
             return
-        else:
+        try:
             template_id = item.data(
                 0, qt_api.QtCore.Qt.ItemDataRole.UserRole
             )
+        except RuntimeError:
+            self.cur_xcorr_leaf_item = None
+            return
 
         try:
             vec_z, xcorr = object_corr[template_id]
@@ -6228,6 +6265,8 @@ class GuiApp:
             return
 
         csub_options: dict[str, Any] = self.getXcorrCsubOptions()
+        if not csub_options.get('mode'):
+            return
 
         mask = ~np.isfinite(flux)
 
@@ -6306,27 +6345,16 @@ class GuiApp:
         dlg_layout.addWidget(temp_sp_view)
         flux_chart: QtCharts.QChart = temp_sp_view.chart()
 
-        if not flux_chart.axes():
-            flux_axis_x = qt_api.QtCharts.QValueAxis()
-            flux_axis_y = qt_api.QtCharts.QValueAxis()
-
-            flux_chart.addAxis(
-                flux_axis_x, qt_api.QtCore.Qt.AlignmentFlag.AlignBottom
-            )
-            flux_chart.addAxis(
-                flux_axis_y, qt_api.QtCore.Qt.AlignmentFlag.AlignLeft
-            )
-        else:
-            flux_axis_x = flux_chart.axes()[0]
-            flux_axis_y = flux_chart.axes()[1]
-
-        flux_axis_y.setTitleText("Flux [arbitrary units]")
-        flux_axis_x.setTitleText("Wavelength [Angstrom]")
-
         for ser in series:
             flux_chart.addSeries(ser)
-            ser.attachAxis(flux_axis_x)
-            ser.attachAxis(flux_axis_y)
+
+        flux_chart.createDefaultAxes()
+        if flux_chart.axes():
+            for ax in flux_chart.axes():
+                if ax.orientation() == qt_api.QtCore.Qt.Orientation.Horizontal:
+                    ax.setTitleText("Wavelength [Angstrom]")
+                elif ax.orientation() == qt_api.QtCore.Qt.Orientation.Vertical:
+                    ax.setTitleText("Flux [arbitrary units]")
 
         preview_dialog.exec()
 
@@ -6369,7 +6397,7 @@ class GuiApp:
         template_series: QtCharts.QLineSeries = values2series(
             template_wav_ang,
             template_flux,
-            name=str(template_id)
+            name=f"{Path(str(template_id)).name} (original)"
         )
 
         pen: QtGui.QPen = template_series.pen()
@@ -6378,7 +6406,39 @@ class GuiApp:
         template_series.setPen(pen)
         template_series.setOpacity(0.5)
 
-        self.previewSeries([template_series, ])
+        series_to_plot = [template_series]
+
+        # Continuum-subtracted version (from cache or computed on-the-fly)
+        try:
+            parts = str(template_id).split("::", 1)
+            if len(parts) == 2:
+                t_path = Path(parts[0]) / parts[1]
+            else:
+                t_path = Path(parts[0])
+            cache_dir = self.getCacheDir()
+            csub_sp = backends.xcorr.load_template(
+                t_path,
+                continuum_subtracted=True,
+                cache_dir=cache_dir
+            )
+            if csub_sp is not None:
+                csub_wav = csub_sp.spectral_axis.to("AA").value
+                csub_flux = csub_sp.flux.value
+                t_name = Path(str(template_id)).name
+                csub_series: QtCharts.QLineSeries = values2series(
+                    csub_wav,
+                    csub_flux,
+                    name=f"{t_name} (continuum subtracted)"
+                )
+                csub_pen: QtGui.QPen = csub_series.pen()
+                csub_pen.setColor(qt_api.QtGui.QColor("red"))
+                csub_pen.setWidth(2)
+                csub_series.setPen(csub_pen)
+                series_to_plot.append(csub_series)
+        except Exception:
+            pass
+
+        self.previewSeries(series_to_plot)
 
     def redrawCurrentSpec(self, *args, **kwargs) -> None:
         """Redraw the charts."""
@@ -6593,6 +6653,31 @@ class GuiApp:
                 break
         else:
             self.setGpuBackend(None)
+
+    def getCacheDir(self) -> str:
+        text = self.settings_wnd.select_cache_dir_lineedit.text().strip()
+        if not text:
+            text = str(utils.get_default_cache_dir())
+        return text
+
+    def setCacheDir(self, path: str | os.PathLike[str]) -> None:
+        p = Path(path) if path else utils.get_default_cache_dir()
+        self.settings_wnd.select_cache_dir_lineedit.setText(str(p))
+        try:
+            (p / "xcorr-templates").mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+
+    def _onSelectCacheDir(self) -> None:
+        current = self.getCacheDir()
+        selected = qt_api.QtWidgets.QFileDialog.getExistingDirectory(
+            self.settings_wnd,
+            self.qapp.tr("Select cache directory")
+            if self.qapp else "Select cache directory",
+            current,
+        )
+        if selected:
+            self.setCacheDir(selected)
 
     def setCurrentObjectRedshift(self, redshift: float | None) -> None:
         if redshift is None:

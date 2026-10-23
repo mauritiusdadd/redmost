@@ -461,3 +461,29 @@ def separate_continuum(
         )
     residuals = data - continuum
     return continuum, residuals
+
+
+def get_default_cache_dir() -> Path:
+    """
+    Return the default OS-dependent application cache directory.
+
+    On Windows: %LOCALAPPDATA%/redmost
+    On macOS: ~/Library/Caches/redmost
+    On Linux/other: $XDG_CACHE_HOME/redmost or ~/.cache/redmost
+    """
+    import platform
+
+    sys_name = platform.system()
+    if sys_name == "Windows":
+        base = os.environ.get(
+            "LOCALAPPDATA",
+            str(Path.home() / "AppData" / "Local")
+        )
+    elif sys_name == "Darwin":
+        base = str(Path.home() / "Library" / "Caches")
+    else:
+        base = os.environ.get(
+            "XDG_CACHE_HOME",
+            str(Path.home() / ".cache")
+        )
+    return Path(base) / "redmost"
