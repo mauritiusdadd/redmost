@@ -1,7 +1,26 @@
+# Copyright (c) 2023-2026 Maurizio D'Addona <mauritiusdadd@gmail.com>
+#
+# This file is part of Redmost.
+#
+# Redmost is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Redmost is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Redmost.  If not, see <https://www.gnu.org/licenses/>.
+"""Spectrum loaders and format identifiers."""
+
 import os
 import copy
 from pathlib import Path
 from typing import Any
+
 
 import numpy as np
 
@@ -163,9 +182,10 @@ def isAscii(filename: str | os.PathLike[str], sample_size: int = 4096) -> bool:
 
 
 def identify1DAsciiTable(origin, *args, **kwargs) -> bool:
-    if not args or not os.path.isfile(args[0]):
+    if not args or not Path(str(args[0])).is_file():
         return False
     if isFits(args[0]):
+
         return False
     if not isAscii(args[0]):
         return False
@@ -779,8 +799,8 @@ class Spectrum2D:
 def identifyClashVlt2dFits(origin, *args, **kwargs) -> bool:
     """Identify VIMOS 2D spectra."""
     if not (
-        isinstance(args[0], str) and
-        os.path.splitext(args[0].lower())[1] == '.fits'
+        isinstance(args[0], (str, Path)) and
+        Path(str(args[0])).suffix.lower() == '.fits'
     ):
         return False
 
@@ -833,7 +853,7 @@ def identify_format(filename, dtype=Spectrum):
     # check for valid string input
     if (
         not isinstance(filename, (str, Path)) or
-        not os.path.isfile(filename)
+        not Path(filename).is_file()
     ):
         raise ValueError(f'{filename} is not a valid string path to a file')
 
@@ -880,8 +900,10 @@ def read(file: str) -> Spectrum | Spectrum2D:
     if sp.meta is None:
         sp.meta = {}
 
-    sp.meta['file_name'] = os.path.basename(file)
-    sp.meta['full_path'] = os.path.realpath(file)
+    p_file = Path(file)
+    sp.meta['file_name'] = p_file.name
+    sp.meta['full_path'] = str(p_file.resolve())
+
 
     # Try to read auxiliary data
     if 'SDSS-V spec' in sp_formats:

@@ -1,14 +1,33 @@
 #!/usr/bin/env python3
+# Copyright (c) 2023-2026 Maurizio D'Addona <mauritiusdadd@gmail.com>
+#
+# This file is part of Redmost.
+#
+# Redmost is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Redmost is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Redmost.  If not, see <https://www.gnu.org/licenses/>.
 """
 Created on Fri Nov 24 20:38:29 2023.
 
 @author: Maurizio D'Addona
 """
+
 import os
+from pathlib import Path
 import time
 from urllib import request
 import json
 from concurrent.futures import ProcessPoolExecutor, Future
+
 
 import numpy as np
 
@@ -174,11 +193,9 @@ def get_data_file(
     :param file_name: the name of the file.
     :return: the path of the file.
     """
-    data_file = os.path.join(
-        os.path.abspath(os.path.dirname(__file__)), 'ui', f"{file_name}"
-    )
-    if os.path.isfile(data_file):
-        return  data_file
+    data_file = Path(__file__).resolve().parent / 'ui' / f"{file_name}"
+    if data_file.is_file():
+        return str(data_file)
 
 
 def get_icon(
@@ -192,13 +209,11 @@ def get_icon(
     :param theme: the name of the theme. Default value is 'feather'
     :return: the path of the icon file.
     """
+    ui_icons = Path(__file__).resolve().parent / 'ui' / 'icons'
     for ext in ["png", "svg"]:
-        icon_file = os.path.join(
-            os.path.abspath(os.path.dirname(__file__)), 'ui', 'icons',
-            theme, f"{icon_name}.{ext}"
-        )
-        if os.path.isfile(icon_file):
-            return icon_file
+        icon_file = ui_icons / str(theme) / f"{icon_name}.{ext}"
+        if icon_file.is_file():
+            return str(icon_file)
 
 def smooth_fft_np(
     data: np.ndarray,

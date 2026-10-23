@@ -1,4 +1,20 @@
 #!/usr/bin/env python3
+# Copyright (c) 2023-2026 Maurizio D'Addona <mauritiusdadd@gmail.com>
+#
+# This file is part of Redmost.
+#
+# Redmost is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Redmost is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Redmost.  If not, see <https://www.gnu.org/licenses/>.
 """
 Created on Fri Nov 24 10:33:40 2023.
 
@@ -6,14 +22,16 @@ Created on Fri Nov 24 10:33:40 2023.
 """
 from __future__ import annotations
 
+
 import os
 import copy
 import pickle
 import sys
 import json
 import uuid
-import pathlib
+from pathlib import Path
 import tempfile
+
 import webbrowser
 import traceback
 import hashlib
@@ -3590,13 +3608,14 @@ class GuiApp:
 
     def addNewTemplateDir(self, dir_path, update=True) -> None:
         dirs = self.xcorr_plugin.get_template_dirs()
-        dir_resolved = str(pathlib.Path(str(dir_path)).resolve())
+        dir_resolved = str(Path(str(dir_path)).resolve())
         if dir_resolved not in dirs:
             dirs.append(dir_resolved)
             self.xcorr_plugin.set_template_dirs(dirs)
             self._rebuild_xcorr_template_list = True
             if update:
                 self.updateXcorrTemplateList()
+
 
     def clearXcorrTreeWidgetZ(self) -> None:
         for item in self.xcor_tree_leaf_items:
@@ -4370,7 +4389,7 @@ class GuiApp:
         self.redrawCurrentSpec()
 
         self.statusbar.showMessage(self.qapp.tr("Mask file loaded"))
-        self.current_mask_open_dir = os.path.dirname(mask_file_path)
+        self.current_mask_open_dir = str(Path(mask_file_path).parent)
         return True
 
     def doSaveMasks(self) -> bool:
@@ -4389,7 +4408,7 @@ class GuiApp:
         open_list = qt_api.QtWidgets.QFileDialog.getSaveFileName(
             self.main_wnd,
             self.qapp.tr("Export masks to file"),
-            os.path.join(cur_dir, 'masks.json'),
+            str(Path(cur_dir) / 'masks.json'),
             (
                 f"{self.qapp.tr('JSON file')} (*.json);;"
             ),
@@ -4430,8 +4449,9 @@ class GuiApp:
             return False
 
         self.statusbar.showMessage(self.qapp.tr("Mask file saved"))
-        self.current_mask_open_dir = os.path.dirname(dest_file_path)
+        self.current_mask_open_dir = str(Path(dest_file_path).parent)
         return True
+
 
     def updateMaskList(self) -> None:
         self.main_wnd.mask_list_widget.clear()
@@ -4665,16 +4685,16 @@ class GuiApp:
         elif self.current_image_open_dir is not None:
             cur_dir = self.current_image_open_dir
         elif self.current_project_file_path is not None:
-            cur_dir = os.path.dirname(self.current_project_file_path)
+            cur_dir = str(Path(self.current_project_file_path).parent)
         else:
             cur_dir = '.'
 
-        base_name = os.path.splitext(str(item.text()))[0]
+        base_name = Path(str(item.text())).stem
 
         open_list = qt_api.QtWidgets.QFileDialog.getSaveFileName(
             self.main_wnd,
             self.qapp.tr("Export spectrum as image"),
-            os.path.join(cur_dir, f'{base_name}.png'),
+            str(Path(cur_dir) / f'{base_name}.png'),
             (
                 f"{self.qapp.tr('PNG image')} (*.png);;"
                 f"{self.qapp.tr('JPG image')} (*.jpg);;"
@@ -4714,7 +4734,7 @@ class GuiApp:
             )
             self.msgBox.exec()
         else:
-            self.current_image_open_dir = os.path.dirname(dest_file_path)
+            self.current_image_open_dir = str(Path(dest_file_path).parent)
             self.statusbar.showMessage(
                 self.qapp.tr("Picture saved")
             )
@@ -4723,14 +4743,14 @@ class GuiApp:
         if self.current_zcat_open_dir is not None:
             cur_dir = self.current_zcat_open_dir
         elif self.current_project_file_path is not None:
-            cur_dir = os.path.dirname(self.current_project_file_path)
+            cur_dir = str(Path(self.current_project_file_path).parent)
         else:
             cur_dir = '.'
 
         open_list = qt_api.QtWidgets.QFileDialog.getSaveFileName(
             self.main_wnd,
             self.qapp.tr("Export redshift catalogue to file"),
-            os.path.join(cur_dir, 'zcat.fits'),
+            str(Path(cur_dir) / 'zcat.fits'),
             (
                 f"{self.qapp.tr('FITS table')} (*.fits *.fit);;"
                 f"{self.qapp.tr('CSV table')} (*.csv);;"
@@ -4759,7 +4779,8 @@ class GuiApp:
             )
             self.msgBox.exec()
         else:
-            self.current_zcat_open_dir = os.path.dirname(dest_file_path)
+            self.current_zcat_open_dir = str(Path(dest_file_path).parent)
+
             self.statusbar.showMessage(
                 self.qapp.tr("Redshift catalogue saved")
             )
@@ -4814,7 +4835,7 @@ class GuiApp:
         if self.current_open_dir is not None:
             cur_dir = self.current_zcat_open_dir
         elif self.current_project_file_path is not None:
-            cur_dir = os.path.dirname(self.current_project_file_path)
+            cur_dir = str(Path(self.current_project_file_path).parent)
         else:
             cur_dir = '.'
         catalogue_file, _ = qt_api.QtWidgets.QFileDialog.getOpenFileName(
@@ -4855,7 +4876,8 @@ class GuiApp:
             self.msgBox.exec()
             return
 
-        self.current_zcat_open_dir = os.path.dirname(catalogue_file)
+        self.current_zcat_open_dir = str(Path(catalogue_file).parent)
+
         self.zcat_mapping_dialog.setup(zcat_tbl)
         self.zcat_mapping_dialog.open()
 
@@ -4864,7 +4886,7 @@ class GuiApp:
         if self.current_open_dir is not None:
             cur_dir = self.current_open_dir
         elif self.current_project_file_path is not None:
-            cur_dir = os.path.dirname(self.current_project_file_path)
+            cur_dir = str(Path(self.current_project_file_path).parent)
         else:
             cur_dir = '.'
 
@@ -4909,7 +4931,8 @@ class GuiApp:
             if self.global_state == GlobalState.REUQUEST_CANCEL:
                 break
 
-            if not os.path.isfile(file):
+            p_file = Path(file)
+            if not p_file.is_file():
                 exception_tracker.append((
                     file, "not found!"
                 ))
@@ -4934,7 +4957,7 @@ class GuiApp:
                 continue
             else:
                 if not al_least_one:
-                    self.current_open_dir = os.path.dirname(file)
+                    self.current_open_dir = str(p_file.parent)
                     al_least_one = True
 
             sp.meta['uuid'] = item_uuid
@@ -4948,7 +4971,7 @@ class GuiApp:
             sp_1d: Spectrum | None = None
 
             if isinstance(sp, Spectrum):
-                item_name = '[1D] ' + os.path.basename(file)
+                item_name = '[1D] ' + p_file.name
                 sp_1d = sp
                 if sp_header and 'SPEC_2D' in sp_header:
                     for _uuid, _sp in self.open_spectra.items():
@@ -4965,14 +4988,14 @@ class GuiApp:
                             sp_1d.meta['linked'] = {'2D': sp_2d}
                             new_item = self.open_spectra_items[_uuid]
                             new_item.setText(
-                                '[1D|2D] ' + os.path.basename(file)
+                                '[1D|2D] ' + p_file.name
                             )
                             self.open_spectra[_uuid] = sp_1d
                             break
 
             elif isinstance(sp,loaders.Spectrum2D):
                 sp_2d = sp
-                item_name = '[2D] ' + os.path.basename(file)
+                item_name = '[2D] ' + p_file.name
                 if sp_header and 'SPEC_1D' in sp_header:
                     for _uuid, _sp in self.open_spectra.items():
                         if _sp.meta['file_name'] == sp_header['SPEC_1D']:
@@ -4981,9 +5004,10 @@ class GuiApp:
                             sp_1d.meta['linked'] = {'2D': sp_2d}
                             new_item = self.open_spectra_items[_uuid]
                             new_item.setText(
-                                '[1D|2D] ' + os.path.basename(file)
+                                '[1D|2D] ' + p_file.name
                             )
                             break
+
                 if sp_1d is None:
                     flux_from_2d = np.nansum(
                         sp_2d.flux.value,
@@ -5059,11 +5083,12 @@ class GuiApp:
 
     def doOpenProject(self, *args, **kwargs) -> bool:
         if self.current_project_file_path is not None:
-            cur_dir = os.path.basename(self.current_project_file_path)
+            cur_dir = str(Path(self.current_project_file_path).parent)
         elif self.current_open_dir is not None:
             cur_dir = self.current_open_dir
         else:
             cur_dir = '.'
+
 
         proj_file_path, _ = qt_api.QtWidgets.QFileDialog.getOpenFileName(
             self.main_wnd,
@@ -5221,13 +5246,14 @@ class GuiApp:
 
         :return: True if the project is saved correctly, False otherwise.
         """
-        if (dest is None) or (not os.path.exists(str(dest))):
+        if (dest is None) or (not Path(str(dest)).exists()):
             if self.current_project_file_path is not None:
                 cur_dir = self.current_project_file_path
             elif self.current_open_dir is not None:
                 cur_dir = self.current_open_dir
             else:
                 cur_dir = '.'
+
 
             dest_file_path, _ = qt_api.QtWidgets.QFileDialog.getSaveFileName(
                 self.main_wnd,
@@ -5494,13 +5520,14 @@ class GuiApp:
         valied_exts = valied_exts.replace('*', '').split()
 
         # get destination file extension
-        dest_ext = os.path.splitext(dest_file)[1]
+        dest_ext = Path(dest_file).suffix
 
         # correct for mismatching extension
         if dest_ext not in valied_exts:
             dest_file = dest_file + valied_exts[0]
 
         zcat_tbl.write(dest_file, overwrite=True)
+
 
     def getGpuBackend(self):
         if self.use_gpu:
@@ -5754,16 +5781,12 @@ class GuiApp:
                 file_path = None
                 is_dummy = True
             else:
-                file_path = os.path.realpath(
-                    os.path.join(
-                        os.path.dirname(file_name),
-                        file_info['path']
-                    )
-                )
+                proj_dir = Path(file_name).resolve().parent
+                file_path = str((proj_dir / file_info['path']).resolve())
                 is_dummy = False
 
-            if not os.path.exists(file_path):
-                if os.path.exists(file_info['path']):
+            if not Path(file_path).exists():
+                if Path(file_info['path']).exists():
                     file_path = file_info['path']
                 else:
                     exception_tracker[item_uuid] = (
@@ -5789,7 +5812,7 @@ class GuiApp:
             if item_uuid == current_uuid:
                 current_spec_list_item = new_item
 
-            sp.meta['file_name'] = os.path.basename(file_path)
+            sp.meta['file_name'] = Path(file_path).name
             sp.meta['full_path'] = file_path
             sp.meta['is_dummy'] = is_dummy
 
@@ -5801,11 +5824,9 @@ class GuiApp:
                 links_dict = {}
                 try:
                     for key, sp_path in serialized_links.items():
-                        linked_file_path = os.path.realpath(
-                            os.path.join(
-                                os.path.dirname(file_name),
-                                sp_path
-                            )
+                        proj_dir = Path(file_name).resolve().parent
+                        linked_file_path = str(
+                            (proj_dir / sp_path).resolve()
                         )
                         try:
                             linked_sp = loaders.read(linked_file_path)
@@ -5817,6 +5838,7 @@ class GuiApp:
                             )
                         else:
                             links_dict[key] = linked_sp
+
                             if isinstance(sp, Spectrum):
                                 linked_sp.meta['linked'] = {'1D': sp}
                             elif isinstance(sp, loaders.Spectrum2D):
@@ -6100,7 +6122,8 @@ class GuiApp:
 
             template_id = self.templates_to_plot['xcorr']
 
-        template_name = f"xcorr/{os.path.basename(template_id)}"
+        template_name = f"xcorr/{Path(template_id).name}"
+
 
         try:
             template_sp = self.xcorr_templates[template_id]
@@ -6379,7 +6402,7 @@ class GuiApp:
         # Serialize program state for json dumping
         serialized_open_file_list = []
         item: QtWidgets.QListWidgetItem | None
-        proj_path = os.path.dirname(file_name)
+        proj_dir = Path(file_name).resolve().parent
         for k in range(self.main_wnd.spec_list_widget.count()):
             item = self.main_wnd.spec_list_widget.item(k)
             if item is None:
@@ -6406,21 +6429,35 @@ class GuiApp:
             if is_dummy or (spec_meta['full_path'] is None):
                 file_info['path'] = None
             else:
-                file_info['path'] = os.path.relpath(
-                    spec_meta['full_path'], proj_path
-                )
+                try:
+                    file_info['path'] = str(
+                        Path(spec_meta['full_path']).resolve().relative_to(
+                            proj_dir
+                        )
+                    )
+                except ValueError:
+                    file_info['path'] = str(
+                        Path(spec_meta['full_path']).resolve()
+                    )
 
             try:
-                serialized_links: dict[str, Any] = {
-                    sp_type: os.path.relpath(
-                        sp.meta['full_path'], proj_path
-                    )
-                    for sp_type, sp in spec_meta['linked'].items()
-                }
+                serialized_links: dict[str, Any] = {}
+                for sp_type, sp in spec_meta['linked'].items():
+                    try:
+                        serialized_links[sp_type] = str(
+                            Path(sp.meta['full_path']).resolve().relative_to(
+                                proj_dir
+                            )
+                        )
+                    except ValueError:
+                        serialized_links[sp_type] = str(
+                            Path(sp.meta['full_path']).resolve()
+                        )
             except KeyError:
                 pass
             else:
                 file_info['linked'] = serialized_links
+
 
             serialized_open_file_list.append(file_info)
 
@@ -6908,8 +6945,9 @@ class GuiApp:
             for local_template_id, template_sp in template_dict.items():
                 self.qapp.processEvents()
                 template_id = dir_path + '::' + local_template_id
-                path_parts = list(pathlib.PurePath(local_template_id).parts)
+                path_parts = list(Path(local_template_id).parts)
                 path_parts.append(template_id)
+
 
                 self.xcorr_templates[template_id] = template_sp
 

@@ -1,8 +1,29 @@
+# Copyright (c) 2026 Maurizio D'Addona <mauritiusdadd@gmail.com>
+#
+# This file is part of Redmost.
+#
+# Redmost is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Redmost is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Redmost.  If not, see <https://www.gnu.org/licenses/>.
+"""Redrock backend wrapper and runner."""
+
 import os
+from pathlib import Path
 import sys
 import uuid
 import pickle
 import argparse
+
+
 import traceback
 from packaging import version
 from typing import Any
@@ -73,8 +94,9 @@ else:
 
         """
 
-        if templates is not None and os.path.isfile(templates):
+        if templates is not None and Path(templates).is_file():
             return [Template(templates), ]
+
 
         available_templates = []
         for t in find_templates(templates):
@@ -196,9 +218,10 @@ else:
         print(f"Using redrock version {redrock.__version__}")
 
         if 'RR_TEMPLATE_DIR' not in os.environ:
-            os.environ['RR_TEMPLATE_DIR'] = os.path.join(
-                os.path.dirname(redrock.__file__), 'templates'
+            os.environ['RR_TEMPLATE_DIR'] = str(
+                Path(redrock.__file__).resolve().parent / 'templates'
             )
+
         print(f"Template directory: {os.environ.get('RR_TEMPLATE_DIR')}")
 
         dtargets = DistTargetsCopy(targets, comm=None, root=0)

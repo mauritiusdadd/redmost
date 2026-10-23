@@ -1,7 +1,26 @@
-import os
+# Copyright (c) 2023-2026 Maurizio D'Addona <mauritiusdadd@gmail.com>
+#
+# This file is part of Redmost.
+#
+# Redmost is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Redmost is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Redmost.  If not, see <https://www.gnu.org/licenses/>.
+"""Splash screen implementation for Redmost application."""
+
+from pathlib import Path
 from typing import TYPE_CHECKING
 from redmost.qt_compat import qt_api, get_qapp
-from redmost.utils import  get_data_file
+from redmost.utils import get_data_file
+
 
 if TYPE_CHECKING:
     # NOTE: These imports will be actually executed only by the type-checking
@@ -19,8 +38,9 @@ class SplashScreen(qt_api.QtCore.QObject):
         self.qapp = get_qapp()
 
         splashfile = get_data_file(
-            os.path.join("pics", "splashscreen.jpg")
+            str(Path("pics") / "splashscreen.jpg")
         )
+
         self._msg = ""
         self._pxm = qt_api.QtGui.QPixmap(splashfile)
         self._qss = qt_api.QtWidgets.QSplashScreen(

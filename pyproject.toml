@@ -15,7 +15,7 @@ dynamic = ["version"]
 description = "Display spectra and estimate their redshifts."
 readme = "README.md"
 requires-python = ">=3.10"
-license = {file = "LICENSE"}
+license = {text = "GPL-3.0-or-later"}
 keywords = ["spectroscopy", "FITS", "astronomy"]
 authors = [
  {name = "Maurizio D'Addona"},
@@ -33,11 +33,13 @@ classifiers = [
         "Development Status :: 3 - Alpha",
         # Indicate who your project is intended for
         "Intended Audience :: Science/Research",
+        "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
         "Topic :: Multimedia :: Graphics :: Graphics Conversion",
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate whether you support Python 2, Python 3 or both.
         "Programming Language :: Python :: 3",
 ]
+
 
 dependencies = [
     "numpy",

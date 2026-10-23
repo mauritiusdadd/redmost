@@ -1,15 +1,38 @@
+# Copyright (c) 2023-2026 Maurizio D'Addona <mauritiusdadd@gmail.com>
+# Portions Copyright (c) 2013-present Bruno Oliveira and contributors
+#
+# This file is part of Redmost.
+#
+# Redmost is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Redmost is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Redmost.  If not, see <https://www.gnu.org/licenses/>.
+#
+# Portions of this file are derived from pytest-qt
+# (https://github.com/pytest-dev/pytest-qt),
+# which is licensed under the MIT License.
 """
-Abstract apy to load different Qt backends
+Abstract API to load different Qt backends.
+"""
 
-Note: Based on https://github.com/pytest-dev/pytest-qt
-"""
 from __future__ import annotations
 
+
 import os
+from pathlib import Path
 import sys
 from typing import TYPE_CHECKING, Any
 from types import ModuleType
 from collections import namedtuple
+
 
 from redmost.utils import get_icon
 
@@ -268,13 +291,11 @@ class QtBackend:
 
         """
 
-        if os.path.isabs(ui_filename):
-            ui_file_path = ui_filename
-        else:
-            ui_file_path = os.path.join(
-                os.path.abspath(os.path.dirname(__file__)), 'ui',
-                ui_filename
-            )
+        ui_path = Path(ui_filename)
+        if not ui_path.is_absolute():
+            ui_path = Path(__file__).resolve().parent / 'ui' / ui_filename
+        ui_file_path = str(ui_path)
+
 
         if self.is_pyqt:
             uic = self._import_module("uic")

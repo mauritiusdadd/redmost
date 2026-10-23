@@ -9,19 +9,20 @@
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-#
-import os
+from pathlib import Path
 import sys
 
-sys.path.insert(0, os.path.abspath('../src'))
+sys.path.insert(0, str((Path(__file__).resolve().parent / '../src').resolve()))
 
 import redmost
+
 
 # -- Project information -----------------------------------------------------
 
 project = 'redmost'
-copyright = "2022-2024, Maurizio D'Addona <mauritiusdadd@gmail.com>"
+copyright = "2022-2026, Maurizio D'Addona <mauritiusdadd@gmail.com>"
 author = "Maurizio D'Addona"
+
 
 # The full version, including alpha/beta/rc tags
 release = redmost.__version__
@@ -70,12 +71,12 @@ html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 
 # These paths are either relative to html_static_path
-# or fully qualified paths (eg. https://...)
 html_css_files = [
-    os.path.join('css', 'custom.css'),
+    str(Path('css') / 'custom.css'),
 ]
 
-html_logo = os.path.join('pics', 'redmost.svg')
+html_logo = str(Path('pics') / 'redmost.svg')
+
 html_theme_options = {
     'logo_only': True,
     'display_version': True

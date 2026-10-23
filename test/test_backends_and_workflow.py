@@ -1,28 +1,27 @@
 # Copyright (c) 2026 Maurizio D'Addona <mauritiusdadd@gmail.com>
 #
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
+# This file is part of Redmost.
 #
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
+# Redmost is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
 #
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
+# Redmost is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Redmost.  If not, see <https://www.gnu.org/licenses/>.
+
 """Unit tests for Redmost backend plugins, projects, masks, and spectra."""
 
 from __future__ import annotations
 
 import glob
 import os
+from pathlib import Path
 import uuid
 import pytest
 from pytestqt.qtbot import QtBot
@@ -33,21 +32,23 @@ from redmost import gui
 from redmost.backends import xcorr, HAS_XCORR
 
 
-XCORR_TEMPLATES_DIR = os.path.abspath(
-    os.path.join(
-        os.path.dirname(__file__), "..", "src", "redmost", "spectral_templates"
-    )
-)
-REDROCK_CLONE_DEST = os.path.join(TEST_DATA_PATH, "redrock-templates")
-PROJECT_3_PATH = os.path.join(TEST_DATA_PATH, "test_project_3.json")
+XCORR_TEMPLATES_DIR = (
+    Path(__file__).resolve().parent.parent
+    / "src"
+    / "redmost"
+    / "spectral_templates"
+).resolve()
+REDROCK_CLONE_DEST = Path(TEST_DATA_PATH) / "redrock-templates"
+PROJECT_3_PATH = Path(TEST_DATA_PATH) / "test_project_3.json"
 TIMEOUT_MS = 60000
 DOWNLOAD_TIMEOUT_MS = 180000
+
 
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_redrock_templates():
     """Ensure redrock templates exist in test/data for the test suite."""
-    if not os.path.isdir(REDROCK_CLONE_DEST):
+    if not REDROCK_CLONE_DEST.is_dir():
         qapp = (
             qt_api.QtWidgets.QApplication.instance()
             or qt_api.QtWidgets.QApplication([])
@@ -68,15 +69,17 @@ def setup_redrock_templates():
         timer.start(100)
 
         # Download via the app method with a 3-minute timeout
-        success = plugin._download_templates(REDROCK_CLONE_DEST)
+        success = plugin._download_templates(str(REDROCK_CLONE_DEST))
         timer.stop()
         assert success, "Failed to download redrock templates via app method"
     yield
-    if os.path.islink(REDROCK_CLONE_DEST):
+    if REDROCK_CLONE_DEST.is_symlink():
         try:
-            os.unlink(REDROCK_CLONE_DEST)
+            REDROCK_CLONE_DEST.unlink()
         except OSError:
             pass
+
+
 
 
 @pytest.fixture
@@ -109,26 +112,30 @@ def test_template_loading(app: gui.GuiApp):
         xcorr_templates = xcorr.load_templates(XCORR_TEMPLATES_DIR)
         assert len(xcorr_templates) > 0, "No X-Corr templates loaded"
         loaded_filenames = [
-            os.path.basename(k) for k in xcorr_templates.keys()
+            Path(k).name for k in xcorr_templates.keys()
         ]
+
         assert "etg_muse.dat" in loaded_filenames
         assert "NEW_E_extended.dat" in loaded_filenames
         assert "NEW_Im_extended.dat" in loaded_filenames
 
 
     # Test Redrock template detection
-    assert os.path.isdir(REDROCK_CLONE_DEST)
-    app.redrock_plugin.set_template_dir(REDROCK_CLONE_DEST)
-    assert os.path.realpath(app.redrock_plugin.get_template_dir()) == (
-        os.path.realpath(REDROCK_CLONE_DEST)
+    assert REDROCK_CLONE_DEST.is_dir()
+    app.redrock_plugin.set_template_dir(str(REDROCK_CLONE_DEST))
+    assert Path(app.redrock_plugin.get_template_dir()).resolve() == (
+        REDROCK_CLONE_DEST.resolve()
     )
     assert app.redrock_plugin.template_files_list is not None
     assert app.redrock_plugin.template_files_list.count() > 0
 
 
+
 def test_import_spectra(app: gui.GuiApp):
     """Verify importing spec_*.fits files located in test/data."""
-    spec_files = sorted(glob.glob(os.path.join(TEST_DATA_PATH, "spec_*.fits")))
+    spec_files = sorted(
+        str(p) for p in Path(TEST_DATA_PATH).glob("spec_*.fits")
+    )
     assert len(spec_files) > 0, "No spec_*.fits files found in test/data"
 
     app.importSpectra(spec_files)
@@ -138,7 +145,7 @@ def test_import_spectra(app: gui.GuiApp):
 
 def test_add_spectral_masks(app: gui.GuiApp):
     """Verify adding, configuring, and deleting spectral masks."""
-    spec_files = [os.path.join(TEST_DATA_PATH, "spec_95.fits")]
+    spec_files = [str(Path(TEST_DATA_PATH) / "spec_95.fits")]
     app.importSpectra(spec_files)
     assert len(app.open_spectra) == 1
     spec_uuid = list(app.open_spectra.keys())[0]
@@ -174,9 +181,10 @@ def test_add_spectral_masks(app: gui.GuiApp):
 )
 def test_load_projects(app: gui.GuiApp, project_name: str):
     """Verify loading test projects."""
-    proj_path = os.path.join(TEST_DATA_PATH, project_name)
-    assert os.path.isfile(proj_path), f"Project file not found: {proj_path}"
-    app.openProject(proj_path)
+    proj_path = Path(TEST_DATA_PATH) / project_name
+    assert proj_path.is_file(), f"Project file not found: {proj_path}"
+    app.openProject(str(proj_path))
+
     assert len(app.open_spectra) > 0
     assert app.main_wnd.spec_list_widget.count() == len(app.open_spectra)
 
@@ -186,7 +194,8 @@ def test_xcorr_execution_cpu_and_gpu(qtbot: QtBot, app: gui.GuiApp):
     if not hasattr(app, "xcorr_plugin") or app.xcorr_plugin is None:
         pytest.skip("X-Corr backend is not installed.")
 
-    app.openProject(PROJECT_3_PATH)
+    app.openProject(str(PROJECT_3_PATH))
+
 
     total_specs = len(app.open_spectra)
     assert total_specs >= 4
@@ -250,11 +259,12 @@ def test_redrock_execution(qtbot: QtBot, app: gui.GuiApp):
     if not app.redrock_plugin.is_available():
         pytest.skip("Redrock module is not available in the environment")
 
-    app.openProject(PROJECT_3_PATH)
+    app.openProject(str(PROJECT_3_PATH))
     total_specs = len(app.open_spectra)
     assert total_specs >= 4
 
-    app.redrock_plugin.set_template_dir(REDROCK_CLONE_DEST)
+    app.redrock_plugin.set_template_dir(str(REDROCK_CLONE_DEST))
+
 
     modes = ["all", "selected", "single"]
     for mode in modes:

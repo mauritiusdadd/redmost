@@ -1,22 +1,20 @@
 # Copyright (c) 2026 Maurizio D'Addona <mauritiusdadd@gmail.com>
 #
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
+# This file is part of Redmost.
 #
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
+# Redmost is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
 #
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
+# Redmost is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Redmost.  If not, see <https://www.gnu.org/licenses/>.
+
 """Redrock backend plugin providing UI components and execution handling."""
 
 from __future__ import annotations
@@ -25,8 +23,9 @@ import os
 import sys
 import uuid
 import pickle
-import pathlib
+from pathlib import Path
 import traceback
+
 from typing import Optional, Any
 
 from redmost.backends.base import BackendPlugin
@@ -129,10 +128,9 @@ class RedrockPlugin(BackendPlugin):
         if self._main_widget is not None:
             return self._main_widget
 
-        ui_path = os.path.join(
-            os.path.dirname(__file__), "rrock_tab.ui"
-        )
-        widget = qt_api.loadUiWidget(ui_path, parent)
+        ui_path = Path(__file__).resolve().parent / "rrock_tab.ui"
+        widget = qt_api.loadUiWidget(str(ui_path), parent)
+
         self.current_radio = getattr(widget, "redrock_current_radio", None)
         self.selected_radio = getattr(widget, "redrock_selected_radio", None)
         self.all_radio = getattr(widget, "redrock_all_radio", None)
@@ -183,9 +181,10 @@ class RedrockPlugin(BackendPlugin):
 
         env = QtCore.QProcessEnvironment.systemEnvironment()
         src_path = str(
-            pathlib.Path(__file__).resolve().parent.parent.parent.parent
+            Path(__file__).resolve().parent.parent.parent.parent
         )
         existing_ppath = env.value("PYTHONPATH", "")
+
         if existing_ppath:
             env.insert("PYTHONPATH", f"{src_path}{os.pathsep}{existing_ppath}")
         else:
@@ -269,10 +268,9 @@ class RedrockPlugin(BackendPlugin):
         if self._settings_widget is not None:
             return self._settings_widget
 
-        ui_path = os.path.join(
-            os.path.dirname(__file__), "rrock_settings_tab.ui"
-        )
-        widget = qt_api.loadUiWidget(ui_path, parent)
+        ui_path = Path(__file__).resolve().parent / "rrock_settings_tab.ui"
+        widget = qt_api.loadUiWidget(str(ui_path), parent)
+
         self.select_dir_button = getattr(
             widget, "select_template_dir_rrock", None
         )
@@ -308,7 +306,7 @@ class RedrockPlugin(BackendPlugin):
         """Set the Redrock template directory and update environment."""
         if not dir_path:
             return
-        resolved = str(pathlib.Path(dir_path).resolve())
+        resolved = str(Path(dir_path).resolve())
         if self.template_dir_edit is not None:
             self.template_dir_edit.setText(resolved)
         os.environ["RR_TEMPLATE_DIR"] = resolved
@@ -327,13 +325,14 @@ class RedrockPlugin(BackendPlugin):
         if not dir_path:
             return
 
-        resolved = pathlib.Path(dir_path)
+        resolved = Path(dir_path)
         if not resolved.is_dir():
             return
 
         for entry in sorted(resolved.iterdir()):
             if entry.is_file():
                 self.template_files_list.addItem(entry.name)
+
 
     def _on_choose_template_dir(self) -> None:
         """Handle template folder selection dialog and validation."""
@@ -395,7 +394,7 @@ class RedrockPlugin(BackendPlugin):
         if msg.clickedButton() != btn_dl:
             return
 
-        clone_dir = str(pathlib.Path(selected_dir) / "redrock-templates")
+        clone_dir = str(Path(selected_dir) / "redrock-templates")
         if self._download_templates(clone_dir, parent=parent):
             self.set_template_dir(clone_dir)
 
@@ -431,7 +430,7 @@ class RedrockPlugin(BackendPlugin):
         from redrock.templates import find_templates
 
         configured_dir = self.get_template_dir()
-        if configured_dir and pathlib.Path(configured_dir).is_dir():
+        if configured_dir and Path(configured_dir).is_dir():
             try:
                 tmpl_files = list(find_templates(configured_dir))
             except Exception:
@@ -490,9 +489,10 @@ class RedrockPlugin(BackendPlugin):
             if not dest_url.isValid():
                 return
             dest_dir = dest_url.path()
-            clone_dir = str(pathlib.Path(dest_dir) / "redrock-templates")
+            clone_dir = str(Path(dest_dir) / "redrock-templates")
             if self._download_templates(clone_dir, parent=parent_window):
                 self.set_template_dir(clone_dir)
+
         elif clicked == btn_select:
             url = QtWidgets.QFileDialog.getExistingDirectoryUrl(
                 parent_window,
