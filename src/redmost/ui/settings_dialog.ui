@@ -23,7 +23,7 @@
       <enum>QTabWidget::TabShape::Rounded</enum>
      </property>
      <property name="currentIndex">
-      <number>0</number>
+      <number>2</number>
      </property>
      <widget class="QWidget" name="tab_general">
       <attribute name="title">
@@ -145,6 +145,39 @@
           </size>
          </property>
         </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="tab_rrock">
+      <attribute name="title">
+       <string>RedRock</string>
+      </attribute>
+      <layout class="QGridLayout" name="gridLayout_8">
+       <item row="0" column="1">
+        <widget class="QPushButton" name="select_template_dir_rrock">
+         <property name="text">
+          <string>Select tamplate folder</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="0">
+        <widget class="QLineEdit" name="linet_edit_template_dir_rrock"/>
+       </item>
+       <item row="1" column="0" colspan="2">
+        <widget class="QGroupBox" name="groupBox_4">
+         <property name="title">
+          <string>Template files found</string>
+         </property>
+         <layout class="QGridLayout" name="gridLayout_7">
+          <item row="0" column="0">
+           <widget class="QListWidget" name="template_files_list_widget_rrock">
+            <property name="verticalScrollBarPolicy">
+             <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOn</enum>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
        </item>
       </layout>
      </widget>

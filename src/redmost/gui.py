@@ -1346,12 +1346,13 @@ class QRedrockHandler(qt_api.QtCore.QObject):
 
         self._target_dump_file = 'rr.targets'
         self._result_dump_file = 'rr.result'
+        self._stderr_buffer: list[str] = []
         self.process: QtCore.QProcess = qt_api.QtCore.QProcess(self)
         self.process.readyReadStandardOutput.connect(  # type: ignore
             self._process_output
         )
         self.process.readyReadStandardError.connect(  # type: ignore
-            self._process_output
+            self._process_error
         )
         self.process.finished.connect(  # type: ignore
             self.retrieve_results
@@ -1363,7 +1364,7 @@ class QRedrockHandler(qt_api.QtCore.QObject):
     def _process_output(self) -> None:
         data_bytes: QtCore.QByteArray
         data_bytes = self.process.readAllStandardOutput()
-        text = bytes(data_bytes).decode()  # type: ignore
+        text = bytes(data_bytes).decode('utf-8', errors='replace')
         for line in text.splitlines():
             simplified = ' '.join(line.lower().strip().split())
             if "finished in" in simplified:
@@ -1374,20 +1375,51 @@ class QRedrockHandler(qt_api.QtCore.QObject):
 
         self.message.emit(str(text))
 
+    def _process_error(self) -> None:
+        data_bytes: QtCore.QByteArray
+        data_bytes = self.process.readAllStandardError()
+        text = bytes(data_bytes).decode('utf-8', errors='replace')
+        if text:
+            self._stderr_buffer.append(text)
+            self.message.emit(str(text))
+
     def retrieve_results(self, exit_status: int) -> None:
+        rem_err_bytes = self.process.readAllStandardError()
+        rem_err = bytes(rem_err_bytes).decode('utf-8', errors='replace')
+        if rem_err:
+            self._stderr_buffer.append(rem_err)
+            self.message.emit(rem_err)
+
         if exit_status != 0:
-            self.message.emit("*** REDROCK EXECUTION FAILED ***")
+            err_details = "".join(self._stderr_buffer).strip()
+            if err_details:
+                self.message.emit(
+                    f"\n*** REDROCK EXECUTION FAILED "
+                    f"(exit code {exit_status}) ***\n{err_details}\n"
+                )
+            else:
+                self.message.emit(
+                    f"\n*** REDROCK EXECUTION FAILED "
+                    f"(exit code {exit_status}) ***\n"
+                )
             self.results = None
         else:
             try:
                 with open(self._result_dump_file, 'rb') as f:
                     self.results = pickle.load(f)
             except Exception:
-                self.message.emit("*** REDROCK EXECUTION FAILED ***")
+                tb = traceback.format_exc()
+                self.message.emit(
+                    f"\n*** REDROCK EXECUTION FAILED: "
+                    f"failed to load results ***\n{tb}\n"
+                )
                 self.results = None
+
+        self._stderr_buffer.clear()
         self.finished.emit()
 
     def run(self, spectra: dict[uuid.UUID, Spectrum]) -> None:
+        self._stderr_buffer.clear()
         self.reset.emit()
         self.maximum.emit(len(spectra))
         self.message.emit(self.qapp.tr("Building targets"))
@@ -1404,6 +1436,18 @@ class QRedrockHandler(qt_api.QtCore.QObject):
         self._total_progress = 0
         self.maximum.emit(self._total_maximum)
         self.message.emit(self.qapp.tr("Running redrock backend"))
+
+        env = qt_api.QtCore.QProcessEnvironment.systemEnvironment()
+        src_path = str(pathlib.Path(__file__).resolve().parent.parent)
+        existing_ppath = env.value("PYTHONPATH", "")
+        if existing_ppath:
+            env.insert(
+                "PYTHONPATH", f"{src_path}{os.pathsep}{existing_ppath}"
+            )
+        else:
+            env.insert("PYTHONPATH", src_path)
+        self.process.setProcessEnvironment(env)
+
         self.process.start(
             sys.executable,
             [
@@ -1724,7 +1768,154 @@ class AboutDialog(qt_api.QtWidgets.QDialog):
         self.setMinimumWidth(640)
 
 
+
+
+class ProcessOutputDialog(qt_api.QtWidgets.QDialog):
+    """
+    A reusable dialog that runs an external command and streams its output.
+
+    The dialog shows stdout and stderr in a read-only text area.
+    The Ok button is disabled until the process exits successfully; Cancel
+    kills the process and closes the dialog. The return value of exec() is
+    QDialog.DialogCode.Accepted if the process exited with code 0, or
+    QDialog.DialogCode.Rejected otherwise.
+    """
+
+    def __init__(
+        self,
+        command: list[str],
+        title: str = "Running...",
+        parent: QtWidgets.QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        qapp = get_qapp()
+
+        self.setWindowTitle(title)
+        self.setMinimumSize(640, 400)
+        self.setWindowModality(
+            qt_api.QtCore.Qt.WindowModality.WindowModal
+        )
+
+        self._exit_code: int | None = None
+
+        # -- Output text area --
+        self._text_edit: QtWidgets.QPlainTextEdit
+        self._text_edit = qt_api.QtWidgets.QPlainTextEdit(self)
+        self._text_edit.setReadOnly(True)
+        self._text_edit.setLineWrapMode(
+            qt_api.QtWidgets.QPlainTextEdit.LineWrapMode.NoWrap
+        )
+        font = qt_api.QtGui.QFontDatabase.systemFont(
+            qt_api.QtGui.QFontDatabase.SystemFont.FixedFont
+        )
+        self._text_edit.setFont(font)
+
+        # -- Buttons --
+        self._ok_button: QtWidgets.QPushButton
+        self._ok_button = qt_api.QtWidgets.QPushButton(
+            qapp.tr("Ok")
+        )
+        self._ok_button.setEnabled(False)
+
+        self._cancel_button: QtWidgets.QPushButton
+        self._cancel_button = qt_api.QtWidgets.QPushButton(
+            qapp.tr("Cancel")
+        )
+
+        btn_layout = qt_api.QtWidgets.QHBoxLayout()
+        btn_layout.addStretch()
+        btn_layout.addWidget(self._ok_button)
+        btn_layout.addWidget(self._cancel_button)
+
+        main_layout = qt_api.QtWidgets.QVBoxLayout()
+        main_layout.addWidget(self._text_edit)
+        main_layout.addLayout(btn_layout)
+        self.setLayout(main_layout)
+
+        # -- QProcess --
+        self._process: QtCore.QProcess = qt_api.QtCore.QProcess(self)
+        self._process.setProgram(command[0])
+        self._process.setArguments(command[1:])
+        self._process.setProcessChannelMode(
+            qt_api.QtCore.QProcess.ProcessChannelMode.MergedChannels
+        )
+        self._process.readyReadStandardOutput.connect(
+            self.on_ready_read
+        )
+        self._process.finished.connect(self.on_finished)
+
+        self._ok_button.clicked.connect(self.accept)
+        self._cancel_button.clicked.connect(self.on_cancel)
+
+        # Start the process when the dialog is shown.
+        self._process.start()
+
+    def append_text(self, text: str) -> None:
+        """Append text to the output area and scroll to the bottom."""
+        self._text_edit.moveCursor(
+            qt_api.QtGui.QTextCursor.MoveOperation.End
+        )
+        self._text_edit.insertPlainText(text)
+        self._text_edit.moveCursor(
+            qt_api.QtGui.QTextCursor.MoveOperation.End
+        )
+
+    def on_ready_read(self) -> None:
+        """Read available output from the process and display it."""
+        raw: bytes = self._process.readAllStandardOutput().data()
+        try:
+            text = raw.decode("utf-8", errors="replace")
+        except Exception:
+            text = str(raw)
+        self.append_text(text)
+
+    def on_finished(
+        self, exit_code: int, exit_status: QtCore.QProcess.ExitStatus
+    ) -> None:
+        """Called when the process exits."""
+        self._exit_code = exit_code
+        if exit_status == qt_api.QtCore.QProcess.ExitStatus.NormalExit:
+            if exit_code == 0:
+                self.append_text(
+                    "\n[Process finished successfully]\n"
+                )
+                self._ok_button.setEnabled(True)
+            else:
+                self.append_text(
+                    f"\n[Process exited with code {exit_code}]\n"
+                )
+                self._ok_button.setEnabled(True)
+        else:
+            self.append_text("\n[Process was killed]\n")
+        self._cancel_button.setEnabled(False)
+
+    def on_cancel(self) -> None:
+        """Kill the running process and reject the dialog."""
+        if (
+            self._process.state()
+            != qt_api.QtCore.QProcess.ProcessState.NotRunning
+        ):
+            self._process.kill()
+            self._process.waitForFinished(3000)
+        self.reject()
+
+    def exit_code(self) -> int | None:
+        """Return the process exit code, or None if not yet finished."""
+        return self._exit_code
+
+    def closeEvent(self, event: QtGui.QCloseEvent) -> None:
+        """Kill the process if the window is closed while it is running."""
+        if (
+            self._process.state()
+            != qt_api.QtCore.QProcess.ProcessState.NotRunning
+        ):
+            self._process.kill()
+            self._process.waitForFinished(3000)
+        super().closeEvent(event)
+
+
 class ImportZcatDialog(qt_api.QtWidgets.QDialog):
+
 
     def __init__(self) -> None:
         super().__init__()
@@ -1840,6 +2031,10 @@ class SettingsDialog(qt_api.QtWidgets.QDialog):
     template_files_list_widget: QtWidgets.QListWidget
     add_template_dir_push_button: QtWidgets.QPushButton
     remove_template_dir_push_button: QtWidgets.QPushButton
+    # RedRock tab widgets
+    select_template_dir_rrock: QtWidgets.QPushButton
+    linet_edit_template_dir_rrock: QtWidgets.QLineEdit
+    template_files_list_widget_rrock: QtWidgets.QListWidget
 
 
 class ExtractSpec1DDialog(qt_api.QtWidgets.QDialog):
@@ -2541,6 +2736,14 @@ class GuiApp:
 
         self.settings_wnd.remove_template_dir_push_button.clicked.connect(
             self.doRemoveCurrentTemplateDir
+        )
+
+        self.settings_wnd.select_template_dir_rrock.clicked.connect(
+            self.doSelectRedrockTemplateDir
+        )
+
+        self.settings_wnd.linet_edit_template_dir_rrock.textChanged.connect(
+            self.updateRedrockTemplateList
         )
 
         self.control_mapping_wnd = cast(
@@ -3378,6 +3581,11 @@ class GuiApp:
                 self.getXcorrTreeWidgetColumnWidth,
                 self.setXcorrTreeWidgetColumnWidth,
                 lambda x: x if isinstance(x, list) else [int(x),]
+            ),
+            "rrock_template_dir": (
+                self.getRedrockTemplateDir,
+                self.setRedrockTemplateDir,
+                str
             )
         }
 
@@ -3394,6 +3602,9 @@ class GuiApp:
             is_outdated, new_ver = utils.check_updates()
             if is_outdated:
                 self._show_update_message(new_ver)
+
+        if backends.HAS_REDROCK:
+            self._check_redrock_templates()
 
 
 
@@ -5837,7 +6048,200 @@ class GuiApp:
                 selected_templates[template_id] = self.xcorr_templates[template_id]
         return selected_templates
 
+    def getRedrockTemplateDir(self) -> str:
+        """Return the currently configured Redrock template directory."""
+        return self.settings_wnd.linet_edit_template_dir_rrock.text()
 
+    def setRedrockTemplateDir(self, dir_path: str) -> None:
+        """
+        Set the Redrock template directory.
+
+        :param dir_path: Path to the directory containing templates.
+        """
+        if not dir_path:
+            return
+        resolved = str(pathlib.Path(dir_path).resolve())
+        self.settings_wnd.linet_edit_template_dir_rrock.setText(resolved)
+        # Set the env variable so that redrock picks it up at runtime.
+        os.environ['RR_TEMPLATE_DIR'] = resolved
+
+    def updateRedrockTemplateList(self, dir_path: str = '') -> None:
+        """
+        Populate template_files_list_widget_rrock with the files found in
+        the configured Redrock template directory.
+
+        :param dir_path: Directory to scan. If empty the current widget text
+            is used.
+        """
+        if not dir_path:
+            dir_path = (
+                self.settings_wnd.linet_edit_template_dir_rrock.text()
+            )
+
+        self.settings_wnd.template_files_list_widget_rrock.clear()
+
+        if not dir_path:
+            return
+
+        resolved = pathlib.Path(dir_path)
+        if not resolved.is_dir():
+            return
+
+        for entry in sorted(resolved.iterdir()):
+            if entry.is_file():
+                self.settings_wnd.template_files_list_widget_rrock.addItem(
+                    entry.name
+                )
+
+    def doSelectRedrockTemplateDir(
+        self, *args: Any, **kwargs: Any
+    ) -> None:
+        """Open a folder-selection dialog and update the Redrock template dir."""
+        url = qt_api.QtWidgets.QFileDialog.getExistingDirectoryUrl(
+            self.settings_wnd,
+            self.qapp.tr("Select Redrock templates directory"),
+        )
+
+        if not url.isValid():
+            return
+
+        self.setRedrockTemplateDir(url.path())
+
+    def doDownloadRedrockTemplates(
+        self, dest_dir: str
+    ) -> bool:
+        """
+        Clone the Redrock templates repository into dest_dir.
+
+        Uses ProcessOutputDialog so that git output is visible in real time.
+        The Ok button is enabled when git finishes; Cancel kills the process.
+
+        :param dest_dir: Destination directory for the cloned repository.
+        :return: True if git exited with code 0, False otherwise.
+        """
+        repo_url = "https://github.com/desihub/redrock-templates"
+        command = [
+            "git", "clone", "--progress", "--depth", "1",
+            repo_url, dest_dir
+        ]
+
+        dlg = ProcessOutputDialog(
+            command=command,
+            title=self.qapp.tr("Downloading Redrock templates"),
+            parent=self.main_wnd
+        )
+        result = dlg.exec()
+
+        if result != qt_api.QtWidgets.QDialog.DialogCode.Accepted:
+            # User cancelled or process was killed.
+            return False
+
+        exit_code = dlg.exit_code()
+        if exit_code != 0:
+            return False
+
+        return True
+
+
+    def _check_redrock_templates(self) -> None:
+        """
+        Check whether Redrock templates are available at startup.
+
+        If a template directory is already configured and valid, just update
+        the list widget. Otherwise, ask the user what to do.
+        """
+        from redrock.templates import find_templates
+
+        configured_dir = self.getRedrockTemplateDir()
+
+        # Check whether the currently configured directory already works.
+        if configured_dir and pathlib.Path(configured_dir).is_dir():
+            try:
+                tmpl_files = list(find_templates(configured_dir))
+            except Exception:
+                tmpl_files = []
+
+            if tmpl_files:
+                # Templates are available - update env var and list.
+                os.environ['RR_TEMPLATE_DIR'] = configured_dir
+                self.updateRedrockTemplateList(configured_dir)
+                return
+
+        # Templates are not found. Check if there are templates in the
+        # default Redrock location.
+        try:
+            tmpl_files = list(find_templates(None))
+        except Exception:
+            tmpl_files = []
+
+        if tmpl_files:
+            # Default templates found, no user action needed.
+            self.updateRedrockTemplateList()
+            return
+
+        # No templates found anywhere - prompt the user.
+        msg = qt_api.QtWidgets.QMessageBox(parent=self.main_wnd)
+        msg.setWindowTitle(self.qapp.tr("Redrock templates not found"))
+        msg.setText(
+            self.qapp.tr(
+                "Redrock templates could not be found.\n\n"
+                "What would you like to do?"
+            )
+        )
+        msg.setIcon(qt_api.QtWidgets.QMessageBox.Icon.Warning)
+
+        btn_download = msg.addButton(
+            self.qapp.tr("Download"),
+            qt_api.QtWidgets.QMessageBox.ButtonRole.AcceptRole
+        )
+        btn_select = msg.addButton(
+            self.qapp.tr("Select folder"),
+            qt_api.QtWidgets.QMessageBox.ButtonRole.ActionRole
+        )
+        btn_ignore = msg.addButton(
+            self.qapp.tr("Ignore"),
+            qt_api.QtWidgets.QMessageBox.ButtonRole.RejectRole
+        )
+        msg.setDefaultButton(btn_download)
+        msg.exec()
+
+        clicked = msg.clickedButton()
+
+        if clicked == btn_download:
+            # Ask the user where to save the downloaded templates.
+            dest_url = qt_api.QtWidgets.QFileDialog.getExistingDirectoryUrl(
+                self.main_wnd,
+                self.qapp.tr("Select destination folder for templates"),
+            )
+            if not dest_url.isValid():
+                return
+
+            dest_dir = dest_url.path()
+            # We clone into a subdirectory called "redrock-templates" so that
+            # the destination folder can be any existing directory.
+            clone_dir = str(
+                pathlib.Path(dest_dir) / "redrock-templates"
+            )
+
+            if self.doDownloadRedrockTemplates(clone_dir):
+                self.setRedrockTemplateDir(clone_dir)
+                self.saveSettings()
+                self.updateRedrockTemplateList(clone_dir)
+
+        elif clicked == btn_select:
+            url = qt_api.QtWidgets.QFileDialog.getExistingDirectoryUrl(
+                self.main_wnd,
+                self.qapp.tr("Select Redrock templates directory"),
+            )
+            if not url.isValid():
+                return
+
+            selected_dir = url.path()
+            self.setRedrockTemplateDir(selected_dir)
+            self.saveSettings()
+            self.updateRedrockTemplateList(selected_dir)
+
+        # btn_ignore: do nothing.
 
     def getXcorrTemplateDirs(self) -> list[str]:
         xcorr_template_dir_list = []

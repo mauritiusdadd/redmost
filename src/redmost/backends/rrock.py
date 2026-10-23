@@ -1,7 +1,9 @@
 import os
+import sys
 import uuid
 import pickle
 import argparse
+import traceback
 from packaging import version
 from typing import Any
 from collections.abc import Callable
@@ -254,11 +256,8 @@ def dump_targets(targets: list[Any], pickle_file: str):
 
 
 def run_redrock_on_pickled_targets(pickle_file: str):
-    try:
-        with open(pickle_file, 'rb') as f:
-            targets: list[Any] = pickle.load(f)
-    except Exception:
-        return
+    with open(pickle_file, 'rb') as f:
+        targets: list[Any] = pickle.load(f)
 
     return run_redrock(targets)
 
@@ -275,10 +274,14 @@ def main(options: list | None = None) -> None:
     )
 
     args = parser.parse_args(options)
-    result = run_redrock_on_pickled_targets(args.in_pickle_file)
+    try:
+        result = run_redrock_on_pickled_targets(args.in_pickle_file)
 
-    with open(args.out_pickle_file, "wb") as f:
-        pickle.dump(result, f)
+        with open(args.out_pickle_file, "wb") as f:
+            pickle.dump(result, f)
+    except Exception:
+        traceback.print_exc(file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == '__main__':
