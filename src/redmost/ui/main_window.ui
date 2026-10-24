@@ -417,7 +417,7 @@ selected</string>
            </widget>
            <widget class="QWidget" name="container_tab_xcorr">
             <attribute name="title">
-             <string>X-Corr</string>
+             <string>Chi2 / ZNCC</string>
             </attribute>
             <layout class="QGridLayout" name="xcorr_widget_layout"/>
            </widget>
@@ -791,7 +791,7 @@ selected</string>
             <enum>QTabWidget::TabShape::Rounded</enum>
            </property>
            <property name="currentIndex">
-            <number>2</number>
+            <number>0</number>
            </property>
            <property name="documentMode">
             <bool>false</bool>

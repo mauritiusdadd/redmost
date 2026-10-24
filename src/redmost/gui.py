@@ -7300,6 +7300,84 @@ class GuiApp:
     def doPlotRedrockTemplate(self, *args, **kwargs) -> None:
         self.plotRedrockTemplate()
 
+    def doPlotRedrockChi2Curve(self, *args, **kwargs) -> None:
+        self.plotRedrockChi2Curve()
+
+    def plotRedrockChi2Curve(
+        self,
+        item: QtWidgets.QTableWidgetItem | None = None,
+        *args,
+        **kwargs
+    ) -> None:
+        tbl = getattr(self.redrock_plugin, 'templates_table_widget', None)
+        if tbl is None or self.current_uuid is None:
+            return
+
+        if item is None:
+            selected_items = tbl.selectedItems()
+            if not selected_items:
+                return
+            item = selected_items[0]
+
+        row = item.row()
+        item_0 = tbl.item(row, 0)
+        if item_0 is None:
+            return
+
+        tname = item_0.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
+        obj_results = self.redrock_plugin.results_per_object.get(
+            self.current_uuid
+        )
+        if not obj_results or tname not in obj_results:
+            return
+
+        t_info = obj_results[tname]
+        vec_z = t_info.get('redshifts')
+        chi2_curve = t_info.get('chi2_curve')
+        if vec_z is None or chi2_curve is None:
+            return
+
+        best_z = t_info.get('z', 0.0)
+
+        self.xcorr_chart_view.setRedshift(best_z)
+        chart = self.xcorr_chart_view.chart()
+        chart.removeAllSeries()
+
+        for ax in chart.axes():
+            chart.removeAxis(ax)
+
+        series = values2series(
+            vec_z, chi2_curve, f"{self.qapp.tr('Chi2')} ({tname})"
+        )
+        chart.addSeries(series)
+
+        axis_x = qt_api.QtCharts.QValueAxis()
+        if self.main_wnd.log_y_check_box.isChecked():
+            axis_y = qt_api.QtCharts.QLogValueAxis()
+        else:
+            axis_y = qt_api.QtCharts.QValueAxis()
+
+        chart.addAxis(
+            axis_x, qt_api.QtCore.Qt.AlignmentFlag.AlignBottom
+        )
+        chart.addAxis(
+            axis_y, qt_api.QtCore.Qt.AlignmentFlag.AlignLeft
+        )
+
+        axis_x.setTickInterval(500)
+        axis_x.setLabelFormat("%.2f")
+        axis_x.setTitleText('redshift')
+
+        axis_y.setLabelFormat("%.2f")
+        axis_y.setTitleText('chi2')
+
+        series.attachAxis(axis_x)
+        series.attachAxis(axis_y)
+
+        chart.setContentsMargins(0, 0, 0, 0)
+        chart.setBackgroundRoundness(0)
+        chart.legend().hide()
+
     def plotRedrockTemplate(
         self,
         item: QtWidgets.QTableWidgetItem | None = None,

@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>320</width>
+    <width>353</width>
     <height>480</height>
    </rect>
   </property>
@@ -130,7 +130,7 @@
         </column>
         <column>
          <property name="text">
-          <string>chi2</string>
+          <string>Best chi2</string>
          </property>
         </column>
        </widget>

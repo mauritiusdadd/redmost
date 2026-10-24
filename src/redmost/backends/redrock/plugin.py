@@ -296,6 +296,12 @@ class RedrockPlugin(BackendPlugin):
                                     'coeff': best_coeff,
                                     'spectype': spectype,
                                     'subtype': subtype,
+                                    'redshifts': np.array(
+                                        z_grid, dtype=float
+                                    ),
+                                    'chi2_curve': np.array(
+                                        tot_chi2, dtype=float
+                                    ),
                                 }
                         elif zfit is not None:
                             t_rows = zfit[zfit['targetid'] == target_id]
@@ -608,6 +614,12 @@ class RedrockPlugin(BackendPlugin):
             self.templates_table_widget.itemDoubleClicked.connect(
                 app.plotRedrockTemplate
             )
+            self.templates_table_widget.itemDoubleClicked.connect(
+                app.plotRedrockChi2Curve
+            )
+            self.templates_table_widget.itemClicked.connect(
+                app.plotRedrockChi2Curve
+            )
 
         if self.use_z_button is not None:
             self.use_z_button.clicked.connect(
@@ -615,6 +627,9 @@ class RedrockPlugin(BackendPlugin):
             )
             self.use_z_button.clicked.connect(
                 app.doPlotRedrockTemplate
+            )
+            self.use_z_button.clicked.connect(
+                app.doPlotRedrockChi2Curve
             )
 
         if self.preview_button is not None:
