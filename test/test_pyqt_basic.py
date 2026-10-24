@@ -113,3 +113,36 @@ def test_save_picture(qtbot: QtBot, main_app: gui.GuiApp):
     main_app.exportAsPicture(str(out_pic))
     assert out_pic.is_file()
 
+
+def test_import_spectra_with_associated_2d(qtbot: QtBot, main_app: gui.GuiApp):
+    """Test importing 1D spectra with associated 2D spectra."""
+    # Test 1: R2129 with SPEC_2D card in header
+    r2129_1d = str(TEST_DATA_DIR / "R2129_LRb_p1_M1_Q1_10_1_1d.fits")
+    main_app.importSpectra([r2129_1d])
+
+    assert len(main_app.open_spectra) == 1
+    spec_uuid = list(main_app.open_spectra.keys())[0]
+    sp_1d = main_app.open_spectra[spec_uuid]
+    assert 'linked' in sp_1d.meta
+    assert '2D' in sp_1d.meta['linked']
+    item = main_app.open_spectra_items[spec_uuid]
+    assert item.text().startswith('[1D|2D]')
+
+    # Clear open spectra
+    main_app.open_spectra.clear()
+    main_app.open_spectra_items.clear()
+    main_app.main_wnd.spec_list_widget.clear()
+
+    # Test 2: M0416 with ESO Phase 3 ASSOC1 / ASSON1 cards
+    m0416_1d = str(TEST_DATA_DIR / "M0416_LRb_p1_M1_Q1_100_1_1d.fits")
+    main_app.importSpectra([m0416_1d])
+
+    assert len(main_app.open_spectra) == 1
+    spec_uuid_m = list(main_app.open_spectra.keys())[0]
+    sp_1d_m = main_app.open_spectra[spec_uuid_m]
+    assert 'linked' in sp_1d_m.meta
+    assert '2D' in sp_1d_m.meta['linked']
+    item_m = main_app.open_spectra_items[spec_uuid_m]
+    assert item_m.text().startswith('[1D|2D]')
+
+

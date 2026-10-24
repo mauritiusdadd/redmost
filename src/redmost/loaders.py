@@ -738,10 +738,63 @@ class Spectrum2D:
         cls, file_path: str, ext: int | str | None = None,
         format: str | None = None
     ) -> "Spectrum2D":
-        if ext is None:
-            ext = 0
+        data = None
+        header = None
+        skip_cards = {
+            'SIMPLE', 'XTENSION', 'BITPIX', 'NAXIS',
+            'NAXIS1', 'NAXIS2', 'PCOUNT', 'GCOUNT', 'EXTEND'
+        }
+        if ext is not None:
+            data, header = fits.getdata(
+                filename=file_path, ext=ext, header=True
+            )
+        else:
+            with fits.open(file_path) as hdul:
+                # First check PrimaryHDU (ext 0)
+                h0_data = hdul[0].data
+                if h0_data is not None and getattr(h0_data, 'ndim', 0) == 2:
+                    data = h0_data
+                    header = hdul[0].header.copy()
+                else:
+                    # Look for 2D extension matching known names or any 2D
+                    for hdu in hdul:
+                        h_ndim = getattr(hdu.data, 'ndim', 0)
+                        if (
+                            hdu.data is not None
+                            and h_ndim == 2
+                            and hdu.name.lower() in KNOWN_SPEC_EXT_NAMES
+                        ):
+                            data = hdu.data
+                            header = hdu.header.copy()
+                            # Inherit primary header cards if missing
+                            for card in hdul[0].header.cards:
+                                if (
+                                    card.keyword not in header
+                                    and card.keyword not in skip_cards
+                                ):
+                                    header[card.keyword] = (
+                                        card.value, card.comment
+                                    )
+                            break
+                    if data is None:
+                        for hdu in hdul:
+                            h_ndim = getattr(hdu.data, 'ndim', 0)
+                            if hdu.data is not None and h_ndim == 2:
+                                data = hdu.data
+                                header = hdu.header.copy()
+                                for card in hdul[0].header.cards:
+                                    if (
+                                        card.keyword not in header
+                                        and card.keyword not in skip_cards
+                                    ):
+                                        header[card.keyword] = (
+                                            card.value, card.comment
+                                        )
+                                break
 
-        data, header = fits.getdata(filename=file_path, ext=ext, header=True)
+        if data is None or header is None:
+            data, header = fits.getdata(filename=file_path, ext=0, header=True)
+
 
         try:
             flux_units = units.Unit(header['BUNIT'])
@@ -805,18 +858,29 @@ def identifyClashVlt2dFits(origin, *args, **kwargs) -> bool:
         return False
 
     with fits.open(args[0]) as hdul:
-        if hdul[0].header.get('NAXIS') != 2:
-            return False
-
         instrument = hdul[0].header.get('INSTRUME')
+        prodcatg = str(hdul[0].header.get('PRODCATG', '')).strip().upper()
 
         if (instrument is None) or (instrument.strip() != 'VIMOS'):
             return False
 
-        if hdul[0].data.shape[0] == 1:
-            return False
+        if hdul[0].header.get('NAXIS') == 2 and hdul[0].data is not None:
+            if hdul[0].data.shape[0] == 1:
+                return False
+            return True
 
-    return True
+        # Check for 2D extension in ESO Phase3 or multi-extension VIMOS
+        if prodcatg == 'ANCILLARY.2DSPECTRUM' or 'SPEC_1D' in hdul[0].header:
+            for hdu in hdul[1:]:
+                if (
+                    hdu.header.get('NAXIS') == 2
+                    and hdu.data is not None
+                    and hdu.data.shape[0] > 1
+                ):
+                    return True
+
+    return False
+
 
 
 

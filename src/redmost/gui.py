@@ -4876,6 +4876,69 @@ class GuiApp:
         self.zcat_mapping_dialog.setup(zcat_tbl)
         self.zcat_mapping_dialog.open()
 
+    def _getAssociated2DSpectrumFilename(
+        self, header: fits.Header | dict[str, Any] | None
+    ) -> str | None:
+        """
+        Extract the associated 2D spectrum filename from FITS header.
+
+        Supports standard SPEC_2D card as well as ESO Phase 3 ASSOCi / ASSONi
+        cards where ASSOCi defines an ancillary 2D spectrum.
+
+        :param header: The FITS header dictionary or Header object.
+        :return: Associated 2D spectrum filename if present, None otherwise.
+        """
+        if not header:
+            return None
+
+        # Check legacy/custom SPEC_2D key
+        if 'SPEC_2D' in header and header['SPEC_2D']:
+            return str(header['SPEC_2D']).strip()
+
+        # Check ESO Phase 3 ASSOC<i> and ASSON<i> cards
+        # E.g. ASSOC1 = 'ANCILLARY.SPECTRUM2D' or 'ANCILLARY.2DSPECTRUM'
+        # and ASSON1 = 'filename_2d.fits'
+        # Check indexed cards
+        i = 1
+        while True:
+            assoc_key = f'ASSOC{i:d}'
+            asson_key = f'ASSON{i:d}'
+            if assoc_key not in header and asson_key not in header:
+                # Also check HIERARCH ESO keys if any
+                eso_assoc = f'ESO {assoc_key}'
+                eso_asson = f'ESO {asson_key}'
+                if eso_assoc in header:
+                    assoc_key = eso_assoc
+                if eso_asson in header:
+                    asson_key = eso_asson
+
+            if assoc_key in header or asson_key in header:
+                assoc_val = str(header.get(assoc_key, '')).strip().upper()
+                asson_val = str(header.get(asson_key, '')).strip()
+
+                is_2d = (
+                    'SPECTRUM2D' in assoc_val
+                    or '2DSPECTRUM' in assoc_val
+                    or 'SPEC_2D' in assoc_val
+                    or '2D' in assoc_val
+                )
+                if is_2d and asson_val:
+                    return asson_val
+                i += 1
+            else:
+                break
+
+        # Fallback check for unindexed ASSOC / ASSON cards
+        for assoc_k in ['ASSOC', 'ASSOCN', 'ESO ASSOC', 'ESO ASSOCN']:
+            if assoc_k in header:
+                val = str(header[assoc_k]).strip().upper()
+                if 'SPECTRUM2D' in val or '2DSPECTRUM' in val or '2D' in val:
+                    for asson_k in ['ASSON', 'ASSOCJ', 'ESO ASSON']:
+                        if asson_k in header and header[asson_k]:
+                            return str(header[asson_k]).strip()
+
+        return None
+
     def doImportSpectra(self,  *args: Any, **kwargs: Any) -> None:
         """Use QFileDialog to get spectra files."""
         if self.current_open_dir is not None:
@@ -4921,6 +4984,7 @@ class GuiApp:
         self.pbar.show()
         self.cancel_button.show()
 
+        ignore_all_missing_2d: bool = False
         al_least_one: bool = False
         for j, file in enumerate(file_list):
             if self.global_state == GlobalState.REUQUEST_CANCEL:
@@ -4968,7 +5032,9 @@ class GuiApp:
             if isinstance(sp, Spectrum):
                 item_name = '[1D] ' + p_file.name
                 sp_1d = sp
-                if sp_header and 'SPEC_2D' in sp_header:
+                spec_2d_name = self._getAssociated2DSpectrumFilename(sp_header)
+                if spec_2d_name:
+                    # 1. Search in open spectra for already loaded dummy 2D
                     for _uuid, _sp in self.open_spectra.items():
                         if not _sp.meta.get('is_dummy'):
                             continue
@@ -4978,7 +5044,7 @@ class GuiApp:
                         except KeyError:
                             continue
 
-                        if sp_2d.meta['file_name'] == sp_header['SPEC_2D']:
+                        if sp_2d.meta['file_name'] == spec_2d_name:
                             sp_2d.meta['linked'] = {'1D': sp_1d}
                             sp_1d.meta['linked'] = {'2D': sp_2d}
                             new_item = self.open_spectra_items[_uuid]
@@ -4988,7 +5054,102 @@ class GuiApp:
                             self.open_spectra[_uuid] = sp_1d
                             break
 
-            elif isinstance(sp,loaders.Spectrum2D):
+                    # 2. If not already in open spectra, try loading from disk
+                    if new_item is None:
+                        spec_2d_path = p_file.parent / spec_2d_name
+                        if not spec_2d_path.is_file():
+                            spec_2d_path = None
+                            if not ignore_all_missing_2d:
+                                prompt_box = qt_api.QtWidgets.QMessageBox(
+                                    parent=self.main_wnd
+                                )
+                                prompt_box.setWindowTitle(
+                                    self.qapp.tr(
+                                        "Associated 2D spectrum not found"
+                                    )
+                                )
+                                prompt_box.setText(
+                                    self.qapp.tr(
+                                        f"The associated 2D spectrum "
+                                        f"'{spec_2d_name}' was not found in "
+                                        f"{p_file.parent}."
+                                    )
+                                )
+                                prompt_box.setInformativeText(
+                                    self.qapp.tr(
+                                        "Do you want to manually locate it?"
+                                    )
+                                )
+                                prompt_box.setIcon(
+                                    qt_api.QtWidgets.QMessageBox.Icon.Question
+                                )
+                                role_accept = (
+                                    qt_api.QtWidgets.QMessageBox
+                                    .ButtonRole.AcceptRole
+                                )
+                                role_reject = (
+                                    qt_api.QtWidgets.QMessageBox
+                                    .ButtonRole.RejectRole
+                                )
+                                role_destructive = (
+                                    qt_api.QtWidgets.QMessageBox
+                                    .ButtonRole.DestructiveRole
+                                )
+                                btn_browse = prompt_box.addButton(
+                                    self.qapp.tr("Select File..."),
+                                    role_accept
+                                )
+                                btn_ignore = prompt_box.addButton(
+                                    self.qapp.tr("Ignore"),
+                                    role_reject
+                                )
+                                btn_ignore_all = prompt_box.addButton(
+                                    self.qapp.tr("Ignore All"),
+                                    role_destructive
+                                )
+                                prompt_box.setDefaultButton(btn_browse)
+                                prompt_box.exec()
+
+                                clicked = prompt_box.clickedButton()
+                                if clicked == btn_browse:
+                                    filters = (
+                                        f"{self.qapp.tr('FITS')} "
+                                        f"(*.fit *.fits);;"
+                                        f"{self.qapp.tr('All Files')} (*.*)"
+                                    )
+                                    chosen_file, _ = (
+                                        qt_api.QtWidgets.QFileDialog
+                                        .getOpenFileName(
+                                            self.main_wnd,
+                                            self.qapp.tr(
+                                                "Select 2D spectrum file"
+                                            ),
+                                            str(p_file.parent),
+                                            filters
+                                        )
+                                    )
+                                    if chosen_file:
+                                        p_chosen = Path(chosen_file)
+                                        if p_chosen.is_file():
+                                            spec_2d_path = p_chosen
+                                elif clicked == btn_ignore_all:
+                                    ignore_all_missing_2d = True
+
+
+                        if spec_2d_path is not None and spec_2d_path.is_file():
+                            try:
+                                loaded_2d = loaders.read(str(spec_2d_path))
+                                if isinstance(loaded_2d, loaders.Spectrum2D):
+                                    loaded_2d.meta['linked'] = {'1D': sp_1d}
+                                    sp_1d.meta['linked'] = {'2D': loaded_2d}
+                                    item_name = '[1D|2D] ' + p_file.name
+                            except Exception as exc:
+                                exception_tracker.append((
+                                    str(spec_2d_path),
+                                    f"Error loading 2D spectrum: {exc}"
+                                ))
+
+            elif isinstance(sp, loaders.Spectrum2D):
                 sp_2d = sp
                 item_name = '[2D] ' + p_file.name
                 if sp_header and 'SPEC_1D' in sp_header:
@@ -5027,6 +5188,7 @@ class GuiApp:
                 continue
 
             new_item = qt_api.QtWidgets.QListWidgetItem(item_name)
+
             new_item.setCheckState(qt_api.QtCore.Qt.CheckState.Checked)
             new_item.setToolTip(file)
             new_item.setData(
