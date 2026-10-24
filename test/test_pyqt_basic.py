@@ -120,13 +120,21 @@ def test_import_spectra_with_associated_2d(qtbot: QtBot, main_app: gui.GuiApp):
     r2129_1d = str(TEST_DATA_DIR / "R2129_LRb_p1_M1_Q1_10_1_1d.fits")
     main_app.importSpectra([r2129_1d])
 
-    assert len(main_app.open_spectra) == 1
-    spec_uuid = list(main_app.open_spectra.keys())[0]
-    sp_1d = main_app.open_spectra[spec_uuid]
+    # 1D child + 2D parent = 2 spectra in open_spectra
+    assert len(main_app.open_spectra) == 2
+    assert main_app.main_wnd.spec_list_widget.topLevelItemCount() == 1
+    parent_item = main_app.main_wnd.spec_list_widget.topLevelItem(0)
+    assert parent_item is not None
+    assert parent_item.text(0).startswith('[2D]')
+    assert parent_item.childCount() == 1
+
+    child_item = parent_item.child(0)
+    assert child_item is not None
+    assert child_item.text(0).startswith('[1D]')
+    child_uuid = child_item.data(0, qt_api.QtCore.Qt.ItemDataRole.UserRole)
+    sp_1d = main_app.open_spectra[child_uuid]
     assert 'linked' in sp_1d.meta
     assert '2D' in sp_1d.meta['linked']
-    item = main_app.open_spectra_items[spec_uuid]
-    assert item.text().startswith('[1D|2D]')
 
     # Clear open spectra
     main_app.open_spectra.clear()
@@ -137,12 +145,28 @@ def test_import_spectra_with_associated_2d(qtbot: QtBot, main_app: gui.GuiApp):
     m0416_1d = str(TEST_DATA_DIR / "M0416_LRb_p1_M1_Q1_100_1_1d.fits")
     main_app.importSpectra([m0416_1d])
 
-    assert len(main_app.open_spectra) == 1
-    spec_uuid_m = list(main_app.open_spectra.keys())[0]
-    sp_1d_m = main_app.open_spectra[spec_uuid_m]
+    assert len(main_app.open_spectra) == 2
+    assert main_app.main_wnd.spec_list_widget.topLevelItemCount() == 1
+    parent_m = main_app.main_wnd.spec_list_widget.topLevelItem(0)
+    assert parent_m is not None
+    assert parent_m.text(0).startswith('[2D]')
+    assert parent_m.childCount() == 1
+
+    child_m = parent_m.child(0)
+    assert child_m is not None
+    assert child_m.text(0).startswith('[1D]')
+    child_uuid_m = child_m.data(0, qt_api.QtCore.Qt.ItemDataRole.UserRole)
+    sp_1d_m = main_app.open_spectra[child_uuid_m]
     assert 'linked' in sp_1d_m.meta
     assert '2D' in sp_1d_m.meta['linked']
-    item_m = main_app.open_spectra_items[spec_uuid_m]
-    assert item_m.text().startswith('[1D|2D]')
+
+    # Test 3: Verify dummy spectra are excluded when preparing for backends
+    for_backend = {
+        u: sp
+        for u, sp in main_app.open_spectra.items()
+        if not sp.meta.get('is_dummy', False)
+    }
+    assert len(for_backend) == 1
+    assert child_uuid_m in for_backend
 
 

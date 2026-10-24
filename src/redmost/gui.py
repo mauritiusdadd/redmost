@@ -45,6 +45,7 @@ from astropy.nddata import VarianceUncertainty  # type: ignore
 from astropy.nddata import StdDevUncertainty  # type: ignore
 from astropy.nddata import InverseVariance  # type: ignore
 from astropy import units  # type: ignore
+from astropy.io import fits  # type: ignore
 from astropy.table import Table  # type: ignore
 from scipy.ndimage import gaussian_filter
 
@@ -1819,7 +1820,7 @@ class MainWindow(qt_api.QtWidgets.QMainWindow):
     smoothing_2d_dspinbox: QtWidgets.QDoubleSpinBox
     smoothing_2d_check_box: QtWidgets.QCheckBox
     spec_group_box: QtWidgets.QGroupBox
-    spec_list_widget: QtWidgets.QListWidget
+    spec_list_widget: QtWidgets.QTreeWidget
     splitter_main: QtWidgets.QSplitter
     splitter_plots: QtWidgets.QSplitter
     toggle_all_button: QtWidgets.QPushButton
@@ -2337,7 +2338,7 @@ class GuiApp:
         self.open_spectra: dict[uuid.UUID, Spectrum] = {}
         self.open_spectra_2d: dict[uuid.UUID, loaders.Spectrum2D] = {}
         self.open_spectra_items: dict[
-            uuid.UUID, QtWidgets.QListWidgetItem
+            uuid.UUID, QtWidgets.QTreeWidgetItem
         ] = {}
 
         self.spectral_masks: dict[
@@ -2793,6 +2794,47 @@ class GuiApp:
         self.main_wnd.spec_list_widget.currentItemChanged.connect(
             self.currentSpecItemChanged
         )
+
+        self.main_wnd.spec_list_widget.itemChanged.connect(
+            self.onSpecTreeItemChanged
+        )
+
+        # Compatibility methods for spec_list_widget (treated as list in tests)
+        self.main_wnd.spec_list_widget.count = (
+            lambda: len(self.allSpecItems())
+        )
+        self.main_wnd.spec_list_widget.item = (
+            lambda idx: (
+                self.allSpecItems()[idx]
+                if 0 <= idx < len(self.allSpecItems())
+                else None
+            )
+        )
+        self.main_wnd.spec_list_widget.addItem = (
+            self.main_wnd.spec_list_widget.addTopLevelItem
+        )
+
+        # Allow item.setCheckState(state) or item.setCheckState(0, state)
+        # and item.text() or item.text(0)
+        _orig_set_check_state = qt_api.QtWidgets.QTreeWidgetItem.setCheckState
+
+        def _compat_set_check_state(item_self, *args):
+            if len(args) == 1:
+                return _orig_set_check_state(item_self, 0, args[0])
+            return _orig_set_check_state(item_self, *args)
+
+        qt_api.QtWidgets.QTreeWidgetItem.setCheckState = (
+            _compat_set_check_state
+        )
+
+        _orig_text = qt_api.QtWidgets.QTreeWidgetItem.text
+
+        def _compat_text(item_self, *args):
+            if len(args) == 0:
+                return _orig_text(item_self, 0)
+            return _orig_text(item_self, *args)
+
+        qt_api.QtWidgets.QTreeWidgetItem.text = _compat_text
 
         self.main_wnd.spec_list_widget.itemDoubleClicked.connect(
             self.toggleSimilarSpecItems
@@ -3254,23 +3296,71 @@ class GuiApp:
             qt_api.QtCharts.QChartView.RubberBand.NoRubberBand
         )
 
-    def _safe_set_spec_index(self, row: int) -> None:
-        if (
-            (row < 0) or
-            (row >= self.main_wnd.spec_list_widget.count())
-        ):
+    def allSpecItems(self) -> list[QtWidgets.QTreeWidgetItem]:
+        """
+        Return all spectrum items in the tree in depth-first traversal order.
+        """
+        items: list[QtWidgets.QTreeWidgetItem] = []
+        root = self.main_wnd.spec_list_widget.invisibleRootItem()
+        if root is None:
+            return items
+
+        def _collect(parent: QtWidgets.QTreeWidgetItem) -> None:
+            for i in range(parent.childCount()):
+                child = parent.child(i)
+                if child is not None:
+                    items.append(child)
+                    _collect(child)
+
+        _collect(root)
+        return items
+
+    def onSpecTreeItemChanged(
+        self, item: QtWidgets.QTreeWidgetItem, column: int
+    ) -> None:
+        """Propagate check state changes from parent to children."""
+        if column != 0 or item is None:
             return
-        self.main_wnd.spec_list_widget.setCurrentRow(row)
+        state = item.checkState(0)
+        # Block signals temporarily to avoid recursive loops
+        self.main_wnd.spec_list_widget.blockSignals(True)
+        try:
+            for i in range(item.childCount()):
+                child = item.child(i)
+                if child is not None:
+                    child.setCheckState(0, state)
+        finally:
+            self.main_wnd.spec_list_widget.blockSignals(False)
+
+    def _safe_set_spec_index(self, row: int) -> None:
+        items = self.allSpecItems()
+        if (row < 0) or (row >= len(items)):
+            return
+        self.main_wnd.spec_list_widget.setCurrentItem(items[row])
 
     def _next_spec(self) -> None:
-        self._safe_set_spec_index(
-            self.main_wnd.spec_list_widget.currentRow() + 1
-        )
+        items = self.allSpecItems()
+        if not items:
+            return
+        current = self.main_wnd.spec_list_widget.currentItem()
+        if current in items:
+            idx = items.index(current)
+            if idx + 1 < len(items):
+                self.main_wnd.spec_list_widget.setCurrentItem(items[idx + 1])
+        else:
+            self.main_wnd.spec_list_widget.setCurrentItem(items[0])
 
     def _previous_spec(self) -> None:
-        self._safe_set_spec_index(
-            self.main_wnd.spec_list_widget.currentRow() - 1
-        )
+        items = self.allSpecItems()
+        if not items:
+            return
+        current = self.main_wnd.spec_list_widget.currentItem()
+        if current in items:
+            idx = items.index(current)
+            if idx - 1 >= 0:
+                self.main_wnd.spec_list_widget.setCurrentItem(items[idx - 1])
+        else:
+            self.main_wnd.spec_list_widget.setCurrentItem(items[0])
 
     def _load_icons(self, theme: str | None = "feather") -> None:
 
@@ -3554,12 +3644,11 @@ class GuiApp:
     def _update_spec_item_qf(self, item_uuid: uuid.UUID, qf: int) -> None:
         if item_uuid not in self.open_spectra_items:
             return
-        item: QtWidgets.QListWidgetItem
-        item = self.open_spectra_items[item_uuid]
+        item: QtWidgets.QTreeWidgetItem = self.open_spectra_items[item_uuid]
         try:
-            item.setBackground(qt_api.QtGui.QColor(self.qf_color[qf]))
+            item.setBackground(0, qt_api.QtGui.QColor(self.qf_color[qf]))
         except KeyError:
-            item.setBackground(qt_api.QtGui.QColor("#00000000"))
+            item.setBackground(0, qt_api.QtGui.QColor("#00000000"))
 
     def _updateMouseLabelFromEvent(self, *args) -> None:
         self._updateMouseLabel(args[0][0])
@@ -3752,7 +3841,7 @@ class GuiApp:
 
     def currentSpecItemChanged(
         self,
-        new_item: QtWidgets.QListWidgetItem | None,
+        new_item: QtWidgets.QTreeWidgetItem | None,
         *args: Any,
         **kwargs: Any
     ) -> None:
@@ -3781,7 +3870,7 @@ class GuiApp:
         self._unlock()
 
         spec_uuid: uuid.UUID = new_item.data(
-            qt_api.QtCore.Qt.ItemDataRole.UserRole
+            0, qt_api.QtCore.Qt.ItemDataRole.UserRole
         )
 
         self.showXcorrZ(spec_uuid)
@@ -4672,8 +4761,9 @@ class GuiApp:
 
     def doExportAsPicture(self) -> None:
         """Use saveFileDialog to save current spectrum as a file."""
-        item: QtWidgets.QListWidgetItem
-        item = self.main_wnd.spec_list_widget.currentItem()
+        item: QtWidgets.QTreeWidgetItem | None = (
+            self.main_wnd.spec_list_widget.currentItem()
+        )
 
         if item is None:
             return
@@ -4684,7 +4774,7 @@ class GuiApp:
         else:
             cur_dir = '.'
 
-        base_name = Path(str(item.text())).stem
+        base_name = Path(str(item.text(0))).stem
 
         open_list = qt_api.QtWidgets.QFileDialog.getSaveFileName(
             self.main_wnd,
@@ -5026,7 +5116,8 @@ class GuiApp:
             except KeyError:
                 sp_header = None
 
-            new_item: QtWidgets.QListWidgetItem | None = None
+            new_item: QtWidgets.QTreeWidgetItem | None = None
+            parent_item: QtWidgets.QTreeWidgetItem | None = None
             sp_1d: Spectrum | None = None
 
             if isinstance(sp, Spectrum):
@@ -5034,28 +5125,26 @@ class GuiApp:
                 sp_1d = sp
                 spec_2d_name = self._getAssociated2DSpectrumFilename(sp_header)
                 if spec_2d_name:
-                    # 1. Search in open spectra for already loaded dummy 2D
+                    # 1. Search in open spectra for already loaded 2D
                     for _uuid, _sp in self.open_spectra.items():
-                        if not _sp.meta.get('is_dummy'):
-                            continue
-
                         try:
                             sp_2d = _sp.meta['linked']['2D']
                         except KeyError:
                             continue
 
                         if sp_2d.meta['file_name'] == spec_2d_name:
-                            sp_2d.meta['linked'] = {'1D': sp_1d}
                             sp_1d.meta['linked'] = {'2D': sp_2d}
-                            new_item = self.open_spectra_items[_uuid]
-                            new_item.setText(
-                                '[1D|2D] ' + p_file.name
+                            parent_item = self.open_spectra_items.get(
+                                sp_2d.meta.get('uuid')
                             )
-                            self.open_spectra[_uuid] = sp_1d
+                            if parent_item is None:
+                                parent_item = self.open_spectra_items.get(
+                                    _uuid
+                                )
                             break
 
                     # 2. If not already in open spectra, try loading from disk
-                    if new_item is None:
+                    if parent_item is None:
                         spec_2d_path = p_file.parent / spec_2d_name
                         if not spec_2d_path.is_file():
                             spec_2d_path = None
@@ -5095,23 +5184,31 @@ class GuiApp:
                                     qt_api.QtWidgets.QMessageBox
                                     .ButtonRole.DestructiveRole
                                 )
-                                btn_browse = prompt_box.addButton(
+                                prompt_box.addButton(
                                     self.qapp.tr("Select File..."),
                                     role_accept
                                 )
-                                btn_ignore = prompt_box.addButton(
+                                prompt_box.addButton(
                                     self.qapp.tr("Ignore"),
                                     role_reject
                                 )
-                                btn_ignore_all = prompt_box.addButton(
+                                prompt_box.addButton(
                                     self.qapp.tr("Ignore All"),
                                     role_destructive
                                 )
-                                prompt_box.setDefaultButton(btn_browse)
+                                prompt_box.setDefaultButton(
+                                    qt_api.QtWidgets.QMessageBox.StandardButton
+                                    .NoButton
+                                )
                                 prompt_box.exec()
 
                                 clicked = prompt_box.clickedButton()
-                                if clicked == btn_browse:
+                                clicked_text = (
+                                    clicked.text() if clicked else ""
+                                )
+                                if clicked_text == self.qapp.tr(
+                                    "Select File..."
+                                ):
                                     filters = (
                                         f"{self.qapp.tr('FITS')} "
                                         f"(*.fit *.fits);;"
@@ -5132,17 +5229,91 @@ class GuiApp:
                                         p_chosen = Path(chosen_file)
                                         if p_chosen.is_file():
                                             spec_2d_path = p_chosen
-                                elif clicked == btn_ignore_all:
+                                elif clicked_text == self.qapp.tr(
+                                    "Ignore All"
+                                ):
                                     ignore_all_missing_2d = True
-
 
                         if spec_2d_path is not None and spec_2d_path.is_file():
                             try:
                                 loaded_2d = loaders.read(str(spec_2d_path))
                                 if isinstance(loaded_2d, loaders.Spectrum2D):
-                                    loaded_2d.meta['linked'] = {'1D': sp_1d}
+                                    parent_2d_uuid = uuid.uuid4()
+                                    while parent_2d_uuid in self.open_spectra:
+                                        parent_2d_uuid = uuid.uuid4()
+
+                                    loaded_2d.meta['uuid'] = parent_2d_uuid
+                                    loaded_2d.meta['full_path'] = str(
+                                        spec_2d_path
+                                    )
+                                    loaded_2d.meta['file_name'] = (
+                                        spec_2d_path.name
+                                    )
+
+                                    flux_from_2d = np.nansum(
+                                        loaded_2d.flux.value,
+                                        axis=0
+                                    )
+                                    dummy_1d = Spectrum(
+                                        flux=(
+                                            flux_from_2d * loaded_2d.flux.unit
+                                        ),
+                                        spectral_axis=loaded_2d.spectral_axis,
+                                    )
+                                    dummy_1d.meta['file_name'] = (
+                                        spec_2d_path.name
+                                    )
+                                    dummy_1d.meta['full_path'] = str(
+                                        spec_2d_path
+                                    )
+                                    dummy_1d.meta['is_dummy'] = True
+                                    dummy_1d.meta['uuid'] = parent_2d_uuid
+                                    dummy_1d.meta['linked'] = {'2D': loaded_2d}
+
+                                    parent_item = (
+                                        qt_api.QtWidgets.QTreeWidgetItem(
+                                            ['[2D] ' + spec_2d_path.name]
+                                        )
+                                    )
+                                    parent_item.setCheckState(
+                                        0, qt_api.QtCore.Qt.CheckState.Checked
+                                    )
+                                    parent_item.setToolTip(
+                                        0, str(spec_2d_path)
+                                    )
+                                    parent_item.setData(
+                                        0,
+                                        qt_api.QtCore.Qt.ItemDataRole.UserRole,
+                                        parent_2d_uuid
+                                    )
+
+                                    p_info = copy.deepcopy(
+                                        self.DEFAULT_SPEC_INFO
+                                    )
+                                    p_info['vmin'] = float(
+                                        np.nanmin(dummy_1d.flux.value)
+                                    )
+                                    p_info['vmax'] = float(
+                                        np.nanmax(dummy_1d.flux.value)
+                                    )
+
+                                    self.open_spectra[parent_2d_uuid] = (
+                                        dummy_1d
+                                    )
+                                    self.open_spectra_items[parent_2d_uuid] = (
+                                        parent_item
+                                    )
+                                    self.object_state_dict[parent_2d_uuid] = (
+                                        p_info
+                                    )
+                                    tree_widget = (
+                                        self.main_wnd.spec_list_widget
+                                    )
+                                    tree_widget.addTopLevelItem(
+                                        parent_item
+                                    )
+
                                     sp_1d.meta['linked'] = {'2D': loaded_2d}
-                                    item_name = '[1D|2D] ' + p_file.name
                             except Exception as exc:
                                 exception_tracker.append((
                                     str(spec_2d_path),
@@ -5152,31 +5323,20 @@ class GuiApp:
             elif isinstance(sp, loaders.Spectrum2D):
                 sp_2d = sp
                 item_name = '[2D] ' + p_file.name
-                if sp_header and 'SPEC_1D' in sp_header:
-                    for _uuid, _sp in self.open_spectra.items():
-                        if _sp.meta['file_name'] == sp_header['SPEC_1D']:
-                            sp_1d = _sp
-                            sp_2d.meta['linked'] = {'1D': sp_1d}
-                            sp_1d.meta['linked'] = {'2D': sp_2d}
-                            new_item = self.open_spectra_items[_uuid]
-                            new_item.setText(
-                                '[1D|2D] ' + p_file.name
-                            )
-                            break
 
-                if sp_1d is None:
-                    flux_from_2d = np.nansum(
-                        sp_2d.flux.value,
-                        axis=0
-                    )
-                    sp_1d = Spectrum(
-                        flux=flux_from_2d * sp_2d.flux.unit,
-                        spectral_axis=sp_2d.spectral_axis,
-                    )
-                    sp_1d.meta['file_name'] = None
-                    sp_1d.meta['full_path'] = None
-                    sp_1d.meta['is_dummy'] = True
-                    sp_1d.meta['linked'] = {'2D': sp_2d}
+                flux_from_2d = np.nansum(
+                    sp_2d.flux.value,
+                    axis=0
+                )
+                sp_1d = Spectrum(
+                    flux=flux_from_2d * sp_2d.flux.unit,
+                    spectral_axis=sp_2d.spectral_axis,
+                )
+                sp_1d.meta['file_name'] = p_file.name
+                sp_1d.meta['full_path'] = str(p_file)
+                sp_1d.meta['is_dummy'] = True
+                sp_1d.meta['uuid'] = item_uuid
+                sp_1d.meta['linked'] = {'2D': sp_2d}
             else:
                 exception_tracker.append((
                     file, "Not a supported spectrum type"
@@ -5184,15 +5344,13 @@ class GuiApp:
                 continue
 
             self.qapp.processEvents()
-            if new_item is not None:
-                continue
 
-            new_item = qt_api.QtWidgets.QListWidgetItem(item_name)
+            new_item = qt_api.QtWidgets.QTreeWidgetItem([item_name])
 
-            new_item.setCheckState(qt_api.QtCore.Qt.CheckState.Checked)
-            new_item.setToolTip(file)
+            new_item.setCheckState(0, qt_api.QtCore.Qt.CheckState.Checked)
+            new_item.setToolTip(0, file)
             new_item.setData(
-                qt_api.QtCore.Qt.ItemDataRole.UserRole, item_uuid
+                0, qt_api.QtCore.Qt.ItemDataRole.UserRole, item_uuid
             )
 
             info_dict: dict[str, Any] = copy.deepcopy(self.DEFAULT_SPEC_INFO)
@@ -5201,8 +5359,13 @@ class GuiApp:
 
             self.open_spectra_items[item_uuid] = new_item
             self.object_state_dict[item_uuid] = info_dict
-            self.main_wnd.spec_list_widget.addItem(new_item)
             self.open_spectra[item_uuid] = sp_1d
+
+            if parent_item is not None:
+                parent_item.addChild(new_item)
+                parent_item.setExpanded(True)
+            else:
+                self.main_wnd.spec_list_widget.addTopLevelItem(new_item)
 
         self.cancel_button.hide()
         self.pbar.hide()
@@ -5331,15 +5494,29 @@ class GuiApp:
             )
             z_list.addItem(new_z_item)
 
-    def removeSpecItem(self, item: QtWidgets.QListWidgetItem) -> None:
+    def removeSpecItem(self, item: QtWidgets.QTreeWidgetItem) -> None:
         if item is None:
             return
 
-        item_uuid = item.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
-        item_row = self.main_wnd.spec_list_widget.row(item)
-        self.main_wnd.spec_list_widget.takeItem(item_row)
+        # First recursively remove children if any
+        while item.childCount() > 0:
+            child = item.child(0)
+            if child is not None:
+                self.removeSpecItem(child)
 
-        self.open_spectra_items.pop(item_uuid)
+        item_uuid = item.data(0, qt_api.QtCore.Qt.ItemDataRole.UserRole)
+        parent = item.parent()
+        if parent is not None:
+            parent.removeChild(item)
+        else:
+            root = self.main_wnd.spec_list_widget.invisibleRootItem()
+            if root is not None:
+                root.removeChild(item)
+
+        if item_uuid in self.open_spectra_items:
+            self.open_spectra_items.pop(item_uuid)
+        if item_uuid in self.open_spectra:
+            self.open_spectra.pop(item_uuid)
 
         if self.xcorr_handler is not None:
             if self.xcorr_handler.best_z is not None:
@@ -5350,7 +5527,7 @@ class GuiApp:
 
             if self.xcorr_handler.corr_data is not None:
                 try:
-                    self.xcorr_handler.best_z.pop(item_uuid)
+                    self.xcorr_handler.corr_data.pop(item_uuid)
                 except KeyError:
                     pass
 
@@ -5361,23 +5538,20 @@ class GuiApp:
 
         del item
 
-        if self.main_wnd.spec_list_widget.count() == 0:
+        if len(self.allSpecItems()) == 0:
             self.newProject()
 
     def doRemoveCurrentSpecItems(self) -> None:
-        if self.main_wnd.spec_list_widget.count() == 0:
-            return
-
-        current_row = self.main_wnd.spec_list_widget.currentRow()
-        item = self.main_wnd.spec_list_widget.item(current_row)
-        self.removeSpecItem(item)
+        item = self.main_wnd.spec_list_widget.currentItem()
+        if item is not None:
+            self.removeSpecItem(item)
 
     def doRemoveSelectedSpecItems(self) -> None:
-        if self.main_wnd.spec_list_widget.count() == 0:
+        items = self.allSpecItems()
+        if not items:
             return
 
-        for row in range(self.main_wnd.spec_list_widget.count(), 0, -1):
-            item = self.main_wnd.spec_list_widget.item(row - 1)
+        for item in reversed(items):
             self.removeSpecItem(item)
 
 
@@ -5472,25 +5646,28 @@ class GuiApp:
             self.redrock_plugin.all_radio is not None
             and self.redrock_plugin.all_radio.isChecked()
         ):
-            for_rr = self.open_spectra
+            for u, sp in self.open_spectra.items():
+                if not sp.meta.get('is_dummy', False):
+                    for_rr[u] = sp
         elif (
             self.redrock_plugin.selected_radio is not None
             and self.redrock_plugin.selected_radio.isChecked()
         ):
-            item: None | QtWidgets.QListWidgetItem
-            for row in range(self.main_wnd.spec_list_widget.count()):
-                item = self.main_wnd.spec_list_widget.item(row)
-                if item is None:
-                    continue
-                if item.checkState() == qt_api.QtCore.Qt.CheckState.Checked:
+            for item in self.allSpecItems():
+                if item.checkState(0) == qt_api.QtCore.Qt.CheckState.Checked:
                     item_uuid = item.data(
-                        qt_api.QtCore.Qt.ItemDataRole.UserRole
+                        0, qt_api.QtCore.Qt.ItemDataRole.UserRole
                     )
-                    for_rr[item_uuid] = self.open_spectra[item_uuid]
+                    if item_uuid in self.open_spectra:
+                        sp = self.open_spectra[item_uuid]
+                        if not sp.meta.get('is_dummy', False):
+                            for_rr[item_uuid] = sp
         else:
             if self.current_uuid is None:
                 return
-            for_rr[self.current_uuid] = self.open_spectra[self.current_uuid]
+            sp = self.open_spectra.get(self.current_uuid)
+            if sp is not None and not sp.meta.get('is_dummy', False):
+                for_rr[self.current_uuid] = sp
 
         self.redrock_plugin.run(for_rr)
 
@@ -5506,22 +5683,25 @@ class GuiApp:
 
         for_xcorr: dict[uuid.UUID, Spectrum] = {}
         if self.main_wnd.xcorr_all_radio.isChecked():
-            for_xcorr = self.open_spectra
+            for u, sp in self.open_spectra.items():
+                if not sp.meta.get('is_dummy', False):
+                    for_xcorr[u] = sp
         elif self.main_wnd.xcorr_selected_radio.isChecked():
-            item: None | QtWidgets.QListWidgetItem
-            for row in range(self.main_wnd.spec_list_widget.count()):
-                item = self.main_wnd.spec_list_widget.item(row)
-                if item is None:
-                    continue
-                if item.checkState() == qt_api.QtCore.Qt.CheckState.Checked:
+            for item in self.allSpecItems():
+                if item.checkState(0) == qt_api.QtCore.Qt.CheckState.Checked:
                     item_uuid = item.data(
-                        qt_api.QtCore.Qt.ItemDataRole.UserRole
+                        0, qt_api.QtCore.Qt.ItemDataRole.UserRole
                     )
-                    for_xcorr[item_uuid] = self.open_spectra[item_uuid]
+                    if item_uuid in self.open_spectra:
+                        sp = self.open_spectra[item_uuid]
+                        if not sp.meta.get('is_dummy', False):
+                            for_xcorr[item_uuid] = sp
         else:
             if self.current_uuid is None:
                 return
-            for_xcorr[self.current_uuid] = self.open_spectra[self.current_uuid]
+            sp = self.open_spectra.get(self.current_uuid)
+            if sp is not None and not sp.meta.get('is_dummy', False):
+                for_xcorr[self.current_uuid] = sp
 
         self.xcorr_plugin.templates = self.getXcorrSelectedTemplates()
         self.xcorr_plugin.set_gpu_backend(self.use_gpu)
@@ -5544,13 +5724,8 @@ class GuiApp:
 
     def doToggleDone(self) -> None:
         check_state = None
-        item: QtWidgets.QListWidgetItem | None
-        for row in range(self.main_wnd.spec_list_widget.count()):
-            item = self.main_wnd.spec_list_widget.item(row)
-            if item is None:
-                continue
-
-            item_uuid = item.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
+        for item in self.allSpecItems():
+            item_uuid = item.data(0, qt_api.QtCore.Qt.ItemDataRole.UserRole)
 
             if item_uuid not in self.object_state_dict:
                 continue
@@ -5559,12 +5734,12 @@ class GuiApp:
                 continue
 
             if check_state is None:
-                if item.checkState() == qt_api.QtCore.Qt.CheckState.Checked:
+                if item.checkState(0) == qt_api.QtCore.Qt.CheckState.Checked:
                     check_state = qt_api.QtCore.Qt.CheckState.Unchecked
                 else:
                     check_state = qt_api.QtCore.Qt.CheckState.Checked
 
-            item.setCheckState(check_state)
+            item.setCheckState(0, check_state)
 
     def doToggleSimilar(self) -> None:
         self.toggleSimilarSpecItems(
@@ -5576,17 +5751,13 @@ class GuiApp:
         if item is None:
             return
 
-        if item.checkState() == qt_api.QtCore.Qt.CheckState.Checked:
+        if item.checkState(0) == qt_api.QtCore.Qt.CheckState.Checked:
             ref_check_state = qt_api.QtCore.Qt.CheckState.Unchecked
         else:
             ref_check_state = qt_api.QtCore.Qt.CheckState.Checked
 
-        other_item: None | QtWidgets.QListWidgetItem
-        for row in range(self.main_wnd.spec_list_widget.count()):
-            other_item = self.main_wnd.spec_list_widget.item(row)
-            if other_item is None:
-                continue
-            other_item.setCheckState(ref_check_state)
+        for other_item in self.allSpecItems():
+            other_item.setCheckState(0, ref_check_state)
 
     def doUpdateColorMap(self, *args, **kwargs) -> None:
         if not HAS_MPL:
@@ -5944,8 +6115,9 @@ class GuiApp:
         except Exception:
             current_uuid = None
 
-        current_spec_list_item: QtWidgets.QListWidgetItem | None
-        current_spec_list_item = None
+        current_spec_list_item: QtWidgets.QTreeWidgetItem | None = None
+        deferred_children: list[tuple[QtWidgets.QTreeWidgetItem, str]] = []
+
         for j, file_info in enumerate(serialized_dict['open_files']):
             self.pbar.setValue(j + 1)
             self.statusbar.showMessage(
@@ -5954,7 +6126,6 @@ class GuiApp:
             self.qapp.processEvents()
 
             item_uuid = uuid.UUID(file_info['uuid'])
-            item_row = int(file_info['index'])
 
             if file_info['path'] is None:
                 file_path = None
@@ -5964,7 +6135,7 @@ class GuiApp:
                 file_path = str((proj_dir / file_info['path']).resolve())
                 is_dummy = False
 
-            if not Path(file_path).exists():
+            if file_path is not None and not Path(file_path).exists():
                 if Path(file_info['path']).exists():
                     file_path = file_info['path']
                 else:
@@ -5974,26 +6145,34 @@ class GuiApp:
                     )
                     continue
 
-            sp: Spectrum | loaders.Spectrum2D
+            sp: Spectrum | loaders.Spectrum2D | None
             try:
-                sp = loaders.read(file_path)
+                if file_path is not None:
+                    sp = loaders.read(file_path)
+                else:
+                    sp = None
             except Exception as exc:
                 exception_tracker[item_uuid] = (file_path, str(exc))
                 continue
 
-            new_item = qt_api.QtWidgets.QListWidgetItem(file_info['text'])
+            new_item = qt_api.QtWidgets.QTreeWidgetItem([file_info['text']])
             new_item.setCheckState(
-                qt_api.QtCore.Qt.CheckState(file_info['checked'])
+                0, qt_api.QtCore.Qt.CheckState(file_info['checked'])
             )
-            new_item.setToolTip(file_path)
-            new_item.setData(qt_api.QtCore.Qt.ItemDataRole.UserRole, item_uuid)
+            if file_path is not None:
+                new_item.setToolTip(0, file_path)
+            new_item.setData(
+                0, qt_api.QtCore.Qt.ItemDataRole.UserRole, item_uuid
+            )
 
             if item_uuid == current_uuid:
                 current_spec_list_item = new_item
 
-            sp.meta['file_name'] = Path(file_path).name
-            sp.meta['full_path'] = file_path
-            sp.meta['is_dummy'] = is_dummy
+            if sp is not None:
+                sp.meta['file_name'] = Path(file_path).name
+                sp.meta['full_path'] = file_path
+                sp.meta['is_dummy'] = is_dummy
+                sp.meta['uuid'] = item_uuid
 
             try:
                 serialized_links = file_info['linked']
@@ -6011,7 +6190,7 @@ class GuiApp:
                             linked_sp = loaders.read(linked_file_path)
                         except Exception as exc:
                             exception_tracker[item_uuid] = (
-                                file_path,
+                                file_path or sp_path,
                                 f"Cannot open linked {key} file {sp_path}: " +
                                 str(exc)
                             )
@@ -6024,17 +6203,54 @@ class GuiApp:
                                 linked_sp.meta['linked'] = {'2D': sp}
                 except AttributeError as exc:
                     exception_tracker[item_uuid] = (
-                        file_path, f"Corruped project file: {str(exc)}"
+                        file_path or "", f"Corrupted project file: {str(exc)}"
                     )
                     continue
                 else:
-                    sp.meta['linked'] = links_dict
+                    if sp is not None:
+                        sp.meta['linked'] = links_dict
+                    elif '2D' in links_dict:
+                        sp_2d = links_dict['2D']
+                        flux_from_2d = np.nansum(
+                            sp_2d.flux.value,
+                            axis=0
+                        )
+                        sp = Spectrum(
+                            flux=flux_from_2d * sp_2d.flux.unit,
+                            spectral_axis=sp_2d.spectral_axis,
+                        )
+                        sp.meta['file_name'] = sp_2d.meta.get('file_name')
+                        sp.meta['full_path'] = sp_2d.meta.get('full_path')
+                        sp.meta['is_dummy'] = True
+                        sp.meta['uuid'] = item_uuid
+                        sp.meta['linked'] = {'2D': sp_2d}
 
-            self.main_wnd.spec_list_widget.addItem(new_item)
+            if sp is None:
+                continue
+
             self.open_spectra[item_uuid] = sp
             self.open_spectra_items[item_uuid] = new_item
-            self.main_wnd.spec_list_widget.insertItem(item_row, new_item)
+
+            parent_uuid_str = file_info.get('parent_uuid')
+            if parent_uuid_str:
+                deferred_children.append((new_item, parent_uuid_str))
+            else:
+                self.main_wnd.spec_list_widget.addTopLevelItem(new_item)
+
             self.qapp.processEvents()
+
+        # Re-attach child items to parent items in the tree
+        for child_item, p_uuid_str in deferred_children:
+            try:
+                p_uuid = uuid.UUID(p_uuid_str)
+                parent_tree_item = self.open_spectra_items.get(p_uuid)
+                if parent_tree_item is not None:
+                    parent_tree_item.addChild(child_item)
+                    parent_tree_item.setExpanded(True)
+                else:
+                    self.main_wnd.spec_list_widget.addTopLevelItem(child_item)
+            except Exception:
+                self.main_wnd.spec_list_widget.addTopLevelItem(child_item)
 
         for h_uuid, obj_info in serialized_dict['objects_properties'].items():
 
@@ -6705,25 +6921,32 @@ class GuiApp:
 
         # Serialize program state for json dumping
         serialized_open_file_list = []
-        item: QtWidgets.QListWidgetItem | None
+        item: QtWidgets.QTreeWidgetItem | None
         proj_dir = Path(file_name).resolve().parent
-        for k in range(self.main_wnd.spec_list_widget.count()):
-            item = self.main_wnd.spec_list_widget.item(k)
+        all_items = self.allSpecItems()
+        for k, item in enumerate(all_items):
             if item is None:
                 continue
             item_uuid: uuid.UUID = item.data(
-                qt_api.QtCore.Qt.ItemDataRole.UserRole
+                0, qt_api.QtCore.Qt.ItemDataRole.UserRole
             )
 
             spec_meta = self.open_spectra[item_uuid].meta
 
-
             file_info: dict[str, Any] = {
                 'index': k,
                 'uuid': item_uuid.hex,
-                'text': item.text(),
-                'checked': int(item.checkState().value),
+                'text': item.text(0),
+                'checked': int(item.checkState(0).value),
             }
+
+            parent = item.parent()
+            if parent is not None:
+                parent_uuid = parent.data(
+                    0, qt_api.QtCore.Qt.ItemDataRole.UserRole
+                )
+                if parent_uuid is not None:
+                    file_info['parent_uuid'] = parent_uuid.hex
 
             try:
                 is_dummy = bool(spec_meta['is_dummy'])
@@ -7294,31 +7517,27 @@ class GuiApp:
 
     def toggleSimilarSpecItems(
         self,
-        item: QtWidgets.QListWidgetItem | None
+        item: QtWidgets.QTreeWidgetItem | None,
+        *args: Any,
+        **kwargs: Any
     ) -> None:
         if item is None:
             return
 
-        ref_uuid = item.data(qt_api.QtCore.Qt.ItemDataRole.UserRole)
+        ref_uuid = item.data(0, qt_api.QtCore.Qt.ItemDataRole.UserRole)
         if ref_uuid in self.object_state_dict:
             ref_qf = self.object_state_dict[ref_uuid]['quality_flag']
         else:
             ref_qf = 0
 
-        if item.checkState() == qt_api.QtCore.Qt.CheckState.Checked:
+        if item.checkState(0) == qt_api.QtCore.Qt.CheckState.Checked:
             ref_check_state = qt_api.QtCore.Qt.CheckState.Unchecked
         else:
             ref_check_state = qt_api.QtCore.Qt.CheckState.Checked
 
-        other_item: None | QtWidgets.QListWidgetItem
-        for row in range(self.main_wnd.spec_list_widget.count()):
-            other_item = self.main_wnd.spec_list_widget.item(row)
-
-            if other_item is None:
-                continue
-
+        for other_item in self.allSpecItems():
             other_uuid = other_item.data(
-                qt_api.QtCore.Qt.ItemDataRole.UserRole
+                0, qt_api.QtCore.Qt.ItemDataRole.UserRole
             )
             if other_uuid in self.object_state_dict:
                 other_qf = self.object_state_dict[other_uuid]['quality_flag']
@@ -7326,7 +7545,7 @@ class GuiApp:
                 other_qf = 0
 
             if other_qf == ref_qf:
-                other_item.setCheckState(ref_check_state)
+                other_item.setCheckState(0, ref_check_state)
 
     def run(self) -> None:
         """Run the main Qt Application."""
